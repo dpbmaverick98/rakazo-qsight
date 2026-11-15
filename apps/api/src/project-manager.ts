@@ -39,7 +39,7 @@ export async function provisionProjectManager(
       spaceId: actor.spaceId,
       userId: actor.userId,
       allBots: true,
-      endpoint: "endpoint" in config ? config.endpoint : null,
+      name: { startsWith: "QSight" },
     },
     select: { id: true },
   });
