@@ -182,6 +182,7 @@ export function buildApprovalAskBlock(
     };
   }
   const fetchSite = webFetchSite(toolName, args);
+  const qsight = qsightApprovalSummary(toolName, args);
   const summary = describeApprovalAction(toolName, args, options?.batch);
   const detail = formatApprovalDetail(
     toolName,
@@ -196,7 +197,7 @@ export function buildApprovalAskBlock(
     approvalEffectId: effectId,
     text: truncate(
       redactSecrets(
-        toolName === "create_space" ? `${summary}?` : `Review before ${summary}`,
+        qsight ?? (toolName === "create_space" ? `${summary}?` : `Review before ${summary}`),
         secrets,
       ),
       MAX_APPROVAL_SUMMARY_LENGTH,
@@ -232,11 +233,40 @@ function webFetchSite(toolName: string, args: Record<string, unknown>): string |
     : undefined;
 }
 
+function qsightApprovalSummary(toolName: string, args: Record<string, unknown>): string | undefined {
+  const text = (key: string) => (typeof args[key] === "string" ? args[key].trim() : "");
+  if (toolName === "create_client") return `Create client “${text("name") || "Untitled"}”`;
+  if (toolName === "create_building")
+    return `Add building “${text("nickname") || text("address") || "Untitled"}”`;
+  if (toolName === "create_project") return `Create project “${text("name") || "Untitled"}”`;
+  if (toolName === "create_work_package")
+    return `Create work package “${text("title") || "Untitled"}”`;
+  return undefined;
+}
+
+function qsightApprovalDetail(toolName: string, args: Record<string, unknown>): string[] {
+  const text = (key: string) => (typeof args[key] === "string" ? args[key].trim() : "");
+  if (toolName === "create_client") return [`Client: ${text("name")}`];
+  if (toolName === "create_building")
+    return [`Building: ${text("nickname") || text("address")}`, `Address: ${text("address")}`];
+  if (toolName === "create_project") return [`Project: ${text("name")}`];
+  if (toolName === "create_work_package")
+    return [
+      `Work package: ${text("title")}`,
+      `Claim: ${text("claim")}`,
+      `Sub vendor: ${text("subcontractor")}`,
+    ];
+  return [];
+}
+
 function describeApprovalAction(
   toolName: string,
   args: Record<string, unknown>,
   batchShape: ToolBatch | undefined,
 ): string {
+  // QSight creations use business language; never echo tool names or raw IDs.
+  const qsight = qsightApprovalSummary(toolName, args);
+  if (qsight) return qsight;
   // A batch is named by the actions it runs; "…" stands for an entry that names none.
   const batch = batchShape && batchActions(batchShape, args);
   if (batch?.actions.length) {
@@ -261,6 +291,8 @@ function formatApprovalDetail(
   batch: ToolBatch | undefined,
   secrets: string[],
 ): string | undefined {
+  const qsight = qsightApprovalDetail(toolName, args);
+  if (qsight.length) return qsight.join("\n");
   const lines: string[] = [];
   if (reviewReason?.trim()) {
     lines.push(reviewReason.trim().replace(/\u2014|\u2013/g, "-"));

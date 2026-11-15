@@ -381,3 +381,28 @@ describe("approval card arguments", () => {
     expect(block.detail?.split("\n")).toContain("to_email: f@example.test");
   });
 });
+describe("QSight business approvals", () => {
+  it.each([
+    ["create_client", { name: "Acme" }, "Create client “Acme”", ["Client: Acme"]],
+    [
+      "create_building",
+      { client_id: "secret-client", nickname: "ESB", address: "1 Main St" },
+      "Add building “ESB”",
+      ["Building: ESB", "Address: 1 Main St"],
+    ],
+    ["create_project", { name: "Fit-out", building_id: "secret-building" }, "Create project “Fit-out”", ["Project: Fit-out"]],
+    [
+      "create_work_package",
+      { project_id: "secret-project", claim: "Claim A", subcontractor: "Drywall Co", title: "Lobby", idempotency_key: "secret-key" },
+      "Create work package “Lobby”",
+      ["Work package: Lobby", "Claim: Claim A", "Sub vendor: Drywall Co"],
+    ],
+  ])("%s uses a business title and allowlisted detail", (tool, args, text, lines) => {
+    const block = buildApprovalAskBlock("effect-1", tool, args, []);
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.text).toBe(text);
+    expect(block.detail?.split("\n")).toEqual(lines);
+    expect(JSON.stringify(block)).not.toMatch(/secret-(client|building|project|key)/);
+    expect(JSON.stringify(block)).not.toContain(tool);
+  });
+});
