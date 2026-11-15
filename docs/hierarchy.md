@@ -14,6 +14,23 @@ The adapter calls only `GET /api/v2/agent/hierarchy?client_id=...`, with a five-
 deadline and no redirects. Successful validated responses are cached in process
 for 15 seconds; downstream responses use `Cache-Control: no-store`. Optional
 upstream fields (including address and nickname) are omitted from the browser DTO.
+Nullable building latitude/longitude are accepted; missing, non-numeric, non-finite
+or out-of-range upstream coordinates become null. Coordinates are never inferred.
+
+Buildings with both coordinates appear on a compact, lazy-loaded Leaflet map above
+the list in web and Electron. Selecting a pin expands its building, scrolls it into
+view and focuses its list control. Pins also support keyboard activation, and the
+list remains available when tiles cannot load. The map is omitted when no building
+has a complete coordinate pair. The reserved card height is 160px in narrow rails
+and 192px in wider rails, including while the lazy bundle loads.
+
+Tiles load directly from `https://tile.openstreetmap.org` with visible attribution;
+this discloses the viewed tile area to the public tile service. No API key,
+geocoding or write requests are used. Existing CSP `img-src https:` already allows
+tile images, so neither host wildcards nor new script/connect sources are needed.
+The public tile service requires network access and follows its usage policy;
+there is no offline basemap or service availability guarantee. Native Expo
+navigation remains unchanged; this map is a web/Electron enhancement.
 
 Project links currently use the upstream origin plus `/projects/<encoded-id>`.
 Confirm that route with the upstream app before enabling the pilot. This is one

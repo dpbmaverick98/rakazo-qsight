@@ -62,6 +62,38 @@ it("does not cache errors, malformed data, or another client", async () => {
   await expect(source.read()).resolves.toHaveProperty("client.id", "7");
 });
 
+it.each([
+  [
+    { latitude: 0, longitude: 0 },
+    { latitude: 0, longitude: 0 },
+  ],
+  [
+    { latitude: null, longitude: null },
+    { latitude: null, longitude: null },
+  ],
+  [
+    { latitude: 91, longitude: -181 },
+    { latitude: null, longitude: null },
+  ],
+  [
+    { latitude: "12", longitude: {} },
+    { latitude: null, longitude: null },
+  ],
+  [{}, { latitude: null, longitude: null }],
+])(
+  "sanitizes optional upstream coordinates %j without losing navigation",
+  async (coordinates, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ ...raw, buildings: [{ ...raw.buildings[0], ...coordinates }] }),
+      ),
+    );
+    const result = await qsightHierarchyFromEnv(config)!.read();
+    expect(result.buildings[0]).toMatchObject({ ...expected, id: "1" });
+    expect(result.buildings[0]).not.toHaveProperty("address");
+  },
+);
 it("reads bounded commercial projections with bearer auth, canonical links and a short cache", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>(async () =>
     Response.json({ ...commercialFixture, secret: "omit" }),
@@ -100,3 +132,4 @@ it("rejects upstream errors, wrong project, malformed and oversized commercial d
   for (let i = 0; i < 5; i++) await expect(source.readCommercial("roof")).rejects.toThrow();
   await expect(source.readCommercial("roof")).resolves.toEqual(commercialFixture);
 });
+

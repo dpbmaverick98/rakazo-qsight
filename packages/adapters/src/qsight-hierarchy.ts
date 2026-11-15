@@ -22,6 +22,8 @@ const ResponseSchema = z.object({
       z.object({
         id: Id,
         name: Name,
+        latitude: z.number().min(-90).max(90).nullable().catch(null),
+        longitude: z.number().min(-180).max(180).nullable().catch(null),
         projects: z.array(z.object({ id: Id, name: Name })).max(5000),
       }),
     )

@@ -17,6 +17,8 @@ test("client hierarchy shares the right region with chat details", async ({ page
           {
             id: "north",
             name: "North Building",
+            latitude: 51.505,
+            longitude: -0.09,
             projects: [
               {
                 id: "roof",
@@ -50,6 +52,13 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await page.goto(`/app/${bot.id}`);
   const rail = page.getByRole("region", { name: "Client hierarchy" });
   await expect(rail).toBeVisible();
+  await expect(rail.getByRole("region", { name: "Building map" })).toBeVisible();
+  await rail.locator(".leaflet-marker-icon").click();
+  await expect(rail.getByRole("button", { name: "North Building", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(rail.getByRole("link", { name: "Roof survey (opens in new tab)" })).toBeVisible();
   await rail.getByRole("button", { name: "North Building" }).click();
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
@@ -59,6 +68,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "project-commercial");
   await commercial.getByRole("button", { name: "Back to hierarchy" }).click();
+
   await captureScreenshot(page, testInfo, "client-hierarchy-expanded");
   await openBotPanelTab(page, "Computer");
   await expect(rail).toBeVisible();
