@@ -14,6 +14,7 @@ describe("attachmentPickerAccept", () => {
     expect(accept).toContain(".csv");
     expect(accept).toContain("application/pdf");
     expect(accept).toContain(".zip");
+    for (const extension of [".doc", ".docx", ".ppt", ".pptx"]) expect(accept).toContain(extension);
     expect(accept).toContain("application/vnd.ms-excel");
     expect(accept).toContain("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     expect(accept).toContain(".xls");

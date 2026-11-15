@@ -115,7 +115,7 @@ test("audio attachments can retry a failed preview without leaving the card", as
   wav.writeUInt16LE(16, 34);
   wav.write("data", 36);
   wav.writeUInt32LE(1600, 40);
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[type="file"]:not([webkitdirectory])').setInputFiles({
     name: "clip.wav",
     mimeType: "audio/wav",
     buffer: wav,

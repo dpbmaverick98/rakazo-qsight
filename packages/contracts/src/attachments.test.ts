@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isAttachmentPath } from "./attachments.js";
 import {
   ATTACHMENT_AUDIO_MIME_TYPES,
   appContract,
@@ -65,4 +66,19 @@ describe("attachment contracts", () => {
     expect(artifactPreviewKind("image/png")).toBe("image");
     expect(artifactPreviewKind("application/zip")).toBe("none");
   });
+});
+
+it("bounds relative attachment display paths and rejects traversal", () => {
+  expect(isAttachmentPath("claims/proposals/invoice.docx")).toBe(true);
+  for (const path of [
+    "/invoice.docx",
+    "../invoice.docx",
+    "claims/../invoice.docx",
+    "claims//invoice.docx",
+    "C:\\invoice.docx",
+    "a".repeat(256),
+    "bad\u0000.docx",
+  ]) {
+    expect(isAttachmentPath(path)).toBe(false);
+  }
 });
