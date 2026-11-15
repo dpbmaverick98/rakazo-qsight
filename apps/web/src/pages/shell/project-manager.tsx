@@ -12,6 +12,7 @@ export function ProjectManagerAction({
   onOpenBot,
   finishSetup,
   bindingRevision,
+  onChanged,
 }: {
   project: Pick<ProjectCommercial["project"], "id" | "name">;
   client: string;
@@ -19,6 +20,7 @@ export function ProjectManagerAction({
   onOpenBot?: (bot: Bot) => void;
   finishSetup?: boolean;
   bindingRevision?: number;
+  onChanged?: () => void;
 }) {
   const { t } = useLingui();
   const navigate = useNavigate();
@@ -46,6 +48,7 @@ export function ProjectManagerAction({
         clientName: client,
         ...(finishSetup ? { finishSetup: true } : {}),
       });
+      onChanged?.();
       if (mounted.current) open(bot);
     } catch {
       if (mounted.current) setError(t`Could not create project manager. Try again.`);

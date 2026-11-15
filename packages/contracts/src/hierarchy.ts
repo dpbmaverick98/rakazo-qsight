@@ -13,6 +13,7 @@ export const HierarchySchema = z.object({
       z.object({
         id: Id,
         name: Name,
+        address: z.string().trim().min(1).max(2000).nullable().optional(),
         latitude: z.number().min(-90).max(90).nullable().optional(),
         longitude: z.number().min(-180).max(180).nullable().optional(),
         projects: z

@@ -53,7 +53,7 @@ export function mountHierarchyRoute(
         name: string,
         operationId?: string,
       ) => Promise<CreatedProject>;
-      readCommercial?: (id: string) => Promise<ProjectCommercial>;
+      readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     } | null;
   },
 ) {
@@ -261,7 +261,7 @@ export function mountHierarchyRoute(
         )
       )
         return c.json({ error: "Project unavailable" }, 404);
-      const commercial = await source.readCommercial(id);
+      const commercial = await source.readCommercial(id, true);
       await deps.resolveBinding(actor, binding.revision);
       return c.json(commercial);
     } catch (error) {

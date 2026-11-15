@@ -5,6 +5,7 @@ import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { hierarchyRetry } from "./hierarchy-refresh";
 import { ProjectManagerAction } from "./project-manager";
 
 export function CommercialSelection({
@@ -22,32 +23,12 @@ export function CommercialSelection({
   onOpenBot?: (bot: Bot) => void;
   back: () => void;
 }) {
-  const query = useQuery({
-    queryKey: ["project-commercial", userId, spaceId, projectId],
-    retry: false,
-    gcTime: 0,
-    refetchOnMount: "always",
-    refetchOnWindowFocus: true,
-    queryFn: async ({ signal }) => {
-      const response = await fetch(
-        `/api/agent-plane/projects/${encodeURIComponent(projectId)}/commercial`,
-        {
-          headers: withSpaceHeaders(undefined, spaceId),
-          credentials: "include",
-          signal,
-        },
-      );
-      if (!response.ok || response.status === 204) throw new Error("Commercial view unavailable");
-      const data = ProjectCommercialSchema.parse(await response.json());
-      if (data.project.id !== projectId) throw new Error("Project mismatch");
-      return data;
-    },
-  });
+  const query = useProjectCommercial(userId, spaceId, projectId);
   return (
     <CommercialPanel
       onOpenBot={onOpenBot}
       managerScope={userId && spaceId ? { userId, spaceId, client } : undefined}
-      data={query.isFetching || query.isError ? undefined : query.data}
+      data={query.isError ? undefined : (query.data ?? undefined)}
       loading={query.isFetching}
       error={query.isError}
       retry={() => {
@@ -223,5 +204,64 @@ export function CommercialPanel({
         </>
       ) : null}
     </section>
+  );
+}
+
+export function useProjectCommercial(
+  userId: string | null,
+  spaceId: string | null,
+  projectId: string,
+) {
+  return useQuery<ProjectCommercial | null>({
+    queryKey: ["project-commercial", userId, spaceId, projectId],
+    enabled: !!userId && !!spaceId,
+    retry: hierarchyRetry,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchInterval: (query) =>
+      query.state.error && hierarchyRetry(0, query.state.error) ? 5_000 : false,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(
+        `/api/agent-plane/projects/${encodeURIComponent(projectId)}/commercial`,
+        {
+          headers: withSpaceHeaders(undefined, spaceId),
+          credentials: "include",
+          signal,
+        },
+      );
+      if (response.status === 204) return null;
+      if (!response.ok)
+        throw Object.assign(new Error("Commercial view unavailable"), { status: response.status });
+      const data = ProjectCommercialSchema.parse(await response.json());
+      if (data.project.id !== projectId) throw new Error("Project mismatch");
+      return data;
+    },
+  });
+}
+
+export function ProjectActivity({
+  userId,
+  spaceId,
+  projectId,
+}: {
+  userId: string;
+  spaceId: string;
+  projectId: string;
+}) {
+  const query = useProjectCommercial(userId, spaceId, projectId);
+  const data = query.isError && !hierarchyRetry(0, query.error) ? undefined : query.data;
+  const packages =
+    data?.claims.flatMap((claim) => claim.sub_vendors.flatMap((vendor) => vendor.work_packages)) ??
+    [];
+  if (!packages.length) return null;
+  return (
+    <ul className="space-y-1 ps-4 text-body">
+      {packages.map((item) => (
+        <li key={item.id} className="break-words">
+          <span>{item.title}</span>
+          <span className="ms-2 text-muted-foreground">{item.status}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
