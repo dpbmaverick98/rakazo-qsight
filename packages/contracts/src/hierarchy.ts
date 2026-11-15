@@ -5,6 +5,7 @@ const Id = z.string().min(1).max(200);
 
 /** Navigation supplied by an optional external hierarchy service. */
 export const HierarchySchema = z.object({
+  bindingRevision: z.number().int().positive().optional(),
   client: z.object({ id: Id, name: Name }),
   buildings: z
     .array(
@@ -25,7 +26,7 @@ export type Hierarchy = z.infer<typeof HierarchySchema>;
 export const CreateProjectSchema = z
   .object({
     buildingId: Id.refine((id) => id !== "." && id !== ".."),
-    name: Name,
+    name: Name.max(200),
   })
   .strict();
 export const CreatedProjectSchema = z.object({
@@ -55,3 +56,42 @@ export const ClientSetupSchema = z.object({
   status: z.enum(["ready", "mcp_missing"]),
 });
 export type ClientSetup = z.infer<typeof ClientSetupSchema>;
+
+export const LocationQuerySchema = z.object({ query: z.string().trim().min(3).max(300) }).strict();
+const Location = z.object({
+  address: z.string().min(1).max(2000),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  attribution: z.string().max(4000),
+  verification_token: z.string().min(1).max(12000),
+});
+export const LocationCandidatesSchema = z.object({
+  items: z.array(Location.extend({ selectable: z.boolean() })).max(5),
+  attribution: z.string().max(4000),
+});
+export const LocationProofInputSchema = z
+  .object({ verification_token: z.string().min(1).max(12000) })
+  .strict();
+export const LocationProofSchema = Location.extend({
+  location_precision: z.string().min(1).max(100),
+  expires_in: z.number().int().positive(),
+});
+export const CreateBuildingSchema = z
+  .object({
+    address: z.string().min(1).max(2000),
+    verification_token: z.string().min(1).max(12000),
+    nickname: z.string().trim().max(200).default(""),
+  })
+  .strict();
+export const CreatedBuildingSchema = z.object({
+  id: Id,
+  name: z.string().max(200),
+  address: z.string().min(1).max(2000),
+  url: z.url({ protocol: /^https?$/ }),
+});
+export type LocationCandidates = z.infer<typeof LocationCandidatesSchema>;
+export type LocationProof = z.infer<typeof LocationProofSchema>;
+export type CreateBuilding = z.infer<typeof CreateBuildingSchema>;
+export type CreatedBuilding = z.infer<typeof CreatedBuildingSchema>;
+
+export const HierarchyOperationIdSchema = z.uuid();

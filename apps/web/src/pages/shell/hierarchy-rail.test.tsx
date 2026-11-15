@@ -6,7 +6,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { replaceComposerDraft } from "../../lib/composer-draft";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -17,8 +16,10 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock("../../lib/composer-draft", () => ({ replaceComposerDraft: vi.fn() }));
-vi.mock("../../lib/rpc", () => ({ withSpaceHeaders: () => new Headers() }));
+vi.mock("../../lib/rpc", () => ({
+  withSpaceHeaders: () => new Headers(),
+  rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: vi.fn() } } }),
+}));
 const data = {
   client: { id: "client", name: "Example Client" },
   buildings: [
@@ -210,49 +211,18 @@ it("pins only complete coordinates and selects, expands and scrolls the building
   }
 });
 
-it.each(["/app", "/app/g/group-1", "/app/bot-1"])(
-  "hands rail requests only to an active bot at %s",
-  async (route) => {
-    vi.mocked(replaceComposerDraft).mockClear();
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    const field = document.createElement("div");
-    field.dataset.testid = "composer-field";
-    const textarea = document.createElement("textarea");
-    textarea.name = "chat-message";
-    field.append(textarea);
-    document.body.append(field);
-    const view = await mount({}, route);
-    try {
-      const find = (name: string) =>
-        [...view.container.querySelectorAll("button")].find(
-          (button) => button.textContent === name,
-        );
-      expect(find("Add project")).toBeUndefined();
-      await act(async () => find("North Building")!.click());
-      if (route === "/app/bot-1") {
-        await act(async () => find("Add building")!.click());
-        expect(replaceComposerDraft).toHaveBeenLastCalledWith(
-          "bot:bot-1",
-          "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
-          [],
-        );
-        expect(document.activeElement).toBe(textarea);
-        await act(async () => find("Add project")!.click());
-        expect(view.container.querySelector('form[aria-label="Add project"]')).not.toBeNull();
-        expect(replaceComposerDraft).toHaveBeenCalledTimes(1);
-      } else {
-        expect(find("Add building")).toBeUndefined();
-        expect(find("Add project")).toBeDefined();
-        expect(replaceComposerDraft).not.toHaveBeenCalled();
-      }
-      expect(fetch).not.toHaveBeenCalled();
-    } finally {
-      await view.close();
-      field.remove();
-    }
-  },
-);
+it("opens building setup without a chat handoff", async () => {
+  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
+  try {
+    const button = [...view.container.querySelectorAll("button")].find(
+      (item) => item.textContent === "Add building",
+    )!;
+    await act(async () => button.click());
+    expect(view.container.querySelector('form[aria-label="Add building"]')).not.toBeNull();
+  } finally {
+    await view.close();
+  }
+});
 
 it("submits in the rail, retains errors and refreshes after success without a chat handoff", async () => {
   const project = {
@@ -308,6 +278,89 @@ it("submits in the rail, retains errors and refreshes after success without a ch
     expect(view.retry).toHaveBeenCalledOnce();
     expect(view.container.querySelector("form")).toBeNull();
     expect(document.activeElement?.textContent).toBe("Add project");
+  } finally {
+    await view.close();
+  }
+});
+
+it("requires a selectable candidate and canonical confirmation, and retains the proof on retry", async () => {
+  const candidate = {
+    address: "10 Example Street",
+    latitude: 1,
+    longitude: 2,
+    attribution: "Map attribution",
+    selectable: true,
+    verification_token: "fake-candidate",
+  };
+  const proof = {
+    ...candidate,
+    verification_token: "fake-proof",
+    location_precision: "building",
+    expires_in: 1800,
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({
+        items: [{ ...candidate, address: "Example town", selectable: false }, candidate],
+        attribution: "Map attribution",
+      }),
+    )
+    .mockResolvedValueOnce(Response.json(proof))
+    .mockResolvedValueOnce(new Response(null, { status: 502 }))
+    .mockResolvedValueOnce(
+      Response.json({
+        id: "new",
+        name: "",
+        address: candidate.address,
+        url: "https://example.test/buildings/new",
+      }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
+  try {
+    const click = async (text: string) =>
+      act(async () =>
+        [...view.container.querySelectorAll("button")]
+          .find((button) => button.textContent === text)!
+          .click(),
+      );
+    await click("Add building");
+    const form = view.container.querySelector('form[aria-label="Add building"]')!;
+    const input = form.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        input,
+        "Example Street",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click("Search");
+    const radios = form.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    expect(radios[0]!.disabled).toBe(true);
+    expect(
+      [...form.querySelectorAll("button")].find(
+        (button) => button.textContent === "Confirm location",
+      )!.disabled,
+    ).toBe(true);
+    await act(async () => radios[1]!.click());
+    await click("Confirm location");
+    expect(fetch.mock.calls[1]![1].body).toBe(
+      JSON.stringify({ verification_token: "fake-candidate" }),
+    );
+    expect(form.textContent).toContain("10 Example Street");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    await click("Confirm building");
+    expect(form.querySelector('[role="alert"]')).not.toBeNull();
+    await click("Confirm building");
+    expect(fetch.mock.calls[2]![1].body).toBe(fetch.mock.calls[3]![1].body);
+    expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
+      address: "10 Example Street",
+      verification_token: "fake-proof",
+      nickname: "",
+    });
+    expect(view.retry).toHaveBeenCalledOnce();
+    expect(view.container.querySelector('form[aria-label="Add building"]')).toBeNull();
   } finally {
     await view.close();
   }

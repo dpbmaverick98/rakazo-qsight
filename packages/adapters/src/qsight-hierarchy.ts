@@ -1,12 +1,19 @@
 import { createHash } from "node:crypto";
-import type { Hierarchy } from "@rakazo/contracts/hierarchy";
+import type { CreateBuilding, Hierarchy } from "@rakazo/contracts/hierarchy";
 import {
+  CreateBuildingSchema,
+  CreatedBuildingSchema,
   CreatedProjectSchema,
   CreateProjectSchema,
   HierarchySchema,
+  LocationCandidatesSchema,
+  LocationProofInputSchema,
+  LocationProofSchema,
+  LocationQuerySchema,
 } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
+import { bestEffort } from "@rakazo/logging";
 import { z } from "zod";
 
 const Id = z
@@ -60,6 +67,29 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     string,
     { data: ReturnType<typeof ProjectCommercialSchema.parse>; expires: number }
   >();
+  async function revokeManagerToken(tokenId: string) {
+    const id = Id.parse(tokenId);
+    const signal = deadlineSignal(5000);
+    const response = await fetch(
+      new URL(`/api/v2/agent/tokens/${encodeURIComponent(id)}`, origin),
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        redirect: "error",
+        signal,
+      },
+    ).catch(() => {
+      throw new Error("Token revocation unavailable");
+    });
+    if (!response.ok) throw new Error("Token revocation unavailable");
+    try {
+      z.object({ revoked: z.boolean() }).parse(
+        await readBoundedJsonResponse(response, 1000, signal),
+      );
+    } catch {
+      throw new Error("Token revocation unavailable");
+    }
+  }
   return {
     spaceId,
     ownerServerPrefix: PROJECT_MANAGER_TOOLS.name,
@@ -114,7 +144,71 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         throw new Error("Client lookup unavailable");
       }
     },
-    async createProject(buildingId: string, name: string) {
+    async searchLocations(query: string) {
+      const input = LocationQuerySchema.parse({ query });
+      const url = new URL("/api/v2/agent/locations/search", origin);
+      url.searchParams.set("query", input.query);
+      const signal = deadlineSignal(5000);
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        redirect: "error",
+        signal,
+      });
+      if (!response.ok) throw new Error("Location search unavailable");
+      return LocationCandidatesSchema.parse(
+        await readBoundedJsonResponse(response, 128_000, signal),
+      );
+    },
+    async proveLocation(verificationToken: string) {
+      const input = LocationProofInputSchema.parse({ verification_token: verificationToken });
+      const signal = deadlineSignal(5000);
+      const response = await fetch(new URL("/api/v2/agent/locations/proof", origin), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+        redirect: "error",
+        signal,
+      });
+      if (!response.ok) throw new Error("Location confirmation unavailable");
+      return LocationProofSchema.parse(await readBoundedJsonResponse(response, 32_000, signal));
+    },
+    async createBuilding(clientId: string, data: CreateBuilding, operationId?: string) {
+      const client_id = Id.parse(clientId);
+      const input = { client_id, ...CreateBuildingSchema.parse(data) };
+      const signal = deadlineSignal(5000);
+      const response = await fetch(new URL("/api/v2/agent/buildings", origin), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Idempotency-Key": createHash("sha256")
+            .update(JSON.stringify(["building", input, operationId ?? null]))
+            .digest("hex"),
+        },
+        body: JSON.stringify(input),
+        redirect: "error",
+        signal,
+      });
+      if (!response.ok) throw new Error("Building creation unavailable");
+      cache.clear();
+      const building = CreatedBuildingSchema.extend({ id: Id, client_id: Id }).parse(
+        await readBoundedJsonResponse(response, 32_000, signal),
+      );
+      if (
+        building.client_id !== client_id ||
+        building.address !== input.address ||
+        building.name !== input.nickname
+      )
+        throw new Error("Building creation mismatch");
+      building.url = new URL(`/buildings/${encodeURIComponent(building.id)}`, origin).href;
+      return building;
+    },
+    async createProject(buildingId: string, name: string, operationId?: string) {
       const input = CreateProjectSchema.parse({ buildingId, name });
       const signal = deadlineSignal(5000);
       try {
@@ -129,6 +223,11 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
               Authorization: `Bearer ${token}`,
               Accept: "application/json",
               "Content-Type": "application/json",
+              "Idempotency-Key": createHash("sha256")
+                .update(
+                  JSON.stringify(["project", input.buildingId, input.name, operationId ?? null]),
+                )
+                .digest("hex"),
             },
             body: JSON.stringify({ name: input.name }),
             redirect: "error",
@@ -151,7 +250,9 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         throw new Error("Project creation unavailable");
       }
     },
+    revokeManagerToken,
     async managerServer(id: string, name: string) {
+      let mintedId: string | undefined;
       const signal = deadlineSignal(5000);
       try {
         const response = await fetch(
@@ -164,16 +265,22 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
           },
         );
         if (!response.ok) throw new Error("Token unavailable");
+        const raw: unknown = await readBoundedJsonResponse(response, 32_000, signal);
+        mintedId = z.object({ token_id: Id }).parse(raw).token_id;
         const minted = z
           .object({
+            token_id: Id,
+            project_id: Id,
             token: z
               .string()
               .min(1)
               .max(16384)
               .refine((value) => !/[\r\n]/.test(value)),
           })
-          .parse(await readBoundedJsonResponse(response, 32_000, signal));
+          .parse(raw);
+        if (minted.project_id !== id) throw new Error("Project mismatch");
         return {
+          tokenId: minted.token_id,
           slug: `pm-${createHash("sha256").update(id).digest("hex").slice(0, 60)}`,
           name: `${PROJECT_MANAGER_TOOLS.managerServerPrefix}${name}`.slice(0, 120),
           description: "",
@@ -184,6 +291,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
           headers: { Authorization: `Bearer ${minted.token}` },
         };
       } catch {
+        if (mintedId)
+          await bestEffort("revoke malformed project credential", revokeManagerToken(mintedId));
         // Parsing and network errors can contain credentials; never forward them.
         throw new Error("Project manager credentials unavailable");
       }

@@ -6,10 +6,10 @@ import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useRef, useState } from "react";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { CreateBuilding } from "./create-building";
 import { CreateProject } from "./create-project";
-import { HierarchyHandoff } from "./hierarchy-handoff";
-import { addBuildingRequest } from "./hierarchy-handoff.prompt";
 import { CommercialSelection } from "./project-commercial";
+import { ProjectManagerAction } from "./project-manager";
 
 const BuildingMap = lazy(() => import("./building-map"));
 
@@ -72,15 +72,18 @@ export function HierarchyRail({
         <SectionHeading className="min-w-0 break-words">
           {data?.client.name ?? t`Hierarchy`}
         </SectionHeading>
-        {data ? (
-          <HierarchyHandoff text={addBuildingRequest(data.client.name)}>
-            <Trans>Add building</Trans>
-          </HierarchyHandoff>
-        ) : null}
         <Button variant="ghost" size="sm" onClick={collapse} aria-label={t`Collapse hierarchy`}>
           <Trans>Hide</Trans>
         </Button>
       </div>
+      {data ? (
+        <CreateBuilding
+          key={`${scope?.userId}:${scope?.spaceId}:${data.bindingRevision}`}
+          spaceId={scope?.spaceId ?? null}
+          bindingRevision={data.bindingRevision}
+          refresh={retry}
+        />
+      ) : null}
       {loading ? (
         <p role="status" className="text-body text-muted-foreground">
           <Trans>Loading hierarchy…</Trans>
@@ -95,6 +98,19 @@ export function HierarchyRail({
             <Trans>Retry</Trans>
           </Button>
         </div>
+      ) : null}
+      {data &&
+      scope?.spaceId &&
+      data.buildings.flatMap((building) => building.projects).length === 1 ? (
+        <ProjectManagerAction
+          key={`${scope.spaceId}:${data.client.id}`}
+          project={data.buildings.flatMap((building) => building.projects)[0]!}
+          client={data.client.name}
+          spaceId={scope.spaceId}
+          onOpenBot={onOpenBot}
+          bindingRevision={data.bindingRevision}
+          finishSetup
+        />
       ) : null}
       {data ? (
         <nav
@@ -141,6 +157,7 @@ export function HierarchyRail({
                       <CreateProject
                         buildingId={building.id}
                         spaceId={scope?.spaceId ?? null}
+                        bindingRevision={data.bindingRevision}
                         refresh={retry}
                       />
                     ) : null}

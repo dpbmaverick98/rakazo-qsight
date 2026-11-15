@@ -1,10 +1,22 @@
 import { ORPCError } from "@orpc/server";
 import type { Actor } from "@rakazo/contracts";
-import type { ClientSetup, CreatedProject, Hierarchy } from "@rakazo/contracts/hierarchy";
+import type {
+  ClientSetup,
+  CreateBuilding,
+  CreatedBuilding,
+  CreatedProject,
+  Hierarchy,
+  LocationCandidates,
+  LocationProof,
+} from "@rakazo/contracts/hierarchy";
 import {
   ChangeClientBindingSchema,
+  CreateBuildingSchema,
   CreateClientSchema,
   CreateProjectSchema,
+  HierarchyOperationIdSchema,
+  LocationProofInputSchema,
+  LocationQuerySchema,
 } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
@@ -27,8 +39,19 @@ export function mountHierarchyRoute(
       ) => Promise<unknown>;
     };
     source: {
+      searchLocations?: (query: string) => Promise<LocationCandidates>;
+      proveLocation?: (token: string) => Promise<LocationProof>;
+      createBuilding?: (
+        clientId: string,
+        data: CreateBuilding,
+        operationId?: string,
+      ) => Promise<CreatedBuilding>;
       read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
-      createProject?: (buildingId: string, name: string) => Promise<CreatedProject>;
+      createProject?: (
+        buildingId: string,
+        name: string,
+        operationId?: string,
+      ) => Promise<CreatedProject>;
       readCommercial?: (id: string) => Promise<ProjectCommercial>;
     } | null;
   },
@@ -108,6 +131,64 @@ export function mountHierarchyRoute(
       return c.json(result.body, result.status);
     }
   });
+  // Location data and proof bearers travel in POST bodies on the product boundary.
+  for (const action of ["locations/search", "locations/proof", "buildings"] as const) {
+    app.post(`/api/agent-plane/${action}`, async (c) => {
+      c.header("Cache-Control", "no-store");
+      const actor = await deps.sessionActor(c.req.raw);
+      if (!actor) return c.json({ status: "unauthorized" }, 401);
+      const origin = c.req.header("origin");
+      if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
+        return c.json({ status: "forbidden" }, 403);
+      if (c.req.header("content-type")?.split(";")[0]?.trim() !== "application/json")
+        return c.json({ status: "invalid_request" }, 400);
+      try {
+        if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
+        const operationId = c.req.header("Idempotency-Key");
+        if (operationId !== undefined && !HierarchyOperationIdSchema.safeParse(operationId).success)
+          return c.json({ status: "invalid_request" }, 400);
+        const source = deps.source;
+        const revision = c.req.header("x-rakazo-binding-revision");
+        const { binding } = await read(
+          actor,
+          revision === undefined ? undefined : Number(revision),
+        );
+        const body: unknown = await c.req.json();
+        if (action === "locations/search") {
+          const input = LocationQuerySchema.safeParse(body);
+          if (!input.success) return c.json({ status: "invalid_request" }, 400);
+          if (!source?.searchLocations) return c.json({ status: "disabled" }, 503);
+          const result = await source.searchLocations(input.data.query);
+          await deps.resolveBinding(actor, binding.revision);
+          return c.json(result);
+        }
+        if (action === "locations/proof") {
+          const input = LocationProofInputSchema.safeParse(body);
+          if (!input.success) return c.json({ status: "invalid_request" }, 400);
+          if (!source?.proveLocation) return c.json({ status: "disabled" }, 503);
+          const result = await source.proveLocation(input.data.verification_token);
+          await deps.resolveBinding(actor, binding.revision);
+          return c.json(result);
+        }
+        const input = CreateBuildingSchema.safeParse(body);
+        if (!input.success) return c.json({ status: "invalid_request" }, 400);
+        if (!source?.createBuilding) return c.json({ status: "disabled" }, 503);
+        if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
+        const result = await source.createBuilding(
+          binding.externalClientId,
+          input.data,
+          operationId,
+        );
+        await deps.resolveBinding(actor, binding.revision);
+        await deps.changed?.(actor);
+        return c.json(result, 201);
+      } catch (error) {
+        if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
+        const result = failure(error);
+        return c.json(result.body, result.status);
+      }
+    });
+  }
   app.post("/api/agent-plane/projects", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
@@ -139,13 +220,14 @@ export function mountHierarchyRoute(
       if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
       const building = hierarchy.buildings.find((item) => item.id === input.data.buildingId);
       if (!building) return c.json({ error: "Building unavailable" }, 404);
-      if (
-        building.projects.some(
-          (project) => project.name.toLowerCase() === input.data.name.toLowerCase(),
-        )
-      )
-        return c.json({ error: "Project already exists" }, 409);
-      const project = await source.createProject(input.data.buildingId, input.data.name);
+      const operationId = c.req.header("Idempotency-Key");
+      if (operationId !== undefined && !HierarchyOperationIdSchema.safeParse(operationId).success)
+        return c.json({ status: "invalid_request" }, 400);
+      const project = await source.createProject(
+        input.data.buildingId,
+        input.data.name,
+        operationId,
+      );
       await deps.resolveBinding(actor, binding.revision);
       await deps.changed?.(actor);
       return c.json(project, 201);
@@ -200,7 +282,7 @@ export function mountHierarchyRoute(
         revision === undefined ? undefined : Number(revision),
       );
       c.header("x-rakazo-binding-revision", String(binding.revision));
-      return c.json(hierarchy);
+      return c.json({ ...hierarchy, bindingRevision: binding.revision });
     } catch (error) {
       const result = failure(error);
       return c.json(result.body, result.status);

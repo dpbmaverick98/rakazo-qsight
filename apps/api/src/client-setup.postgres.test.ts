@@ -120,6 +120,17 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
         { revision: 1, client: null },
       ),
     ).rejects.toMatchObject({ message: "project_managers_exist" });
+    // A completed promotion must not let a setup retry restore broad owner tools.
+    await system.bot.update({
+      where: { id: missing.botId },
+      data: { spawnKey: "pm:synthetic-project" },
+    });
+    await system.botMcpServer.deleteMany({ where: { botId: missing.botId } });
+    await expect(setupClient(db.prisma, actor, source, client.name)).rejects.toMatchObject({
+      message: "setup_finished",
+    });
+    expect(await system.bot.count({ where: { spaceId: missing.spaceId } })).toBe(1);
+    expect(await system.botMcpServer.count({ where: { botId: missing.botId } })).toBe(0);
   });
 
   it("rejects inactive bindings and member-only access even for deployment owners", async () => {

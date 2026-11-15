@@ -57,7 +57,7 @@ it("requires a session before reading any external data", async () => {
 it("uses the bound ID despite display names and rechecks revision after reading", async () => {
   const { app, deps } = setup();
   const response = await app.request(paths[0]!);
-  expect(await response.json()).toEqual(data);
+  expect(await response.json()).toEqual({ ...data, bindingRevision: 1 });
   expect(deps.source.read).toHaveBeenCalledWith("client", true);
   expect(deps.resolveBinding).toHaveBeenLastCalledWith(actor, 1);
   expect(response.headers.get("cache-control")).toBe("no-store");
@@ -174,7 +174,7 @@ it("rechecks commercial membership after the external read", async () => {
   });
   expect((await app.request(paths[1]!)).status).toBe(403);
 });
-it("keeps project input/origin checks and duplicate guards before upstream writes", async () => {
+it("keeps project input and origin checks before upstream writes", async () => {
   const { app, deps } = setup();
   for (const [body, headers, status] of [
     ["{", { "Content-Type": "application/json" }, 400],
@@ -184,7 +184,6 @@ it("keeps project input/origin checks and duplicate guards before upstream write
       { "Content-Type": "application/json", origin: "https://foreign.example.test" },
       403,
     ],
-    ['{"buildingId":"building","name":" roof "}', { "Content-Type": "application/json" }, 409],
   ] as const)
     expect(
       (await app.request("/api/agent-plane/projects", { method: "POST", body, headers })).status,
@@ -233,4 +232,77 @@ it("validates client setup writes and returns resumable IDs without treating mis
   const conflict = await post({ name: "Example Client" });
   expect(conflict.status).toBe(409);
   expect(await conflict.json()).toEqual({ status: "binding_conflict" });
+});
+
+it("uses only the bound client for confirmed building writes and signals after commit", async () => {
+  const { deps } = setup();
+  const createBuilding = vi.fn(async () => ({
+    id: "site",
+    name: "Site",
+    address: "10 Example Street",
+    url: "https://example.test/buildings/site",
+  }));
+  const source = { ...deps.source, createBuilding };
+  const app = new Hono();
+  mountHierarchyRoute(app, { ...deps, source });
+  const body = { address: "10 Example Street", verification_token: "fake-proof", nickname: "Site" };
+  const post = (data: unknown, headers = {}) =>
+    app.request("/api/agent-plane/buildings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-rakazo-binding-revision": "1", ...headers },
+      body: JSON.stringify(data),
+    });
+  expect((await post({ ...body, client_id: "foreign" })).status).toBe(400);
+  expect(createBuilding).not.toHaveBeenCalled();
+  expect((await post(body)).status).toBe(201);
+  expect(createBuilding).toHaveBeenCalledWith("client", body, undefined);
+  expect(deps.changed).toHaveBeenCalledWith(actor);
+  deps.canCreateProject.mockResolvedValue(false);
+  expect((await post(body)).status).toBe(403);
+  expect(createBuilding).toHaveBeenCalledTimes(1);
+});
+it.each(["locations/search", "locations/proof", "buildings"])(
+  "guards %s with session, origin, membership and binding checks",
+  async (action) => {
+    const { deps } = setup();
+    const searchLocations = vi.fn();
+    const proveLocation = vi.fn();
+    const createBuilding = vi.fn();
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      ...deps,
+      source: { ...deps.source, searchLocations, proveLocation, createBuilding },
+    });
+    const post = (headers = {}) =>
+      app.request(`/api/agent-plane/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ query: "Example Street" }),
+      });
+    deps.sessionActor.mockResolvedValueOnce(null);
+    expect((await post()).status).toBe(401);
+    expect((await post({ origin: "https://foreign.example.test" })).status).toBe(403);
+    deps.resolveBinding.mockRejectedValueOnce(
+      new ORPCError("CONFLICT", { message: "binding_stale" }),
+    );
+    expect((await post()).status).toBe(409);
+    deps.canCreateProject.mockResolvedValue(false);
+    expect((await post()).status).toBe(403);
+    expect(searchLocations).not.toHaveBeenCalled();
+    expect(proveLocation).not.toHaveBeenCalled();
+    expect(createBuilding).not.toHaveBeenCalled();
+  },
+);
+it("allows the upstream receipt to replay a project already visible in the hierarchy", async () => {
+  const { app, deps } = setup();
+  expect(
+    (
+      await app.request("/api/agent-plane/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buildingId: "building", name: "Roof" }),
+      })
+    ).status,
+  ).toBe(201);
+  expect(deps.source.createProject).toHaveBeenCalledWith("building", "Roof", undefined);
 });

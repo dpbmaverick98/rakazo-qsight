@@ -72,7 +72,11 @@ export interface RouterDeps {
   projectManagers?: {
     ownerServerPrefix: string;
     read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
-    managerServer: (id: string, name: string) => Promise<McpServerConfigInput>;
+    managerServer: (
+      id: string,
+      name: string,
+    ) => Promise<McpServerConfigInput & { tokenId: string }>;
+    revokeManagerToken: (tokenId: string) => Promise<void>;
   } | null;
   pushTokens: PushTokenStore;
   /** Absent when the deployment cannot update a phone's live status card. */
