@@ -229,7 +229,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
     created: true,
   });
   expect(test.state.bots[0]).toMatchObject({
-    name: "PM — Roof survey",
+    name: "Proj. Manager - Sam",
     inheritMcpServers: false,
     dailyCheckIns: false,
     fleetManagement: false,
@@ -475,7 +475,9 @@ it("promotes the setup PM in place and removes its owner connection", async () =
     expect.objectContaining({ botId: "setup", serverId: result.server.id }),
   ]);
   expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
-  await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  test.state.bots[0]!.name = "My manager";
+  const reused = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(reused.bot.name).toBe("My manager");
   expect(test.state.bots).toHaveLength(1);
   expect(test.state.servers).toHaveLength(1);
   expect(

@@ -335,7 +335,11 @@ export function mountHierarchyRoute(
         revision === undefined ? undefined : Number(revision),
       );
       c.header("x-rakazo-binding-revision", String(binding.revision));
-      return c.json({ ...hierarchy, bindingRevision: binding.revision });
+      return c.json({
+        ...hierarchy,
+        bindingRevision: binding.revision,
+        canManage: (await deps.canCreateProject?.(actor)) === true,
+      });
     } catch (error) {
       const result = failure(error);
       return c.json(result.body, result.status);
