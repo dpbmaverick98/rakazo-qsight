@@ -10,6 +10,7 @@ test("display branding preserves application compatibility identifiers", () => {
   assert.equal(desktop.productName, "Vendor One Management");
   assert.equal(desktop.name, "@rakazo/desktop");
   assert.equal(desktop.build.appId, "dev.rakazo.desktop");
+  assert.equal(desktop.build.mac.executableName, "Rakazo");
   assert.equal(desktop.build.extraMetadata.name, "rakazo");
   const { expo } = json("apps/mobile/app.json");
   assert.equal(expo.name, "Vendor One Management");

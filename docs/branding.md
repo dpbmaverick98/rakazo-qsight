@@ -39,3 +39,5 @@ signed desktop packaging were not exercised locally.
 ![Desktop sign-in](./branding-sign-in.png)
 
 ![Mobile-width sign-in](./branding-sign-in-mobile.png)
+
+![Mobile-width marketing header](./branding-site-mobile.png)
