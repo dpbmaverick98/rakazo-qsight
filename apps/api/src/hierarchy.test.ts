@@ -16,24 +16,23 @@ it("requires a session and space membership before accessing the source", async 
   const app = new Hono();
   mountHierarchyRoute(app, {
     sessionActor,
-    source: { spaceId: actor.spaceId, read },
-    isPersonalSpace: async () => false,
+    source: { read },
+    spaceClientName: async () => data.client.name,
   });
   expect((await app.request("/api/agent-plane/hierarchy")).status).toBe(401);
   expect(read).not.toHaveBeenCalled();
 });
-it("hides an unconfigured source, other spaces and Personal", async () => {
+it("hides an unconfigured source and Personal", async () => {
   for (const [sourceSpace, personal] of [
     [null, false],
-    ["other", false],
     [actor.spaceId, true],
   ] as const) {
     const read = vi.fn(async () => data);
     const app = new Hono();
     mountHierarchyRoute(app, {
       sessionActor: async () => actor,
-      source: sourceSpace ? { spaceId: sourceSpace, read } : null,
-      isPersonalSpace: async () => personal,
+      source: sourceSpace ? { read } : null,
+      spaceClientName: async () => (personal ? null : data.client.name),
     });
     const response = await app.request("/api/agent-plane/hierarchy");
     expect(response.status).toBe(204);
@@ -46,8 +45,8 @@ it("returns data and sanitizes upstream failures", async () => {
   const app = new Hono();
   mountHierarchyRoute(app, {
     sessionActor: async () => actor,
-    source: { spaceId: actor.spaceId, read },
-    isPersonalSpace: async () => false,
+    source: { read },
+    spaceClientName: async () => data.client.name,
   });
   expect(await (await app.request("/api/agent-plane/hierarchy")).json()).toEqual(data);
   read.mockRejectedValueOnce(new Error("private upstream details"));
@@ -60,7 +59,6 @@ it("commercial reads authorize the session, bound space and mapped project befor
   const readCommercial = vi.fn(async () => commercialFixture);
   for (const [session, personal, configured, id, status] of [
     [null, false, true, "roof", 401],
-    [{ ...actor, spaceId: "other" }, false, true, "roof", 204],
     [actor, true, true, "roof", 204],
     [actor, false, false, "roof", 204],
     [actor, false, true, "unmapped", 404],
@@ -69,10 +67,9 @@ it("commercial reads authorize the session, bound space and mapped project befor
     const app = new Hono();
     mountHierarchyRoute(app, {
       sessionActor: async () => session,
-      isPersonalSpace: async () => personal,
+      spaceClientName: async () => (personal ? null : data.client.name),
       source: configured
         ? {
-            spaceId: actor.spaceId,
             read: async () => data,
             readCommercial,
           }
@@ -92,9 +89,8 @@ it("returns mapped commercial data and sanitizes commercial upstream errors", as
   const app = new Hono();
   mountHierarchyRoute(app, {
     sessionActor: async () => actor,
-    isPersonalSpace: async () => false,
+    spaceClientName: async () => data.client.name,
     source: {
-      spaceId: actor.spaceId,
       read: async () => ({
         ...data,
         buildings: [
@@ -114,4 +110,70 @@ it("returns mapped commercial data and sanitizes commercial upstream errors", as
   const failed = await app.request("/api/agent-plane/projects/roof/commercial");
   expect(failed.status).toBe(502);
   expect(await failed.json()).toEqual({ error: "Commercial view unavailable" });
+});
+
+it("resolves two authenticated spaces by their server names for hierarchy and commercial", async () => {
+  const names = { "client-space": "Example Client", second: "Second Client" };
+  const read = vi.fn(async (name?: string) => ({
+    client: { id: name!, name: name! },
+    buildings: [
+      {
+        id: "building",
+        name: "Building",
+        projects: [
+          {
+            id: name === "Example Client" ? "roof" : "second-project",
+            name: "Project",
+            url: "https://example.test",
+          },
+        ],
+      },
+    ],
+  }));
+  const readCommercial = vi.fn(async () => commercialFixture);
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    sessionActor: async (request) => ({
+      ...actor,
+      spaceId: request.headers.get("x-rakazo-space-id") ?? actor.spaceId,
+    }),
+    spaceClientName: async (actor) => names[actor.spaceId as keyof typeof names] ?? null,
+    source: { read, readCommercial },
+  });
+  for (const [spaceId, name] of Object.entries(names)) {
+    const response = await app.request("/api/agent-plane/hierarchy", {
+      headers: { "x-rakazo-space-id": spaceId },
+    });
+    expect(await response.json()).toHaveProperty("client.name", name);
+    expect(read).toHaveBeenLastCalledWith(name);
+    const commercial = await app.request("/api/agent-plane/projects/roof/commercial", {
+      headers: { "x-rakazo-space-id": spaceId },
+    });
+    expect(commercial.status).toBe(spaceId === "client-space" ? 200 : 404);
+    expect(read).toHaveBeenLastCalledWith(name);
+  }
+  expect(readCommercial).toHaveBeenCalledTimes(1);
+});
+it("does not use a default client for an empty or mismatched Space name", async () => {
+  for (const name of ["", "   ", "Missing Client"]) {
+    const read = vi.fn(async () => {
+      throw new Error("Hierarchy client mismatch");
+    });
+    const readCommercial = vi.fn(async () => commercialFixture);
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      sessionActor: async () => actor,
+      spaceClientName: async () => name,
+      source: { read, readCommercial },
+    });
+    for (const path of [
+      "/api/agent-plane/hierarchy",
+      "/api/agent-plane/projects/roof/commercial",
+    ]) {
+      expect((await app.request(path)).status).toBe(502);
+    }
+    if (name.trim()) expect(read.mock.calls).toEqual([[name], [name]]);
+    else expect(read).not.toHaveBeenCalled();
+    expect(readCommercial).not.toHaveBeenCalled();
+  }
 });

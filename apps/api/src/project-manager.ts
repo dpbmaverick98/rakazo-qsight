@@ -16,13 +16,12 @@ export async function provisionProjectManager(
 ) {
   const { deps, repos, prepareMcpServer, insertMcpServer } = ctx;
   const source = deps.projectManagers;
-  if (!source || source.spaceId !== actor.spaceId)
-    throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
+  if (!source) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   const space = await deps.prisma.space.findFirst({ where: { id: actor.spaceId } });
-  if (!space || space.isDefault)
+  if (!space || space.isDefault || !space.name.trim())
     throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   // Only canonical upstream names enter instructions or deterministic resource names.
-  const hierarchy = await source.read().catch(() => {
+  const hierarchy = await source.read(space.name).catch(() => {
     throw new ORPCError("BAD_GATEWAY", { message: "Project unavailable" });
   });
   const project = hierarchy.buildings
@@ -45,7 +44,8 @@ export async function provisionProjectManager(
   });
   if (shared)
     throw new ORPCError("CONFLICT", {
-      message: "Disable All bots on the owner-level QSight server before creating a project manager",
+      message:
+        "Disable All bots on the owner-level QSight server before creating a project manager",
     });
   const stored = await prepareMcpServer(actor, config);
   if (!stored) throw new ORPCError("INTERNAL_SERVER_ERROR");

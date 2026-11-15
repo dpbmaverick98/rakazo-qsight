@@ -49,7 +49,9 @@ function setup() {
         throw error;
       }
     }),
-    space: { findFirst: vi.fn(async () => ({ id: "space", isDefault: false })) },
+    space: {
+      findFirst: vi.fn(async () => ({ id: "space", name: "Example Client", isDefault: false })),
+    },
     bot: {
       findFirst: vi.fn(async ({ where }: Row) =>
         state.bots.find(
@@ -119,14 +121,15 @@ function setup() {
     vaultCredential: { count: async () => 0 },
     integrationProviderConfig: { count: async () => 0 },
     botMcpServer: {
-      count: vi.fn(async ({ where }: Row) =>
-        state.assignments.filter(
-          (assignment) =>
-            assignment.spaceId === where.spaceId &&
-            assignment.userId === where.userId &&
-            assignment.serverId === where.serverId &&
-            assignment.botId !== where.botId.not,
-        ).length,
+      count: vi.fn(
+        async ({ where }: Row) =>
+          state.assignments.filter(
+            (assignment) =>
+              assignment.spaceId === where.spaceId &&
+              assignment.userId === where.userId &&
+              assignment.serverId === where.serverId &&
+              assignment.botId !== where.botId.not,
+          ).length,
       ),
       deleteMany: vi.fn(async ({ where }: Row) => {
         state.assignments = state.assignments.filter(
@@ -149,8 +152,6 @@ function setup() {
   const source = qsightHierarchyFromEnv({
     QSIGHT_BASE_URL: "https://hierarchy.example.test",
     QSIGHT_AGENT_TOKEN: "fake-owner-write-token",
-    QSIGHT_CLIENT_ID: "client",
-    QSIGHT_SPACE_ID: "space",
   })!;
   const deps = {
     prisma,
@@ -253,9 +254,13 @@ it.each(["space", "personal", "project"])(
   "rejects an unavailable %s before minting",
   async (condition) => {
     const test = setup();
-    if (condition === "space") test.deps.projectManagers.spaceId = "other";
+    if (condition === "space") test.prisma.space.findFirst.mockResolvedValue(null as never);
     if (condition === "personal")
-      test.prisma.space.findFirst.mockResolvedValue({ id: "space", isDefault: true });
+      test.prisma.space.findFirst.mockResolvedValue({
+        id: "space",
+        name: "Personal",
+        isDefault: true,
+      });
     await expect(
       provisionProjectManager(test.ctx, actor, {
         ...input,
@@ -384,4 +389,23 @@ it("refuses provisioning while an owner server is shared with all bots", async (
   await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow(/All bots/);
   expect(test.state.bots).toHaveLength(0);
   expect(test.state.assignments).toHaveLength(0);
+});
+
+it("binds provisioning to the stored Space name without legacy IDs", async () => {
+  const test = setup();
+  await provisionProjectManager(test.ctx, { ...actor, spaceId: "second-space" }, input);
+  const url = test.upstream.mock.calls[0]![0];
+  expect(url.searchParams.get("client_name")).toBe("Example Client");
+  expect(url.searchParams.has("client_id")).toBe(false);
+});
+it("rejects an empty or mismatched Space name before minting", async () => {
+  for (const name of ["", "Other Client"]) {
+    const test = setup();
+    test.prisma.space.findFirst.mockResolvedValue({ id: "space", name, isDefault: false });
+    await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow();
+    expect(test.upstream.mock.calls.some(([url]) => String(url).includes("manager-token"))).toBe(
+      false,
+    );
+    expect(test.state.bots).toHaveLength(0);
+  }
 });

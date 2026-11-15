@@ -1003,11 +1003,14 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountHierarchyRoute(app, {
     sessionActor,
     source: qsightHierarchyFromEnv(),
-    isPersonalSpace: async (actor) => {
+    spaceClientName: async (actor) => {
       const space = await runAsTenant(actor, () =>
-        prisma.space.findUnique({ where: { id: actor.spaceId }, select: { isDefault: true } }),
+        prisma.space.findUnique({
+          where: { id: actor.spaceId },
+          select: { isDefault: true, name: true },
+        }),
       );
-      return !space || space.isDefault;
+      return !space || space.isDefault ? null : space.name;
     },
   });
   if (userDeviceHub && userDevices) {
