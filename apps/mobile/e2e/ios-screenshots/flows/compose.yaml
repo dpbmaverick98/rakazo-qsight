@@ -7,7 +7,7 @@ name: Compose
       RAKAZO_ACTIVE_EMAIL: ${RAKAZO_SCREENSHOT_EMAIL}
 - openLink: "rakazo:///new-space"
 - extendedWaitUntil:
-    visible: "Customer support|Create space"
+    visible: "Customer support|Create client space"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 3000

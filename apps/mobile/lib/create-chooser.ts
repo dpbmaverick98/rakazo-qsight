@@ -15,7 +15,7 @@ export const createMenuItems = [
   { id: "group", label: msg`New group chat`, sfSymbol: "person.2", materialIcon: "group" },
   {
     id: "space",
-    label: msg`New private space`,
+    label: msg`New client space`,
     sfSymbol: "square.grid.2x2",
     materialIcon: "grid_view",
   },

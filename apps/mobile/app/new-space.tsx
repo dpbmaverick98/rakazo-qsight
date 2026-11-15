@@ -34,7 +34,7 @@ export default function NewSpace() {
       if (navigation.isFocused() && isSearchInboxSession(askedIn)) hapticSuccess();
       void refreshOrganizations();
       if (!(await selectSpace(space.id))) {
-        Alert.alert(t`Space created`, t`It could not be opened. Try again from the sidebar.`);
+        Alert.alert(t`Client space created`, t`It could not be opened. Try again from the sidebar.`);
         router.dismissAll();
         router.replace("/");
         return;
@@ -42,7 +42,7 @@ export default function NewSpace() {
       router.dismissAll();
       router.replace("/");
     } catch (reason) {
-      setError(errorText(reason, t`Could not create space`));
+      setError(errorText(reason, t`Could not create client space`));
       setPending(false);
     }
   }
@@ -56,14 +56,14 @@ export default function NewSpace() {
         contentContainerStyle={{ padding: 24 }}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>{t`Name`}</Text>
+        <Text style={{ color: tokens.mutedForeground, fontSize: 14 }}>{t`Client name`}</Text>
         <TextInput
           autoFocus
           value={name}
           maxLength={60}
           onChangeText={setName}
           onSubmitEditing={() => void create()}
-          placeholder={t`Customer support`}
+          placeholder={t`Client name`}
           placeholderTextColor={tokens.mutedForeground}
           returnKeyType="done"
           style={{
@@ -78,7 +78,7 @@ export default function NewSpace() {
         {error ? <Text style={{ color: tokens.destructive, marginTop: 14 }}>{error}</Text> : null}
         <NativeActionButton
           disabled={!name.trim() || pending}
-          label={pending ? t`Creating…` : t`Create space`}
+          label={pending ? t`Creating…` : t`Create client space`}
           onPress={() => void create()}
           style={{ marginTop: 20 }}
         />
