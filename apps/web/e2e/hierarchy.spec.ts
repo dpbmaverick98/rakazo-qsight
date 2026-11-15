@@ -7,7 +7,6 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await signup(page, `hierarchy-${Date.now()}@rakazo.test`, "password12", "Test User");
   await completeOnboarding(page);
   const space = await rpc<{ id: string }>(page, "spaces/create", { name: "Example Client" });
-  const createdProjects: { id: string; name: string; url: string }[] = [];
   const candidate = {
     address: "10 Example Street",
     latitude: 51.505,
@@ -26,19 +25,6 @@ test("client hierarchy shares the right region with chat details", async ({ page
       ),
     }),
   );
-  await page.route("**/api/agent-plane/projects", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({ buildingId: "north", name: "Window survey" });
-    const project = {
-      id: "windows",
-      name: "Window survey",
-      url: "https://hierarchy.example.test/projects/windows",
-    };
-    createdProjects.push(project);
-    await route.fulfill({
-      status: 201,
-      json: { ...project, currency: "GBP", building_id: "north" },
-    });
-  });
   await page.route("**/api/agent-plane/hierarchy", async (route) => {
     if (route.request().headers()["x-rakazo-space-id"] !== space.id)
       return route.fulfill({ status: 204 });
@@ -53,7 +39,6 @@ test("client hierarchy shares the right region with chat details", async ({ page
             latitude: 51.505,
             longitude: -0.09,
             projects: [
-              ...createdProjects,
               {
                 id: "roof",
                 name: "Roof survey",
@@ -91,37 +76,24 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await expect(rail).toBeVisible();
   await expect(rail.getByText("Workspace artifacts", { exact: true })).toBeVisible();
   await expect(rail.getByText(candidate.address, { exact: true })).toBeVisible();
-  await expect(rail.getByText("Drywall", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "live-hierarchy-stage");
   await expect(rail.getByRole("region", { name: "Building map" })).toBeVisible();
-  await rail.locator(".leaflet-marker-icon").click();
+  await expect(rail.locator(".leaflet-marker-icon")).not.toHaveAttribute("tabindex");
+  await expect(building.locator(".lucide-building")).toBeVisible();
   await expect(building).toHaveAttribute("aria-expanded", "true");
-  const composer = page.getByTestId("composer-field").locator("textarea");
-  await expect(rail.getByRole("button", { name: "Add building", exact: true })).toHaveCount(0);
-  await rail.getByRole("button", { name: "Add project", exact: true }).click();
-  const projectForm = rail.getByRole("form", { name: "Add project", exact: true });
-  await expect(projectForm.getByRole("textbox", { name: "Project name" })).toBeFocused();
-  await captureScreenshot(page, testInfo, "add-project-form");
-  await projectForm.getByRole("textbox", { name: "Project name" }).fill("Window survey");
-  await projectForm.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(rail.getByRole("button", { name: "Window survey", exact: true })).toBeVisible();
-  await expect(composer).toHaveValue("");
-  await captureScreenshot(page, testInfo, "add-project-created");
+  await expect(
+    rail.getByRole("button", {
+      name: /Add project|Add building|Create project manager|Finish setup/,
+    }),
+  ).toHaveCount(0);
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
   await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
-  await commercial.getByRole("button", { name: "Create project manager", exact: true }).click();
-  await expect(commercial.getByRole("alert")).toHaveText(
-    "Could not create project manager. Try again.",
-  );
-  await expect(commercial.getByRole("button", { name: "Create project manager" })).toBeEnabled();
-  const managersResponse = await page.request.post("/rpc/bots/list", {
-    headers: { "x-rakazo-space-id": space.id },
-    data: { json: {} },
-  });
-  expect(managersResponse.ok()).toBeTruthy();
-  const { json: managers } = (await managersResponse.json()) as { json: { name: string }[] };
-  expect(managers.filter((item) => item.name === "Proj. Manager - Sam")).toHaveLength(0);
+  await expect(
+    rail.getByRole("button", {
+      name: /Add project|Add building|Create project manager|Finish setup/,
+    }),
+  ).toHaveCount(0);
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
@@ -137,6 +109,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   await expect(rail).toBeVisible();
+  await captureScreenshot(page, testInfo, "client-hierarchy-narrow");
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   await rail.getByRole("button", { name: "Finishes", exact: true }).click();
   await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();

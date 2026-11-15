@@ -1,17 +1,15 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { Bot } from "@rakazo/contracts";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
+import { Building } from "lucide-react";
 import { Suspense, useRef, useState } from "react";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { lazyComponent } from "../../lib/preload-recovery";
 import { withSpaceHeaders } from "../../lib/rpc";
-import { CreateProject } from "./create-project";
 import { hierarchyRetry } from "./hierarchy-refresh";
 import { CommercialSelection, ProjectActivity } from "./project-commercial";
-import { ProjectManagerAction } from "./project-manager";
 
 const BuildingMap = lazyComponent(() => import("./building-map").then((module) => module.default));
 
@@ -40,11 +38,8 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
 export function HierarchyRail({
   data,
   loading,
-  retry,
   scope,
-  onOpenBot,
 }: {
-  onOpenBot?: (bot: Bot) => void;
   scope?: { userId: string | null; spaceId: string | null };
   data?: Hierarchy | null;
   loading: boolean;
@@ -54,34 +49,25 @@ export function HierarchyRail({
 }) {
   const { t } = useLingui();
   const [closed, setClosed] = useState<Set<string>>(() => new Set());
-  const rows = useRef(new Map<string, HTMLLIElement>());
   const selectionTrigger = useRef<HTMLButtonElement | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const selectedProject = data?.buildings
     .flatMap((building) => building.projects)
     .find((project) => project.id === selected);
-  function selectBuilding(id: string) {
-    setClosed((previous) => {
-      const next = new Set(previous);
-      next.delete(id);
-      return next;
-    });
-    const row = rows.current.get(id);
-    row?.scrollIntoView({ block: "nearest" });
-    row?.querySelector("button")?.focus({ preventScroll: true });
-  }
   return (
     <section
       aria-label={t`Client hierarchy`}
       className="@container rk-scroll min-h-0 overflow-y-auto px-5 py-4"
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionHeading className="min-w-0 break-words">
+        <SectionHeading variant="label" className="min-w-0 break-words">
           <Trans>Workspace artifacts</Trans>
         </SectionHeading>
       </div>
-      {data?.buildings.length ? (
-        <p className="mb-3 text-body font-medium break-words">{data.client.name}</p>
+      {data ? (
+        <h2 className="mb-4 text-heading1 font-semibold tracking-tight break-words">
+          {data.client.name}
+        </h2>
       ) : null}
       {!data?.buildings.length ? (
         <p className="text-body text-muted-foreground">
@@ -92,20 +78,6 @@ export function HierarchyRail({
         <p role="status" className="text-body text-muted-foreground">
           <Trans>Loading hierarchy…</Trans>
         </p>
-      ) : null}
-      {data &&
-      scope?.spaceId &&
-      data.buildings.flatMap((building) => building.projects).length === 1 ? (
-        <ProjectManagerAction
-          key={`${scope.spaceId}:${data.client.id}`}
-          project={data.buildings.flatMap((building) => building.projects)[0]!}
-          client={data.client.name}
-          spaceId={scope.spaceId}
-          onOpenBot={onOpenBot}
-          bindingRevision={data.bindingRevision}
-          finishSetup
-          onChanged={retry}
-        />
       ) : null}
       {data ? (
         <nav
@@ -118,21 +90,15 @@ export function HierarchyRail({
             <ErrorBoundary fallback={null}>
               <Suspense fallback={null}>
                 <div className="mb-3 h-40 overflow-hidden rounded-md border border-border @min-[300px]:h-48">
-                  <BuildingMap buildings={data.buildings} onSelect={selectBuilding} />
+                  <BuildingMap buildings={data.buildings} />
                 </div>
               </Suspense>
             </ErrorBoundary>
           ) : null}
           {data.buildings.length > 0 ? (
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col gap-5">
               {data.buildings.map((building) => (
-                <li
-                  key={building.id}
-                  ref={(row) => {
-                    if (row) rows.current.set(building.id, row);
-                    else rows.current.delete(building.id);
-                  }}
-                >
+                <li key={building.id}>
                   <Disclosure
                     open={!closed.has(building.id)}
                     onOpenChange={(expanded) =>
@@ -143,28 +109,30 @@ export function HierarchyRail({
                         return next;
                       })
                     }
-                    summary={building.name}
-                    summaryClassName="min-h-10 w-full justify-between break-words text-body"
+                    summary={
+                      <span className="flex min-w-0 items-start gap-2">
+                        <Building
+                          aria-hidden="true"
+                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                        />
+                        <span className="min-w-0 break-words">{building.name}</span>
+                      </span>
+                    }
+                    summaryClassName="min-h-10 w-full justify-between gap-2 text-start text-body font-medium"
                   >
-                    {building.address ? (
-                      <p className="ps-4 text-body text-muted-foreground break-words">
+                    {building.address?.trim() &&
+                    building.address.trim().toLocaleLowerCase() !==
+                      building.name.trim().toLocaleLowerCase() ? (
+                      <p className="mb-2 ps-6 text-caption text-muted-foreground break-words">
                         {building.address}
                       </p>
-                    ) : null}
-                    {!closed.has(building.id) ? (
-                      <CreateProject
-                        buildingId={building.id}
-                        spaceId={scope?.spaceId ?? null}
-                        bindingRevision={data.bindingRevision}
-                        refresh={retry}
-                      />
                     ) : null}
                     {building.projects.length === 0 ? (
                       <p className="ps-4 text-body text-muted-foreground">
                         <Trans>No projects</Trans>
                       </p>
                     ) : (
-                      <ul className="border-s border-border ps-4">
+                      <ul className="ms-2 border-s border-border ps-3">
                         {building.projects.map((project) => (
                           <li key={project.id}>
                             <Button
@@ -200,9 +168,7 @@ export function HierarchyRail({
         <CommercialSelection
           key={selectedProject.id}
           {...scope}
-          onOpenBot={onOpenBot}
           projectId={selectedProject.id}
-          client={data!.client.name}
           back={() => {
             setSelected(null);
             selectionTrigger.current?.focus();

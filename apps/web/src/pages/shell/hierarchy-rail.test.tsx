@@ -160,7 +160,7 @@ it("hides the map when coordinates are absent or incomplete", async () => {
   }
 });
 
-it("pins only complete coordinates and selects, expands and scrolls the building", async () => {
+it("pins only complete coordinates without interactive markers", async () => {
   // Preload the lazy module so this test can observe the real Leaflet marker DOM.
   await import("./building-map");
   const scroll = vi.fn();
@@ -190,14 +190,14 @@ it("pins only complete coordinates and selects, expands and scrolls the building
     const pins = view.container.querySelectorAll<HTMLElement>(".leaflet-marker-icon");
     expect(pins).toHaveLength(1);
     expect(pins[0]!.getAttribute("title")).toBe("North Building");
-    expect(pins[0]!.getAttribute("tabindex")).toBe("0");
+    expect(pins[0]!.hasAttribute("tabindex")).toBe(false);
+    expect(pins[0]!.classList.contains("leaflet-interactive")).toBe(false);
     await act(async () => pins[0]!.click());
     const button = [...view.container.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("North Building"),
     )!;
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(document.activeElement).toBe(button);
-    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+    expect(scroll).not.toHaveBeenCalled();
   } finally {
     await view.close();
     Element.prototype.scrollIntoView = originalScroll;
@@ -219,61 +219,27 @@ it("does not offer building setup in the rail", async () => {
   }
 });
 
-it("submits in the rail, retains errors and refreshes after success without a chat handoff", async () => {
-  const project = {
-    id: "new",
-    name: "New",
-    currency: "GBP",
-    building_id: "north",
-    url: "https://example.test/projects/new",
-  };
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(new Response(null, { status: 409 }))
-    .mockResolvedValueOnce(new Response(null, { status: 502 }))
-    .mockResolvedValueOnce(Response.json(project));
-  vi.stubGlobal("fetch", fetch);
-  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
-  try {
-    const click = async (name: string) =>
-      act(async () =>
-        [...view.container.querySelectorAll("button")]
-          .find((button) => button.textContent === name)!
-          .click(),
+it("keeps the rail read-only with a large client name and a building icon", async () => {
+  for (const props of [
+    {},
+    { data: { ...data, buildings: [] } },
+    { data: undefined, loading: true },
+  ]) {
+    const view = await mount(props);
+    try {
+      expect(view.container.textContent).not.toMatch(
+        /Add project|Add building|Create project manager|Finish setup/,
       );
-    await click("Add project");
-    const form = view.container.querySelector("form")!;
-    const input = form.querySelector("input")!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
-        input,
-        " New ",
-      );
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    for (const message of [
-      "Project already exists",
-      "Could not complete project setup. Try again.",
-      null,
-    ]) {
-      await act(async () =>
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
-      );
-      if (message) {
-        expect(view.container.querySelector('[role="alert"]')?.textContent).toBe(message);
-        expect(input.value).toBe(" New ");
-        expect(view.retry).not.toHaveBeenCalled();
+      expect(view.container.querySelector("form")).toBeNull();
+      if (props.data !== undefined || !props.loading)
+        expect(view.container.querySelector("h2")?.textContent).toBe("Example Client");
+      if (!props.data && !props.loading) {
+        expect(view.container.textContent).not.toContain("Building —");
+        expect(view.container.querySelector(".lucide-building")).not.toBeNull();
       }
+    } finally {
+      await view.close();
     }
-    expect(fetch.mock.calls[0]![1]).toMatchObject({
-      method: "POST",
-      body: JSON.stringify({ buildingId: "north", name: "New" }),
-    });
-    expect(view.retry).toHaveBeenCalledOnce();
-    expect(view.container.querySelector("form")).toBeNull();
-    expect(document.activeElement?.textContent).toBe("Add project");
-  } finally {
-    await view.close();
   }
 });
 
@@ -373,3 +339,18 @@ it("keeps permission denials as errors", async () => {
     client.clear();
   }
 });
+
+it.each(["North Building", "  north building  "])(
+  "omits a duplicate address %s",
+  async (address) => {
+    const view = await mount({
+      data: { ...data, buildings: [{ ...data.buildings[0]!, address }] },
+    });
+    try {
+      expect(view.container.textContent?.match(/North Building/g)).toHaveLength(1);
+      expect(view.container.querySelector("p")).toBeNull();
+    } finally {
+      await view.close();
+    }
+  },
+);

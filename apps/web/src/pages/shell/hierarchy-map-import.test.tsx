@@ -6,7 +6,10 @@ import { expect, it, vi } from "vitest";
 import { HierarchyRail } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
-  useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
+  useLingui: () => ({
+    t: (parts: TemplateStringsArray, ...values: unknown[]) =>
+      parts.reduce((text, part, i) => text + part + (values[i] ?? ""), ""),
+  }),
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("./building-map", () => {

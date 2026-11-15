@@ -8,9 +8,55 @@ import { rpcForSpace } from "../../lib/rpc";
 import { CreateBuilding } from "./create-building";
 import { CreateProject } from "./create-project";
 
-export function ClientSpaceAction({
+export function ClientSpaceAction(props: {
+  action: "building" | "project";
+  spaceId: string;
+  buildingId?: string;
+  hierarchy?: Hierarchy | null;
+  loading?: boolean;
+  retry?: () => void;
+  onClose: () => void;
+  onOpenBot: (bot: Bot) => void;
+  refreshRoster: () => Promise<void>;
+}) {
+  const { t } = useLingui();
+  if (props.hierarchy) return <ReadyClientSpaceAction {...props} hierarchy={props.hierarchy} />;
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) props.onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {props.action === "building" ? t`Add building` : t`Add project`}
+          </DialogTitle>
+        </DialogHeader>
+        {props.loading ? (
+          <p role="status">
+            <Trans>Loading hierarchy…</Trans>
+          </p>
+        ) : (
+          <>
+            <p role="alert">
+              <Trans>Hierarchy unavailable</Trans>
+            </p>
+            <Button onClick={props.retry}>
+              <Trans>Retry</Trans>
+            </Button>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ReadyClientSpaceAction({
   action,
   spaceId,
+  buildingId: initialBuildingId,
   hierarchy,
   onClose,
   onOpenBot,
@@ -19,6 +65,7 @@ export function ClientSpaceAction({
   action: "building" | "project";
   spaceId: string;
   hierarchy: Hierarchy;
+  buildingId?: string;
   onClose: () => void;
   onOpenBot: (bot: Bot) => void;
   refreshRoster: () => Promise<void>;
@@ -27,7 +74,7 @@ export function ClientSpaceAction({
   const id = useId();
   const queries = useQueryClient();
   const [buildingId, setBuildingId] = useState(
-    action === "building" ? "" : (hierarchy.buildings[0]?.id ?? ""),
+    action === "building" ? "" : (initialBuildingId ?? hierarchy.buildings[0]?.id ?? ""),
   );
   const [newBuilding, setNewBuilding] = useState(
     action === "building" || !hierarchy.buildings.length,
@@ -39,9 +86,22 @@ export function ClientSpaceAction({
     void queries.invalidateQueries({ queryKey: ["hierarchy"] });
     void queries.invalidateQueries({ queryKey: ["client-navigation"] });
   };
-  async function provision(project: Pick<CreatedProject, "id" | "name">) {
+  async function openManager(botId: string) {
+    refresh();
+    await refreshRoster();
+    const bots = await rpcForSpace(spaceId).bots.list({});
+    const bot = bots.find((item) => item.id === botId);
+    if (!bot) throw new Error("Manager unavailable");
+    onOpenBot(bot);
+    onClose();
+  }
+  async function provision(project: Pick<CreatedProject, "id" | "name" | "botId">) {
     setBusy(true);
     try {
+      if (project.botId) {
+        await openManager(project.botId);
+        return;
+      }
       const { bot } = await rpcForSpace(spaceId).mcp.servers.provisionProjectManager({
         projectId: project.id,
         projectName: project.name,
@@ -78,7 +138,11 @@ export function ClientSpaceAction({
             refresh={refresh}
             initiallyOpen
             onBusyChange={setBusy}
-            onCreated={(building) => {
+            onCreated={async (building) => {
+              if (action === "building" && building.botId) {
+                await openManager(building.botId);
+                return;
+              }
               setCreatedBuilding(building);
               setBuildingId(building.id);
               setNewBuilding(false);

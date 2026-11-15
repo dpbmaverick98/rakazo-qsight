@@ -77,7 +77,11 @@ export function SidebarRoster({
   applyRosterDrop: (target: RosterDropTarget, sameList: boolean, botIds: string[]) => void;
   openSpaceChat: (spaceId: string, path: string) => void;
   spaceMenuAnchor: RefObject<HTMLElement | null>;
-  setSpaceMenu: (menu: { id: string; position: { x: number; y: number } }) => void;
+  setSpaceMenu: (menu: {
+    id: string;
+    buildingId?: string;
+    position: { x: number; y: number };
+  }) => void;
   setRenameSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
   setDeleteSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
   toggleSidebarSection: (key: string) => void;
@@ -179,6 +183,7 @@ export function SidebarRoster({
                             spaceMenuAnchor.current = event.currentTarget;
                             setSpaceMenu({
                               id: group.spaceId,
+                              buildingId: group.buildingId,
                               position: { x: event.clientX, y: event.clientY },
                             });
                           }
@@ -248,15 +253,16 @@ export function SidebarRoster({
                 size="icon-sm"
                 className={
                   group.title
-                    ? `col-start-1 row-start-1 justify-self-end self-center ${group.emptySpaceId ? "" : "me-6"}`
+                    ? `relative z-10 col-start-1 row-start-1 justify-self-end self-center ${group.emptySpaceId ? "" : "me-6"}`
                     : undefined
                 }
-                aria-label={t`Actions for ${group.spaceName}`}
+                aria-label={t`Actions for ${group.title ?? group.spaceName}`}
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect();
                   spaceMenuAnchor.current = event.currentTarget;
                   setSpaceMenu({
                     id: group.spaceId,
+                    buildingId: group.buildingId,
                     position: { x: rect.left, y: rect.bottom },
                   });
                 }}

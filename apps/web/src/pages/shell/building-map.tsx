@@ -5,18 +5,10 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 
 /** Read-only enhancement: the adjacent building disclosures remain the navigation fallback. */
-export default function BuildingMap({
-  buildings,
-  onSelect,
-}: {
-  buildings: Hierarchy["buildings"];
-  onSelect: (id: string) => void;
-}) {
+export default function BuildingMap({ buildings }: { buildings: Hierarchy["buildings"] }) {
   const { t } = useLingui();
   const [failed, setFailed] = useState(false);
   const container = useRef<HTMLElement>(null);
-  const select = useRef(onSelect);
-  select.current = onSelect;
   useEffect(() => {
     if (!container.current || failed) return;
     const located = buildings.filter(
@@ -24,7 +16,13 @@ export default function BuildingMap({
     );
     if (!located.length) return;
     const view = map(container.current, {
+      dragging: false,
       scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false,
+      tapHold: false,
       zoomControl: false,
       attributionControl: true,
     });
@@ -40,22 +38,17 @@ export default function BuildingMap({
       for (const building of located) {
         const point: [number, number] = [building.latitude!, building.longitude!];
         bounds.extend(point);
-        const label = document.createElement("span");
-        label.textContent = building.name;
         marker(point, {
           icon: divIcon({
-            className:
-              "rounded-full border-2 border-background bg-primary shadow-sm focus-visible:outline focus-visible:outline-ring",
+            className: "rounded-full border-2 border-background bg-primary shadow-sm",
             iconSize: [18, 18],
             iconAnchor: [9, 9],
           }),
           title: building.name,
           alt: building.name,
-          keyboard: true,
-        })
-          .addTo(view)
-          .bindTooltip(label)
-          .on("click", () => select.current(building.id));
+          keyboard: false,
+          interactive: false,
+        }).addTo(view);
       }
       view.fitBounds(bounds, { padding: [24, 24], maxZoom: 16, animate: false });
       const resize = new ResizeObserver(() => {
@@ -77,7 +70,7 @@ export default function BuildingMap({
     <section
       ref={container}
       aria-label={t`Building map`}
-      className="relative isolate h-full w-full bg-muted"
+      className="building-map-pastel relative isolate h-full w-full bg-muted"
     />
   );
 }

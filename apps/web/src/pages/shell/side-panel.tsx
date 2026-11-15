@@ -146,7 +146,6 @@ export function ShellSidePanel({
             <HierarchyRail
               key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
               scope={hierarchyScope}
-              onOpenBot={openCreatedBot}
               data={
                 hierarchy.isError && !hierarchyRetry(0, hierarchy.error)
                   ? undefined

@@ -12,11 +12,14 @@ vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
-const mocks = vi.hoisted(() => ({ provision: vi.fn() }));
+const mocks = vi.hoisted(() => ({ provision: vi.fn(), list: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({
   withSpaceHeaders: (headers: HeadersInit, spaceId: string) =>
     new Headers({ ...Object.fromEntries(new Headers(headers)), "x-rakazo-space-id": spaceId }),
-  rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: mocks.provision } } }),
+  rpcForSpace: () => ({
+    bots: { list: mocks.list },
+    mcp: { servers: { provisionProjectManager: mocks.provision } },
+  }),
 }));
 const hierarchy: Hierarchy = {
   bindingRevision: 3,
@@ -34,6 +37,7 @@ let root: Root;
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  mocks.list.mockResolvedValue([{ id: "manager" }]);
   mocks.provision.mockResolvedValue({ bot: { id: "manager" }, created: true });
 });
 afterEach(() => {
@@ -41,7 +45,10 @@ afterEach(() => {
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
 });
-async function mount(action: "building" | "project" = "project", data = hierarchy) {
+async function mount(
+  action: "building" | "project" = "project",
+  data: Hierarchy | null = hierarchy,
+) {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -131,7 +138,7 @@ it("reuses and reveals an existing project's manager without recreating the proj
   });
   expect(view.onOpenBot).toHaveBeenCalledWith({ id: "existing" });
 });
-it("uses verified location proof, then opens a project scoped to the new building", async () => {
+it("uses verified location proof, then opens the new building manager", async () => {
   const location = {
     address: "10 Example Street",
     latitude: 51,
@@ -154,6 +161,7 @@ it("uses verified location proof, then opens a project scoped to the new buildin
     .mockResolvedValueOnce(
       Response.json({
         id: "south",
+        botId: "manager",
         name: "South Building",
         address: location.address,
         url: "https://example.test/buildings/south",
@@ -180,13 +188,8 @@ it("uses verified location proof, then opens a project scoped to the new buildin
     verification_token: "proof",
     nickname: "",
   });
-  expect(document.querySelector<HTMLSelectElement>("select")!.value).toBe("south");
-  await fill("Roof survey");
-  await submit();
-  expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
-    buildingId: "south",
-    name: "Roof survey",
-  });
+  expect(mocks.provision).not.toHaveBeenCalled();
+  expect(view.refreshRoster).toHaveBeenCalledOnce();
   expect(view.onOpenBot).toHaveBeenCalledOnce();
 });
 it("offers a new building from Add project and rejects an unselectable address", async () => {
@@ -219,4 +222,28 @@ it("offers a new building from Add project and rejects an unselectable address",
   expect(document.querySelector<HTMLInputElement>('input[type="radio"]')!.disabled).toBe(true);
   expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
   expect(mocks.provision).not.toHaveBeenCalled();
+});
+
+it("opens the server-provisioned project manager without provisioning it twice", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ ...project, botId: "manager" })),
+  );
+  const view = await mount();
+  await fill("Roof survey");
+  await submit();
+  expect(mocks.provision).not.toHaveBeenCalled();
+  expect(view.onOpenBot).toHaveBeenCalledWith({ id: "manager" });
+  expect(view.refreshRoster).toHaveBeenCalledOnce();
+});
+it("opens an empty hierarchy directly in building creation", async () => {
+  await mount("project", { ...hierarchy, buildings: [] });
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Add building");
+  expect(document.querySelector('input[minlength="3"]')).not.toBeNull();
+});
+
+it("shows a dialog immediately without hierarchy data and offers a retry", async () => {
+  await mount("building", null);
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Add building");
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe("Hierarchy unavailable");
 });

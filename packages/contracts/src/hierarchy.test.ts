@@ -8,9 +8,10 @@ const parse = (coordinates: object) =>
     buildings: [{ ...building, ...coordinates }],
   }).buildings[0];
 
-it("accepts nullable, missing and boundary coordinates while stripping addresses", () => {
-  expect(parse({ latitude: 0, longitude: 0, address: "omit" })).toEqual({
+it("accepts nullable, missing and boundary coordinates and preserves building addresses", () => {
+  expect(parse({ latitude: 0, longitude: 0, address: "Example Street" })).toEqual({
     ...building,
+    address: "Example Street",
     latitude: 0,
     longitude: 0,
   });

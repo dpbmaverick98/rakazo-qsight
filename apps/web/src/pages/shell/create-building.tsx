@@ -27,7 +27,7 @@ export function CreateBuilding({
   bindingRevision?: number;
   initiallyOpen?: boolean;
   onBusyChange?: (busy: boolean) => void;
-  onCreated?: (building: CreatedBuilding) => void;
+  onCreated?: (building: CreatedBuilding) => void | Promise<void>;
 }) {
   const { t } = useLingui();
   const id = useId();
@@ -129,8 +129,8 @@ export function CreateBuilding({
                   await post("buildings", confirmed.current),
                 );
                 refresh();
+                await onCreated?.(building);
                 close();
-                onCreated?.(building);
               } else if (candidates && choice !== null) {
                 const candidate = candidates.items[choice];
                 if (!candidate?.selectable) return;

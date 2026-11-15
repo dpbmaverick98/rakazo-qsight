@@ -61,7 +61,6 @@ it.each(["initialization", "tiles"])(
                 buildings={[
                   { id: "north", name: "North Building", latitude: 0, longitude: 0, projects: [] },
                 ]}
-                onSelect={() => {}}
               />
             </ErrorBoundary>
             <button type="button">North Building</button>
@@ -69,7 +68,36 @@ it.each(["initialization", "tiles"])(
         ),
       );
       if (failure === "tiles") {
-        expect(container.querySelector('[aria-label="Building map"]')).not.toBeNull();
+        expect(mocks.map).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            touchZoom: false,
+            tapHold: false,
+            zoomControl: false,
+            attributionControl: true,
+          }),
+        );
+        expect(mocks.marker).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({
+            keyboard: false,
+            interactive: false,
+          }),
+        );
+        expect(
+          container
+            .querySelector('[aria-label="Building map"]')
+            ?.classList.contains("building-map-pastel"),
+        ).toBe(true);
+        expect(mocks.tileLayer).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ attribution: expect.stringContaining("OpenStreetMap") }),
+        );
         await act(async () => tileFailed());
       }
       expect(container.querySelector('[aria-label="Building map"]')).toBeNull();
