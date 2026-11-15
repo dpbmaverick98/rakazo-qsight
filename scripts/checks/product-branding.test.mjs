@@ -19,5 +19,5 @@ test("display branding preserves application compatibility identifiers", () => {
   assert.equal(expo.android.package, "com.rakazo.app");
   assert.match(read("apps/web/index.html"), /<title>Vendor One Management<\/title>/);
   assert.match(read("apps/web/src/pwa/plugin.ts"), /name: "Vendor One Management"/);
-  assert.match(read("apps/web/src/pwa/plugin.ts"), /short_name: "Vendor One Management"/);
+  assert.match(read("apps/web/src/pwa/plugin.ts"), /short_name: "Vendor One"/);
 });

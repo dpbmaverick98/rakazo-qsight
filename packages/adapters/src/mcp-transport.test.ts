@@ -616,7 +616,12 @@ describe("MCP transport seam", () => {
     try {
       await expect(
         (await safeFetch("https://mcp.example.test/mcp", { headers })).json(),
-      ).resolves.toEqual({ ...headers, host: "mcp.example.test" });
+      ).resolves.toEqual({
+        ...headers,
+        host: "mcp.example.test",
+        "x-request-id": expect.any(String),
+        traceparent: expect.stringMatching(/^00-/),
+      });
       await expect(
         (await safeFetch("https://auth.example.test/discovery", { headers })).json(),
       ).resolves.toEqual({ host: "auth.example.test" });

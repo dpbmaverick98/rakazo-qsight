@@ -18,7 +18,7 @@ export function webManifest() {
   return {
     id: "/",
     name: "Vendor One Management",
-    short_name: "Vendor One Management",
+    short_name: "Vendor One",
     description: "Your team of always-on agents.",
     start_url: "/",
     scope: "/",

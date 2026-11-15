@@ -3769,3 +3769,51 @@ describe("explicit-only MCP bots", () => {
     }
   });
 });
+
+it.each([true, false])(
+  "logs the selected server and selection source (assigned=%s) without credentials",
+  async (assigned) => {
+    vi.stubEnv("CLIENT_SETUP_DEBUG", "1");
+    const previous = getLogger();
+    const sink = createTestSink();
+    installLogger(createLogger({ service: "test", sinks: [sink] }));
+    const server = {
+      ...SERVER,
+      name: "Example setup tools",
+      headers: { Authorization: "Bearer private-credential" },
+    };
+    const prisma = {
+      bot: { findFirst: async () => ({ inheritMcpServers: true }) },
+      botMcpServer: { findFirst: async () => (assigned ? { ...ASSIGNMENT, server } : null) },
+      mcpServer: { findFirst: async () => server },
+    };
+    const connector = new McpConnector(prisma as never, {} as never);
+    try {
+      for await (const _event of connector.execute(
+        {
+          tool: "unavailable",
+          args: { text: "private-document" },
+          route: { connectorId: "mcp", resourceId: SERVER.id, toolName: "__rakazo_unavailable" },
+        } as never,
+        { userId: "u1", spaceId: "w1", botId: "bot-1" } as never,
+      )) {
+        /* Selection alone; no transport is opened. */
+      }
+      expect(sink.events).toContainEqual(
+        expect.objectContaining({
+          message: "client_setup.mcp.selected",
+          serverId: SERVER.id,
+          serverName: server.name,
+          botId: "bot-1",
+          operation: assigned ? "assigned" : "inherited",
+        }),
+      );
+      expect(JSON.stringify(sink.events)).not.toContain("private-credential");
+      expect(JSON.stringify(sink.events)).not.toContain("private-document");
+    } finally {
+      await connector.close();
+      installLogger(previous);
+      vi.unstubAllEnvs();
+    }
+  },
+);

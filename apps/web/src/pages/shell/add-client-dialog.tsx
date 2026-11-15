@@ -11,6 +11,7 @@ import {
   Input,
 } from "@rakazo/ui-web";
 import { useId, useRef, useState } from "react";
+import { clientSetupDebug, clientSetupFetch } from "../../lib/client-setup-debug";
 import { withSpaceHeaders } from "../../lib/rpc";
 
 export function AddClientDialog({
@@ -45,7 +46,7 @@ export function AddClientDialog({
             setSaving(true);
             setError("");
             try {
-              const response = await fetch("/api/agent-plane/clients", {
+              const response = await clientSetupFetch("add_client", "/api/agent-plane/clients", {
                 method: "POST",
                 credentials: "include",
                 headers: withSpaceHeaders({ "Content-Type": "application/json" }),
@@ -57,6 +58,12 @@ export function AddClientDialog({
               }
               if (!response.ok) throw new Error("Setup unavailable");
               const setup = ClientSetupSchema.parse(await response.json());
+              clientSetupDebug("add_client", {
+                ...setup,
+                requestId: response.headers.get("x-request-id"),
+                httpStatus: response.status,
+                status: "parsed",
+              });
               setResult(setup);
               if (setup.status === "ready") onDone(setup);
             } catch {

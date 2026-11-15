@@ -4,7 +4,7 @@ import type { Actor } from "@rakazo/contracts";
 import { PROJECT_MANAGER_TOOLS, retry } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import { lockSpaceDeletion } from "@rakazo/db";
-import { bestEffort } from "@rakazo/logging";
+import { bestEffort, clientSetupDebug, clientSetupStage } from "@rakazo/logging";
 import { lockOwner } from "./availability.js";
 import { mcpServerDto } from "./mcp-servers.js";
 import { projectManagerInstructions } from "./project-manager.prompt.js";
@@ -13,6 +13,22 @@ import { bindingAccess, boundHierarchy, resolveClientBinding } from "./space-cli
 
 /** Token minting and endpoint validation finish before any product records change. */
 export async function provisionProjectManager(
+  ctx: RouterContext,
+  actor: Actor,
+  input: {
+    projectId: string;
+    projectName: string;
+    clientName: string;
+    bindingRevision?: number;
+    finishSetup?: boolean;
+  },
+) {
+  return clientSetupStage("promotion", { actorId: actor.userId, spaceId: actor.spaceId }, () =>
+    provision(ctx, actor, input),
+  );
+}
+
+async function provision(
   ctx: RouterContext,
   actor: Actor,
   input: {
@@ -224,16 +240,26 @@ export async function provisionProjectManager(
       },
     );
     await deps.events.publishRosterChange?.({ spaceIds: [actor.spaceId] });
+    clientSetupDebug("promotion", {
+      actorId: actor.userId,
+      spaceId: actor.spaceId,
+      clientId: binding.externalClientId,
+      botId: result.bot.id,
+      serverId: result.server.id,
+      status: "committed",
+    });
     return result;
   } finally {
     if (!adopted)
       await bestEffort(
         "revoke unused project manager token",
-        retry(() => source.revokeManagerToken(tokenId), {
-          attempts: 3,
-          delayMs: [100, 500],
-          retryable: () => true,
-        }),
+        clientSetupStage("token.revoke", { actorId: actor.userId, spaceId: actor.spaceId }, () =>
+          retry(() => source.revokeManagerToken(tokenId), {
+            attempts: 3,
+            delayMs: [100, 500],
+            retryable: () => true,
+          }),
+        ),
       );
   }
 }

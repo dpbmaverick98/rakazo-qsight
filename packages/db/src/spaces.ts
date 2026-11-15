@@ -150,7 +150,7 @@ export async function createSpaceForMember(
     /** Explicit canonical authority, never inferred from a Space name. */
     client?: { id: string; name: string };
   },
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string; reused: boolean }> {
   const name = normalizeSpaceName(input.name);
   const spaceId = randomUUID();
   const spaceMembershipId = randomUUID();
@@ -184,7 +184,7 @@ export async function createSpaceForMember(
               binding.space.isDefault
             )
               throw new ClientSpaceConflictError();
-            return { id: binding.spaceId, name: binding.space.name };
+            return { id: binding.spaceId, name: binding.space.name, reused: true };
           }
         }
         const deleting = await tx.space.count({
@@ -221,7 +221,7 @@ export async function createSpaceForMember(
           userId: input.userId,
           memoryContent: "# Space memory\n\n",
         });
-        return { id: spaceId, name };
+        return { id: spaceId, name, reused: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
