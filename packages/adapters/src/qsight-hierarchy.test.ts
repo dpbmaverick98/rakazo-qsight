@@ -40,13 +40,13 @@ it("authenticates server-side, sanitizes data, encodes links and caches briefly"
   const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(raw));
   vi.stubGlobal("fetch", fetch);
   const source = qsightHierarchyFromEnv(config)!;
-  const result = await source.read();
+  const result = await source.read("7");
   expect(result.client).toEqual({ id: "7", name: "Example Client" });
   expect(result.buildings[0]).not.toHaveProperty("address");
   expect(result.buildings[0]!.projects[0]!.url).toBe(
     "https://hierarchy.example.test/projects/roof%2Fsurvey",
   );
-  await source.read();
+  await source.read("7");
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(fetch.mock.calls[0]![1]).toMatchObject({
     headers: { Authorization: "Bearer fake-token" },
@@ -62,8 +62,8 @@ it("does not cache errors, malformed data, or another client", async () => {
     .mockResolvedValueOnce(Response.json(raw));
   vi.stubGlobal("fetch", fetch);
   const source = qsightHierarchyFromEnv(config)!;
-  for (let i = 0; i < 3; i++) await expect(source.read()).rejects.toThrow();
-  await expect(source.read()).resolves.toHaveProperty("client.id", "7");
+  for (let i = 0; i < 3; i++) await expect(source.read("7")).rejects.toThrow();
+  await expect(source.read("7")).resolves.toHaveProperty("client.id", "7");
 });
 
 it.each([
@@ -93,7 +93,7 @@ it.each([
         Response.json({ ...raw, buildings: [{ ...raw.buildings[0], ...coordinates }] }),
       ),
     );
-    const result = await qsightHierarchyFromEnv(config)!.read();
+    const result = await qsightHierarchyFromEnv(config)!.read("7");
     expect(result.buildings[0]).toMatchObject({ ...expected, id: "1" });
     expect(result.buildings[0]).not.toHaveProperty("address");
   },
@@ -182,50 +182,27 @@ it.each([
   );
 });
 
-it("selects by name without legacy IDs and isolates name and ID caches", async () => {
+it("reads only canonical IDs, validates returned identity and never falls back to names", async () => {
   const fetch = vi.fn(async (input: URL | RequestInfo) => {
     const url = new URL(String(input));
     return Response.json({
       ...raw,
-      client: { id: 7, name: url.searchParams.get("client_name") ?? raw.client.name },
+      client: { id: url.searchParams.get("client_id"), name: "Same name" },
     });
   });
   vi.stubGlobal("fetch", fetch);
   const source = qsightHierarchyFromEnv(config)!;
-  await source.read("Example Client");
-  await source.read("Other & Client");
-  await source.read();
-  await source.read("Example Client");
-  expect(fetch).toHaveBeenCalledTimes(3);
-  expect(new URL(String(fetch.mock.calls[1]![0])).searchParams.get("client_name")).toBe(
-    "Other & Client",
-  );
-  expect(new URL(String(fetch.mock.calls[0]![0])).searchParams.has("client_id")).toBe(false);
-  const namedOnly = qsightHierarchyFromEnv({
-    QSIGHT_BASE_URL: config.QSIGHT_BASE_URL,
-    QSIGHT_AGENT_TOKEN: config.QSIGHT_AGENT_TOKEN,
-  })!;
-  await expect(namedOnly.read("Example Client")).resolves.toHaveProperty("client.id", "7");
-  await expect(namedOnly.read()).rejects.toThrow("Hierarchy client required");
-});
-it("never falls back on empty, mismatched, or failed named reads and does not cache failures", async () => {
-  const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(raw));
-  vi.stubGlobal("fetch", fetch);
-  const source = qsightHierarchyFromEnv(config)!;
+  await source.read("7");
+  await source.read("8");
+  await source.read("7");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  for (const [url] of fetch.mock.calls)
+    expect(new URL(String(url)).searchParams.has("client_name")).toBe(false);
   await expect(source.read("")).rejects.toThrow();
   await expect(source.read("   ")).rejects.toThrow();
-  expect(fetch).not.toHaveBeenCalled();
-  await expect(source.read("Other Client")).rejects.toThrow("Hierarchy client mismatch");
-  await expect(source.read("Other Client")).rejects.toThrow("Hierarchy client mismatch");
-  expect(fetch).toHaveBeenCalledTimes(2);
-  fetch.mockResolvedValueOnce(new Response(null, { status: 404 }));
-  await expect(source.read("Example Client")).rejects.toThrow();
-  await expect(source.read("Example Client")).resolves.toHaveProperty(
-    "client.name",
-    "Example Client",
-  );
-  for (const [url] of fetch.mock.calls)
-    expect(new URL(String(url)).searchParams.has("client_id")).toBe(false);
+  fetch.mockImplementation(async () => Response.json(raw));
+  await expect(source.read("other")).rejects.toThrow("Hierarchy client mismatch");
+  await expect(source.read("other")).rejects.toThrow("Hierarchy client mismatch");
 });
 
 it("creates with a server token, validates the result and invalidates hierarchy cache", async () => {
@@ -243,7 +220,7 @@ it("creates with a server token, validates the result and invalidates hierarchy 
     .mockResolvedValueOnce(Response.json(raw));
   vi.stubGlobal("fetch", fetch);
   const source = qsightHierarchyFromEnv(config)!;
-  await source.read();
+  await source.read("7");
   expect(await source.createProject("1", " New ")).toEqual({
     ...project,
     id: "9",
@@ -260,7 +237,7 @@ it("creates with a server token, validates the result and invalidates hierarchy 
     redirect: "error",
     signal: expect.any(AbortSignal),
   });
-  await source.read();
+  await source.read("7");
   expect(fetch).toHaveBeenCalledTimes(3);
 });
 

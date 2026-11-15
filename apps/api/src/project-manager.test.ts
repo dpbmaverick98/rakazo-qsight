@@ -50,7 +50,16 @@ function setup() {
       }
     }),
     space: {
-      findFirst: vi.fn(async () => ({ id: "space", name: "Example Client", isDefault: false })),
+      findUnique: vi.fn(async () => ({ id: "space", name: "Example Client", isDefault: false })),
+    },
+    spaceMember: { findUnique: vi.fn(async () => ({ role: "owner" })) },
+    spaceClientBinding: {
+      findUnique: vi.fn(async () => ({
+        externalClientId: "client",
+        clientName: "Original",
+        revision: 1,
+        active: true,
+      })),
     },
     bot: {
       findFirst: vi.fn(async ({ where }: Row) =>
@@ -254,9 +263,9 @@ it.each(["space", "personal", "project"])(
   "rejects an unavailable %s before minting",
   async (condition) => {
     const test = setup();
-    if (condition === "space") test.prisma.space.findFirst.mockResolvedValue(null as never);
+    if (condition === "space") test.prisma.space.findUnique.mockResolvedValue(null as never);
     if (condition === "personal")
-      test.prisma.space.findFirst.mockResolvedValue({
+      test.prisma.space.findUnique.mockResolvedValue({
         id: "space",
         name: "Personal",
         isDefault: true,
@@ -266,7 +275,7 @@ it.each(["space", "personal", "project"])(
         ...input,
         projectId: condition === "project" ? "other" : "roof",
       }),
-    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    ).rejects.toMatchObject({ code: condition === "project" ? "NOT_FOUND" : "CONFLICT" });
     expect(test.upstream.mock.calls.some(([url]) => String(url).includes("manager-token"))).toBe(
       false,
     );
@@ -391,21 +400,34 @@ it("refuses provisioning while an owner server is shared with all bots", async (
   expect(test.state.assignments).toHaveLength(0);
 });
 
-it("binds provisioning to the stored Space name without legacy IDs", async () => {
+it("PM provisioning follows the immutable ID after a Space rename and ignores input names", async () => {
   const test = setup();
-  await provisionProjectManager(test.ctx, { ...actor, spaceId: "second-space" }, input);
+  test.prisma.space.findUnique.mockResolvedValue({
+    id: "space",
+    name: "Another client",
+    isDefault: false,
+  });
+  await provisionProjectManager(test.ctx, actor, input);
   const url = test.upstream.mock.calls[0]![0];
-  expect(url.searchParams.get("client_name")).toBe("Example Client");
-  expect(url.searchParams.has("client_id")).toBe(false);
+  expect(url.searchParams.get("client_id")).toBe("client");
+  expect(url.searchParams.has("client_name")).toBe(false);
 });
-it("rejects an empty or mismatched Space name before minting", async () => {
-  for (const name of ["", "Other Client"]) {
+it("rejects missing binding or membership before PM credential minting", async () => {
+  for (const condition of ["binding", "membership"]) {
     const test = setup();
-    test.prisma.space.findFirst.mockResolvedValue({ id: "space", name, isDefault: false });
+    if (condition === "binding")
+      test.prisma.spaceClientBinding.findUnique.mockResolvedValue(null as never);
+    else test.prisma.spaceMember.findUnique.mockResolvedValue(null as never);
     await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow();
-    expect(test.upstream.mock.calls.some(([url]) => String(url).includes("manager-token"))).toBe(
-      false,
-    );
-    expect(test.state.bots).toHaveLength(0);
+    expect(test.upstream).not.toHaveBeenCalled();
   }
+});
+it("rejects stale binding revisions and ordinary members before PM minting", async () => {
+  const test = setup();
+  await expect(
+    provisionProjectManager(test.ctx, actor, { ...input, bindingRevision: 2 }),
+  ).rejects.toThrow("binding_stale");
+  test.prisma.spaceMember.findUnique.mockResolvedValue({ role: "member" });
+  await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow("forbidden");
+  expect(test.upstream).not.toHaveBeenCalled();
 });

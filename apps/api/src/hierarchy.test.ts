@@ -1,3 +1,4 @@
+import { ORPCError } from "@orpc/server";
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
 import { Hono } from "hono";
 import { expect, it, vi } from "vitest";
@@ -5,279 +6,188 @@ import { mountHierarchyRoute } from "./hierarchy.js";
 
 const actor = {
   userId: "user",
-  spaceId: "client-space",
+  spaceId: "space",
   email: "user@example.test",
   isDeploymentOwner: false,
 };
-const data = { client: { id: "client", name: "Example Client" }, buildings: [] };
-it("requires a session and space membership before accessing the source", async () => {
-  const read = vi.fn(async () => data);
-  const sessionActor = vi.fn(async () => null);
-  const app = new Hono();
-  mountHierarchyRoute(app, {
-    sessionActor,
-    source: { read },
-    spaceClientName: async () => data.client.name,
-  });
-  expect((await app.request("/api/agent-plane/hierarchy")).status).toBe(401);
-  expect(read).not.toHaveBeenCalled();
-});
-it("hides an unconfigured source and Personal", async () => {
-  for (const [sourceSpace, personal] of [
-    [null, false],
-    [actor.spaceId, true],
-  ] as const) {
-    const read = vi.fn(async () => data);
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => actor,
-      source: sourceSpace ? { read } : null,
-      spaceClientName: async () => (personal ? null : data.client.name),
-    });
-    const response = await app.request("/api/agent-plane/hierarchy");
-    expect(response.status).toBe(204);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(read).not.toHaveBeenCalled();
-  }
-});
-it("returns data and sanitizes upstream failures", async () => {
-  const read = vi.fn(async () => data);
-  const app = new Hono();
-  mountHierarchyRoute(app, {
-    sessionActor: async () => actor,
-    source: { read },
-    spaceClientName: async () => data.client.name,
-  });
-  expect(await (await app.request("/api/agent-plane/hierarchy")).json()).toEqual(data);
-  read.mockRejectedValueOnce(new Error("private upstream details"));
-  const failed = await app.request("/api/agent-plane/hierarchy");
-  expect(failed.status).toBe(502);
-  expect(await failed.json()).toEqual({ error: "Hierarchy unavailable" });
-});
-
-it("commercial reads authorize the session, bound space and mapped project before fetching", async () => {
-  const readCommercial = vi.fn(async () => commercialFixture);
-  for (const [session, personal, configured, id, status] of [
-    [null, false, true, "roof", 401],
-    [actor, true, true, "roof", 204],
-    [actor, false, false, "roof", 204],
-    [actor, false, true, "unmapped", 404],
-    [actor, false, true, "roof/commercial?extra=1", 400],
-  ] as const) {
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => session,
-      spaceClientName: async () => (personal ? null : data.client.name),
-      source: configured
-        ? {
-            read: async () => data,
-            readCommercial,
-          }
-        : null,
-    });
-    const response = await app.request(
-      `/api/agent-plane/projects/${id.includes("?") ? id : `${id}/commercial`}`,
-    );
-    expect(response.status).toBe(status);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-  }
-  expect(readCommercial).not.toHaveBeenCalled();
-});
-
-it("returns mapped commercial data and sanitizes commercial upstream errors", async () => {
-  const readCommercial = vi.fn().mockResolvedValue(commercialFixture);
-  const app = new Hono();
-  mountHierarchyRoute(app, {
-    sessionActor: async () => actor,
-    spaceClientName: async () => data.client.name,
-    source: {
-      read: async () => ({
-        ...data,
-        buildings: [
-          {
-            id: "b",
-            name: "Building",
-            projects: [{ id: "roof", name: "Roof", url: "https://example.test/projects/roof" }],
-          },
-        ],
-      }),
-      readCommercial,
+const binding = { externalClientId: "client", clientName: "Original", revision: 1 };
+const data = {
+  client: { id: "client", name: "Renamed upstream" },
+  buildings: [
+    {
+      id: "building",
+      name: "Building",
+      projects: [{ id: "roof", name: "Roof", url: "https://example.test/roof" }],
     },
-  });
-  expect((await app.request("/api/agent-plane/projects/roof/commercial")).status).toBe(200);
-  expect(readCommercial).toHaveBeenCalledWith("roof");
-  readCommercial.mockRejectedValueOnce(new Error("private upstream failure"));
-  const failed = await app.request("/api/agent-plane/projects/roof/commercial");
-  expect(failed.status).toBe(502);
-  expect(await failed.json()).toEqual({ error: "Commercial view unavailable" });
-});
-
-it("resolves two authenticated spaces by their server names for hierarchy and commercial", async () => {
-  const names = { "client-space": "Example Client", second: "Second Client" };
-  const read = vi.fn(async (name?: string) => ({
-    client: { id: name!, name: name! },
-    buildings: [
-      {
-        id: "building",
-        name: "Building",
-        projects: [
-          {
-            id: name === "Example Client" ? "roof" : "second-project",
-            name: "Project",
-            url: "https://example.test",
-          },
-        ],
-      },
-    ],
-  }));
-  const readCommercial = vi.fn(async () => commercialFixture);
-  const app = new Hono();
-  mountHierarchyRoute(app, {
-    sessionActor: async (request) => ({
-      ...actor,
-      spaceId: request.headers.get("x-rakazo-space-id") ?? actor.spaceId,
-    }),
-    spaceClientName: async (actor) => names[actor.spaceId as keyof typeof names] ?? null,
-    source: { read, readCommercial },
-  });
-  for (const [spaceId, name] of Object.entries(names)) {
-    const response = await app.request("/api/agent-plane/hierarchy", {
-      headers: { "x-rakazo-space-id": spaceId },
-    });
-    expect(await response.json()).toHaveProperty("client.name", name);
-    expect(read).toHaveBeenLastCalledWith(name, true);
-    const commercial = await app.request("/api/agent-plane/projects/roof/commercial", {
-      headers: { "x-rakazo-space-id": spaceId },
-    });
-    expect(commercial.status).toBe(spaceId === "client-space" ? 200 : 404);
-    expect(read).toHaveBeenLastCalledWith(name, true);
-  }
-  expect(readCommercial).toHaveBeenCalledTimes(1);
-});
-it("does not use a default client for an empty or mismatched Space name", async () => {
-  for (const name of ["", "   ", "Missing Client"]) {
-    const read = vi.fn(async () => {
-      throw new Error("Hierarchy client mismatch");
-    });
-    const readCommercial = vi.fn(async () => commercialFixture);
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => actor,
-      spaceClientName: async () => name,
-      source: { read, readCommercial },
-    });
-    for (const path of [
-      "/api/agent-plane/hierarchy",
-      "/api/agent-plane/projects/roof/commercial",
-    ]) {
-      expect((await app.request(path)).status).toBe(502);
-    }
-    if (name.trim())
-      expect(read.mock.calls).toEqual([
-        [name, true],
-        [name, true],
-      ]);
-    else expect(read).not.toHaveBeenCalled();
-    expect(readCommercial).not.toHaveBeenCalled();
-  }
-});
-
-it("creates only for authorized owners and mapped buildings with valid, unique names", async () => {
-  const project = {
-    id: "new",
-    name: "New",
-    currency: "GBP",
-    building_id: "b",
-    url: "https://example.test/projects/new",
+  ],
+};
+function setup() {
+  const deps = {
+    sessionActor: vi.fn(async () => actor as typeof actor | null),
+    resolveBinding: vi.fn(async (_actor: typeof actor, _revision?: number) => binding),
+    canCreateProject: vi.fn(async () => true),
+    source: {
+      read: vi.fn(async () => data),
+      readCommercial: vi.fn(async () => commercialFixture),
+      createProject: vi.fn(async () => ({
+        id: "new",
+        name: "New",
+        building_id: "building",
+        currency: "GBP",
+        url: "https://example.test/new",
+      })),
+    },
+    bindingCommands: {
+      status: vi.fn(async () => ({ status: "bound", revision: 1 })),
+      change: vi.fn(async () => ({ status: "bound", revision: 1 })),
+    },
+    changed: vi.fn(async () => {}),
   };
-  for (const [session, owner, body, status] of [
-    [null, true, { buildingId: "b", name: "New" }, 401],
-    [actor, false, { buildingId: "b", name: "New" }, 403],
-    [actor, true, { buildingId: "other", name: "New" }, 404],
-    [actor, true, { buildingId: "b", name: " " }, 400],
-    [actor, true, { buildingId: "b", name: " roof " }, 409],
-    [actor, true, { buildingId: "b", name: "New" }, 201],
+  const app = new Hono();
+  mountHierarchyRoute(app, deps);
+  return { app, deps };
+}
+const paths = ["/api/agent-plane/hierarchy", "/api/agent-plane/projects/roof/commercial"];
+it("requires a session before reading any external data", async () => {
+  const { app, deps } = setup();
+  deps.sessionActor.mockResolvedValue(null);
+  for (const path of paths) expect((await app.request(path)).status).toBe(401);
+  expect(deps.source.read).not.toHaveBeenCalled();
+});
+it("uses the bound ID despite display names and rechecks revision after reading", async () => {
+  const { app, deps } = setup();
+  const response = await app.request(paths[0]!);
+  expect(await response.json()).toEqual(data);
+  expect(deps.source.read).toHaveBeenCalledWith("client", true);
+  expect(deps.resolveBinding).toHaveBeenLastCalledWith(actor, 1);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+});
+it("rejects missing, stale, Personal and forbidden bindings for both read paths", async () => {
+  for (const [code, status] of [
+    ["binding_missing", 409],
+    ["binding_stale", 409],
+    ["personal", 409],
+    ["forbidden", 403],
   ] as const) {
-    const createProject = vi.fn(async () => project);
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => session,
-      canCreateProject: async () => owner,
-      spaceClientName: async () => data.client.name,
-      source: {
-        read: async () => ({
-          ...data,
-          buildings: [
-            {
-              id: "b",
-              name: "Building",
-              projects: [{ id: "roof", name: "Roof", url: "https://example.test/roof" }],
-            },
-          ],
-        }),
-        createProject,
-      },
-    });
-    const response = await app.request("/api/agent-plane/projects", {
+    const { app, deps } = setup();
+    deps.resolveBinding.mockRejectedValue(
+      new ORPCError(status === 403 ? "FORBIDDEN" : "CONFLICT", { message: code }),
+    );
+    for (const path of paths) {
+      const response = await app.request(path);
+      expect(response.status).toBe(status);
+      expect(await response.json()).toEqual({ status: code });
+    }
+    expect(deps.source.read).not.toHaveBeenCalled();
+    expect(deps.source.readCommercial).not.toHaveBeenCalled();
+  }
+});
+it("rejects mismatched upstream clients and removed membership after a read", async () => {
+  const { app, deps } = setup();
+  deps.source.read.mockResolvedValueOnce({ ...data, client: { id: "wrong", name: "Original" } });
+  expect((await app.request(paths[0]!)).status).toBe(502);
+  deps.resolveBinding
+    .mockResolvedValueOnce(binding)
+    .mockRejectedValueOnce(new ORPCError("FORBIDDEN", { message: "forbidden" }));
+  expect((await app.request(paths[0]!)).status).toBe(403);
+});
+it("checks project and building ancestry before commercial reads or writes", async () => {
+  const { app, deps } = setup();
+  expect((await app.request("/api/agent-plane/projects/other/commercial")).status).toBe(404);
+  expect(deps.source.readCommercial).not.toHaveBeenCalled();
+  const post = (body: unknown) =>
+    app.request("/api/agent-plane/projects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    expect(response.status).toBe(status);
-    expect(createProject).toHaveBeenCalledTimes(status === 201 ? 1 : 0);
-  }
+  expect((await post({ buildingId: "wrong", name: "New" })).status).toBe(404);
+  expect(deps.source.createProject).not.toHaveBeenCalled();
+  expect((await post({ buildingId: "building", name: "New" })).status).toBe(201);
+  deps.canCreateProject.mockResolvedValue(false);
+  expect((await post({ buildingId: "building", name: "New" })).status).toBe(403);
 });
-
-it("maps upstream conflicts and sanitizes creation failures", async () => {
-  for (const [message, status] of [
-    ["Project already exists", 409],
-    ["private details", 502],
+it("validates binding command and origin and publishes after success", async () => {
+  const { app, deps } = setup();
+  for (const [body, status] of [
+    [{ revision: 0, externalClientId: "client" }, 200],
+    [{ revision: 0, clientName: "forged" }, 400],
+    [{ externalClientId: "client" }, 400],
   ] as const) {
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => actor,
-      canCreateProject: async () => true,
-      spaceClientName: async () => data.client.name,
-      source: {
-        read: async () => ({ ...data, buildings: [{ id: "b", name: "Building", projects: [] }] }),
-        createProject: async () => {
-          throw new Error(message);
-        },
-      },
-    });
-    const response = await app.request("/api/agent-plane/projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ buildingId: "b", name: "New" }),
-    });
-    expect(response.status).toBe(status);
-    expect(await response.text()).not.toContain("private");
+    expect(
+      (
+        await app.request("/api/agent-plane/client-binding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+      ).status,
+    ).toBe(status);
   }
+  expect(deps.changed).toHaveBeenCalledTimes(1);
+  expect(
+    (
+      await app.request("/api/agent-plane/client-binding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", origin: "https://other.example.test" },
+        body: '{"revision":0}',
+      })
+    ).status,
+  ).toBe(403);
+});
+it("sanitizes upstream failures", async () => {
+  const { app, deps } = setup();
+  deps.source.read.mockRejectedValue(new Error("private details"));
+  const response = await app.request(paths[0]!);
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ status: "upstream_unavailable" });
 });
 
-it("rejects missing Space bindings, malformed JSON, non-JSON and foreign-origin writes", async () => {
-  for (const [name, body, headers, status] of [
-    [null, '{"buildingId":"b","name":"New"}', { "Content-Type": "application/json" }, 403],
-    ["Example Client", "{", { "Content-Type": "application/json" }, 400],
-    ["Example Client", '{"buildingId":"b","name":"New"}', { "Content-Type": "text/plain" }, 400],
+it("disabled hierarchy and commercial adapters return explicit safe statuses", async () => {
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    sessionActor: async () => actor,
+    resolveBinding: async () => binding,
+    source: null,
+  });
+  for (const path of paths) {
+    const response = await app.request(path);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "disabled" });
+  }
+});
+it("passes explicit revisions through all hierarchy and commercial reads", async () => {
+  const { app, deps } = setup();
+  for (const path of paths) {
+    await app.request(path, { headers: { "x-rakazo-binding-revision": "1" } });
+    expect(deps.resolveBinding).toHaveBeenCalledWith(actor, 1);
+    expect(
+      (await app.request(path, { headers: { "x-rakazo-binding-revision": "bad" } })).status,
+    ).toBe(400);
+  }
+});
+it("rechecks commercial membership after the external read", async () => {
+  const { app, deps } = setup();
+  deps.source.readCommercial.mockImplementation(async () => {
+    deps.resolveBinding.mockRejectedValue(new ORPCError("FORBIDDEN", { message: "forbidden" }));
+    return commercialFixture;
+  });
+  expect((await app.request(paths[1]!)).status).toBe(403);
+});
+it("keeps project input/origin checks and duplicate guards before upstream writes", async () => {
+  const { app, deps } = setup();
+  for (const [body, headers, status] of [
+    ["{", { "Content-Type": "application/json" }, 400],
+    ['{"buildingId":"building","name":"New"}', { "Content-Type": "text/plain" }, 400],
     [
-      "Example Client",
-      '{"buildingId":"b","name":"New"}',
-      { "Content-Type": "application/json", Origin: "https://foreign.example.test" },
+      '{"buildingId":"building","name":"New"}',
+      { "Content-Type": "application/json", origin: "https://foreign.example.test" },
       403,
     ],
-  ] as const) {
-    const createProject = vi.fn();
-    const app = new Hono();
-    mountHierarchyRoute(app, {
-      sessionActor: async () => actor,
-      canCreateProject: async () => true,
-      spaceClientName: async () => name,
-      source: { read: async () => data, createProject },
-    });
+    ['{"buildingId":"building","name":" roof "}', { "Content-Type": "application/json" }, 409],
+  ] as const)
     expect(
-      (await app.request("/api/agent-plane/projects", { method: "POST", headers, body })).status,
+      (await app.request("/api/agent-plane/projects", { method: "POST", body, headers })).status,
     ).toBe(status);
-    expect(createProject).not.toHaveBeenCalled();
-  }
+  expect(deps.source.createProject).not.toHaveBeenCalled();
 });

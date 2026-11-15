@@ -1,8 +1,10 @@
+import { ORPCError } from "@orpc/server";
 import type { Actor } from "@rakazo/contracts";
 import type { CreatedProject, Hierarchy } from "@rakazo/contracts/hierarchy";
-import { CreateProjectSchema } from "@rakazo/contracts/hierarchy";
+import { ChangeClientBindingSchema, CreateProjectSchema } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
+import type { ClientBinding } from "./space-client-binding.js";
 
 export function mountHierarchyRoute(
   app: Hono,
@@ -11,19 +13,78 @@ export function mountHierarchyRoute(
     trustedOrigin?: (origin: string) => boolean;
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
-    spaceClientName: (actor: Actor) => Promise<string | null>;
+    resolveBinding: (actor: Actor, revision?: number) => Promise<ClientBinding>;
+    bindingCommands?: {
+      status: (actor: Actor) => Promise<unknown>;
+      change: (
+        actor: Actor,
+        input: { revision: number; externalClientId?: string },
+      ) => Promise<unknown>;
+    };
     source: {
-      read: (clientName?: string, fresh?: boolean) => Promise<Hierarchy>;
+      read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
       createProject?: (buildingId: string, name: string) => Promise<CreatedProject>;
       readCommercial?: (id: string) => Promise<ProjectCommercial>;
     } | null;
   },
 ) {
+  const failure = (error: unknown) => {
+    if (error instanceof ORPCError)
+      return {
+        status: error.status as 400 | 403 | 409 | 502 | 503,
+        body: { status: error.message },
+      };
+    return { status: 502 as const, body: { status: "upstream_unavailable" } };
+  };
+  const read = async (actor: Actor, revision?: number) => {
+    if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 1))
+      throw new ORPCError("BAD_REQUEST", { message: "invalid_request" });
+    if (!deps.source) throw new ORPCError("SERVICE_UNAVAILABLE", { message: "disabled" });
+    const binding = await deps.resolveBinding(actor, revision);
+    const hierarchy = await deps.source.read(binding.externalClientId, true);
+    if (hierarchy.client.id !== binding.externalClientId)
+      throw new ORPCError("BAD_GATEWAY", { message: "binding_mismatch" });
+    await deps.resolveBinding(actor, binding.revision);
+    return { hierarchy, binding };
+  };
+  app.get("/api/agent-plane/client-binding", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.json({ status: "unauthorized" }, 401);
+    try {
+      if (!deps.bindingCommands) return c.json({ status: "disabled" }, 503);
+      return c.json(await deps.bindingCommands.status(actor));
+    } catch (error) {
+      const result = failure(error);
+      return c.json(result.body, result.status);
+    }
+  });
+  app.post("/api/agent-plane/client-binding", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.json({ status: "unauthorized" }, 401);
+    const origin = c.req.header("origin");
+    if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
+      return c.json({ status: "forbidden" }, 403);
+    if (c.req.header("content-type")?.split(";")[0]?.trim() !== "application/json")
+      return c.json({ status: "invalid_request" }, 400);
+    try {
+      const input = ChangeClientBindingSchema.safeParse(await c.req.json());
+      if (!input.success) return c.json({ status: "invalid_request" }, 400);
+      if (!deps.bindingCommands) return c.json({ status: "disabled" }, 503);
+      const result = await deps.bindingCommands.change(actor, input.data);
+      await deps.changed?.(actor);
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
+      const result = failure(error);
+      return c.json(result.body, result.status);
+    }
+  });
   app.post("/api/agent-plane/projects", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
-    if (!(await deps.canCreateProject?.(actor))) return c.json({ error: "Forbidden" }, 403);
     const origin = c.req.header("origin");
     if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
       return c.json({ error: "Forbidden" }, 403);
@@ -40,9 +101,13 @@ export function mountHierarchyRoute(
     const source = deps.source;
     if (!source?.createProject) return c.json({ error: "Project creation unavailable" }, 503);
     try {
-      const name = await deps.spaceClientName(actor);
-      if (!name?.trim()) return c.json({ error: "Forbidden" }, 403);
-      const hierarchy = await source.read(name, true);
+      if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
+      const { hierarchy, binding } = await read(
+        actor,
+        c.req.header("x-rakazo-binding-revision") === undefined
+          ? undefined
+          : Number(c.req.header("x-rakazo-binding-revision")),
+      );
       const building = hierarchy.buildings.find((item) => item.id === input.data.buildingId);
       if (!building) return c.json({ error: "Building unavailable" }, 404);
       if (
@@ -52,12 +117,14 @@ export function mountHierarchyRoute(
       )
         return c.json({ error: "Project already exists" }, 409);
       const project = await source.createProject(input.data.buildingId, input.data.name);
+      await deps.resolveBinding(actor, binding.revision);
       await deps.changed?.(actor);
       return c.json(project, 201);
     } catch (error) {
       if (error instanceof Error && error.message === "Project already exists")
         return c.json({ error: "Project already exists" }, 409);
-      return c.json({ error: "Project creation unavailable" }, 502);
+      const result = failure(error);
+      return c.json(result.body, result.status);
     }
   });
   app.get("/api/agent-plane/projects/:id/commercial", async (c) => {
@@ -65,39 +132,48 @@ export function mountHierarchyRoute(
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
     const source = deps.source;
-    if (!source?.readCommercial) return c.body(null, 204);
+    if (!source?.readCommercial) return c.json({ status: "disabled" }, 503);
     const id = c.req.param("id");
     if (!id || id.length > 200 || id === "." || id === ".." || new URL(c.req.url).search)
       return c.json({ error: "Invalid project request" }, 400);
     try {
-      const name = await deps.spaceClientName(actor);
-      if (name === null) return c.body(null, 204);
-      if (!name.trim()) throw new Error("Space name required");
-      const hierarchy = await source.read(name, true);
+      const { hierarchy, binding } = await read(
+        actor,
+        c.req.header("x-rakazo-binding-revision") === undefined
+          ? undefined
+          : Number(c.req.header("x-rakazo-binding-revision")),
+      );
       if (
         !hierarchy.buildings.some((building) =>
           building.projects.some((project) => project.id === id),
         )
       )
         return c.json({ error: "Project unavailable" }, 404);
-      return c.json(await source.readCommercial(id));
-    } catch {
-      return c.json({ error: "Commercial view unavailable" }, 502);
+      const commercial = await source.readCommercial(id);
+      await deps.resolveBinding(actor, binding.revision);
+      return c.json(commercial);
+    } catch (error) {
+      const result = failure(error);
+      return c.json(result.body, result.status);
     }
   });
   app.get("/api/agent-plane/hierarchy", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
-    if (!deps.source) return c.body(null, 204);
     try {
-      const name = await deps.spaceClientName(actor);
-      if (name === null) return c.body(null, 204);
-      if (!name.trim()) throw new Error("Space name required");
-      return c.json(await deps.source.read(name, true));
-    } catch {
-      // Never forward upstream bodies, URLs, headers or credentials.
-      return c.json({ error: "Hierarchy unavailable" }, 502);
+      const revision = c.req.header("x-rakazo-binding-revision");
+      if (revision !== undefined && !/^[1-9][0-9]*$/.test(revision))
+        return c.json({ status: "invalid_request" }, 400);
+      const { hierarchy, binding } = await read(
+        actor,
+        revision === undefined ? undefined : Number(revision),
+      );
+      c.header("x-rakazo-binding-revision", String(binding.revision));
+      return c.json(hierarchy);
+    } catch (error) {
+      const result = failure(error);
+      return c.json(result.body, result.status);
     }
   });
 }

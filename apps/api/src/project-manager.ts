@@ -2,29 +2,31 @@ import { ORPCError } from "@orpc/server";
 import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import type { Prisma } from "@rakazo/db";
-import { itemSecretIn } from "@rakazo/db";
+import { itemSecretIn, lockSpaceDeletion } from "@rakazo/db";
 import { lockOwner } from "./availability.js";
 import { mcpServerDto } from "./mcp-servers.js";
 import { projectManagerInstructions } from "./project-manager.prompt.js";
 import type { RouterContext } from "./routes/context.js";
+import { bindingAccess, boundHierarchy, resolveClientBinding } from "./space-client-binding.js";
 
 /** Token minting and endpoint validation finish before any product records change. */
 export async function provisionProjectManager(
   ctx: RouterContext,
   actor: Actor,
-  input: { projectId: string; projectName: string; clientName: string },
+  input: { projectId: string; projectName: string; clientName: string; bindingRevision?: number },
 ) {
   const { deps, repos, prepareMcpServer, insertMcpServer } = ctx;
   const source = deps.projectManagers;
-  if (!source) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
-  const space = await deps.prisma.space.findFirst({ where: { id: actor.spaceId } });
-  if (!space || space.isDefault || !space.name.trim())
-    throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
-  if (!actor.isDeploymentOwner && space.createdByUserId !== actor.userId)
-    throw new ORPCError("FORBIDDEN", { message: "Only the Space owner can provision a project manager" });
-  // Only canonical upstream names enter instructions or deterministic resource names.
-  const hierarchy = await source.read(space.name).catch(() => {
-    throw new ORPCError("BAD_GATEWAY", { message: "Project unavailable" });
+  if (!source) throw new ORPCError("SERVICE_UNAVAILABLE", { message: "disabled" });
+  await bindingAccess(deps.prisma, actor, true);
+  const { hierarchy, binding } = await boundHierarchy(
+    deps.prisma,
+    actor,
+    source,
+    input.bindingRevision,
+  ).catch((error) => {
+    if (error instanceof ORPCError) throw error;
+    throw new ORPCError("BAD_GATEWAY", { message: "upstream_unavailable" });
   });
   const project = hierarchy.buildings
     .flatMap((building) => building.projects)
@@ -40,14 +42,14 @@ export async function provisionProjectManager(
       spaceId: actor.spaceId,
       userId: actor.userId,
       allBots: true,
-      name: { startsWith: "QSight" },
+      name: { startsWith: source.ownerServerPrefix },
     },
     select: { id: true },
   });
   if (shared)
     throw new ORPCError("CONFLICT", {
       message:
-        "Disable All bots on the owner-level QSight server before creating a project manager",
+        "Disable All bots on the owner-level project connection before creating a project manager",
     });
   const stored = await prepareMcpServer(actor, config);
   if (!stored) throw new ORPCError("INTERNAL_SERVER_ERROR");
@@ -55,6 +57,10 @@ export async function provisionProjectManager(
     let server: Awaited<ReturnType<typeof insertMcpServer>> | undefined;
     let seededBotId: string | undefined;
     const write = async (tx: Prisma.TransactionClient, botId: string) => {
+      await lockSpaceDeletion(tx, actor.spaceId);
+      await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${actor.spaceId} FOR UPDATE`;
+      await bindingAccess(tx, actor, true);
+      await resolveClientBinding(tx, actor, binding.revision);
       await lockOwner(tx, actor.userId, "names:mcpServer");
       const bot = await tx.bot.findFirst({
         where: { id: botId, spaceId: actor.spaceId, userId: actor.userId, archivedAt: null },
@@ -128,7 +134,10 @@ export async function provisionProjectManager(
       } else {
         server = await insertMcpServer(tx, actor, config, stored);
       }
-      await tx.bot.update({ where: { id: botId }, data: { inheritMcpServers: false } });
+      await tx.bot.update({
+        where: { id: botId },
+        data: { inheritMcpServers: false, crossSpaceCommunication: false },
+      });
       await tx.botMcpServer.deleteMany({ where: { botId, spaceId: actor.spaceId } });
       await tx.botMcpServer.create({
         data: {

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { onError } from "@orpc/server";
+import { ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import type {
   AgentContextStrategy,
@@ -177,6 +177,11 @@ import { mountScreenTarget } from "./screen-proxy.js";
 import { mountScriptAssets } from "./script-assets.js";
 import { createAuthResponseAudit } from "./security-audit.js";
 import { mountSharedPages } from "./shared-pages.js";
+import {
+  bindingAccess,
+  changeClientBinding,
+  resolveClientBinding,
+} from "./space-client-binding.js";
 import { afterSpaceDeparture } from "./space-departure.js";
 import { createSpeechSummarizer } from "./speech-summary.js";
 import { SYSTEM_CONTEXT_PATHS } from "./system-context-routes.js";
@@ -1000,37 +1005,52 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     return actor && { actor, sessionId: session.session.id };
   };
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
-  const canCreateHierarchyProject = async (actor: Actor) =>
-    actor.isDeploymentOwner ||
-    (await runAsTenant(
-      actor,
-      async () =>
-        (
-          await prisma.spaceMember.findUnique({
-            where: { spaceId_userId: { spaceId: actor.spaceId, userId: actor.userId } },
-            select: { role: true },
-          })
-        )?.role === "owner",
-    ));
+  const hierarchySource = qsightHierarchyFromEnv();
   mountHierarchyRoute(app, {
     sessionActor,
-    source: qsightHierarchyFromEnv(),
-    canCreateProject: canCreateHierarchyProject,
+    source: hierarchySource,
+    canCreateProject: async (actor) =>
+      runAsTenant(actor, async () => {
+        await bindingAccess(prisma, actor, true);
+        return true;
+      }),
     trustedOrigin: (origin) => isTrustedOrigin(origin, env),
     changed: async (actor) => {
       await events.publishRosterChange?.({ spaceIds: [actor.spaceId] });
     },
-    spaceClientName: async (actor) => {
-      // Avoid turning a renameable Space into another client's authority.
-      if (!(await canCreateHierarchyProject(actor))) return null;
-      const space = await runAsTenant(actor, () =>
-        prisma.space.findUnique({
-          where: { id: actor.spaceId },
-          select: { isDefault: true, name: true },
+    resolveBinding: (actor, revision) =>
+      runAsTenant(actor, () => resolveClientBinding(prisma, actor, revision)),
+    bindingCommands: {
+      status: (actor) =>
+        runAsTenant(actor, async () => {
+          await bindingAccess(prisma, actor);
+          const binding = await prisma.spaceClientBinding.findUnique({
+            where: { spaceId: actor.spaceId },
+          });
+          return {
+            status: binding?.active ? "bound" : "binding_missing",
+            revision: binding?.revision ?? 0,
+            ...(binding?.active
+              ? { externalClientId: binding.externalClientId, clientName: binding.clientName }
+              : {}),
+          };
         }),
-      );
-      if (!space || space.isDefault) return null;
-      return space.name;
+      change: async (actor, input) => {
+        await runAsTenant(actor, () => bindingAccess(prisma, actor, true));
+        let client = null;
+        if (input.externalClientId !== undefined) {
+          if (!hierarchySource) throw new ORPCError("SERVICE_UNAVAILABLE", { message: "disabled" });
+          const hierarchy = await hierarchySource.read(input.externalClientId, true);
+          if (hierarchy.client.id !== input.externalClientId)
+            throw new ORPCError("BAD_GATEWAY", { message: "binding_mismatch" });
+          client = hierarchy.client;
+        }
+        const binding = await changeClientBinding(prisma, actor, {
+          revision: input.revision,
+          client,
+        });
+        return { status: binding.active ? "bound" : "binding_missing", revision: binding.revision };
+      },
     },
   });
   if (userDeviceHub && userDevices) {
