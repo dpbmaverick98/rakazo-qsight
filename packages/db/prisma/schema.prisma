@@ -1008,6 +1008,7 @@ model Bot {
   modelId           String?
   thinkingLevel     String?
   disabledBuiltinTools String[] @default([])
+  inheritMcpServers Boolean @default(true)
   webhookSecretId   String?
   teamChatAmbientEnabled Boolean @default(false)
   teamChatRules          String  @default("")

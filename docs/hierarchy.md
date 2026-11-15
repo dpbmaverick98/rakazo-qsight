@@ -34,8 +34,7 @@ navigation remains unchanged; this map is a web/Electron enhancement.
 
 Project links currently use the upstream origin plus `/projects/<encoded-id>`.
 Confirm that route with the upstream app before enabling the pilot. This is one
-client binding per deployment, not a multi-client mapping system. There are no
-writes, manager spawning, schema changes, or hierarchy-based authorization rules.
+client binding per deployment, not a multi-client mapping system. The navigation reads do not write upstream. Project-manager provisioning is described below.
 
 The web/Electron Shell shares one resizable right region between the hierarchy
 and existing details. On narrow screens the hierarchy starts behind its button;
@@ -82,7 +81,7 @@ hierarchy and resizable panel components, synthetic data, and Playwright at
 they show an isolated composition, not an authenticated full-stack Shell.
 The full-stack CI spec also covers coexistence with actual chat details. No
 upstream service, production credentials, native mobile, or live project target
-was exercised. No creation or write requests to the external service exist.
+was exercised. These navigation checks do not make upstream writes.
 
 ## Scoped commercial panel
 
@@ -150,3 +149,58 @@ project-button focus; the narrow capture had no horizontal document overflow.
 The full-stack E2E spec now captures the commercial panel on wide/narrow screens;
 its execution and Electron E2E remain with CI. Native mobile and screen-reader
 speech were not exercised.
+
+## Automatic scoped project managers
+
+Web and Electron use `mcp.servers.provisionProjectManager`, available at
+`POST /rpc/mcp/servers/provisionProjectManager`, with
+`{ projectId, projectName, clientName }`. It requires the existing signed-in session
+and `x-rakazo-space-id` membership selection. The configured non-Personal space
+binding and client hierarchy are checked before minting. Canonical names from the
+hierarchy replace browser-supplied names. The response is `{ bot, server, created }`;
+`created` means this request created the bot. Neither bearer nor ciphertext appears
+in the response.
+
+The hierarchy adapter calls `POST /api/v2/agent/projects/{encoded-id}/manager-token`
+with `Authorization: Bearer <QSIGHT_AGENT_TOKEN>`, no request body, no redirects,
+a five-second deadline, and a 32,000-byte response limit. The expected JSON response
+is `{ "token": "<project-scoped-read-only-bearer>" }`; other upstream fields are
+ignored. Read-only project scoping is enforced by the upstream issuer, not inferred
+from the token text. `QSIGHT_AGENT_TOKEN` must have the upstream owner's write
+permission. `QSIGHT_MCP_ENDPOINT` optionally overrides the default
+`${QSIGHT_BASE_URL}/mcp`. Existing MCP endpoint and private-network security checks
+still apply; a local endpoint needs the deployment's standard private-endpoint
+opt-in. No provider-specific browser settings are introduced.
+
+`prepareMcpServer` validates the endpoint and encrypts the bearer; `insertMcpServer`
+creates a `streamable_http` server named `QSight PM — {projectName}` (120 characters
+maximum), scoped to the current space with `allBots: false`. A project-ID-derived
+SHA-256 slug keeps identity stable when names change. A matching legacy name can
+be adopted; projects sharing a display name keep separate slugs. A server shared
+with every bot or space is rejected. Reuse refreshes the credential, so a same-named owner credential
+cannot survive. No new server or bot IDs are created on repeated successful calls.
+
+The PM uses `spawnKey: pm:{projectId}` and an 80-character name. The bot-creation
+transaction's existing `seed` hook commits the bot, secret, server and sole
+`botMcpServer` assignment together. An existing PM is repaired in a transaction;
+previous assignments are replaced, including any owner-level server. The additive
+`bots.inheritMcpServers` setting defaults to true for existing bots and is set false
+for PMs. MCP discovery and execution both honor it, preventing implicit access to
+all-agent servers. Failed persistence rolls back product records and uses the
+existing prepared-secret cleanup. An already-issued upstream token cannot be
+revoked on database failure because no revocation API was supplied.
+
+Limits: one configured client/space per deployment; hierarchy membership may be
+cached for 15 seconds; provisioning an existing bot owned by another member fails
+safely rather than replacing that member's credentials. Each provisioning request
+mints a scoped token, including retries and reuse. There is no token-refresh timer
+or automatic run. Deploy the migration and updated API/worker code together;
+already-running old workers do not learn the new inheritance setting. Native Expo
+has no hierarchy panel; the authenticated RPC is shared and available to it.
+
+Offline tests cover minting, safe responses, endpoint validation, resource reuse,
+transaction rollback, assignment repair, inherited-server denial and web success
+and retry. The hierarchy E2E spec checks the unconfigured failure without leaving
+a PM behind; CI owns full web/Electron E2E. Local visual checks use the real
+commercial panel with synthetic data; captures are in `docs/screenshots/hierarchy/`.
+No live token issuer or database migration was exercised.

@@ -24,6 +24,7 @@ const namedSpace: RosterScope = (actor, input) => ({
  */
 export const ROSTER_PROCEDURES: Record<string, RosterScope> = {
   "bots.create": actorSpace,
+  "mcp.servers.provisionProjectManager": actorSpace,
   "bots.importCreate": actorSpace,
   "bots.createFromTemplate": actorSpace,
   "bots.duplicate": actorSpace,

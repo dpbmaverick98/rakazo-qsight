@@ -1185,6 +1185,19 @@ export const appContract = {
   },
   mcp: {
     servers: {
+      provisionProjectManager: oc
+        .input(
+          z.object({
+            projectId: z
+              .string()
+              .min(1)
+              .max(200)
+              .refine((id) => id !== "." && id !== ".."),
+            projectName: z.string().trim().min(1).max(500),
+            clientName: z.string().trim().min(1).max(500),
+          }),
+        )
+        .output(z.object({ bot: BotSchema, server: McpServerSchema, created: z.boolean() })),
       list: oc.output(z.array(McpServerSchema)),
       create: oc.input(McpServerConfigInput).output(McpServerSchema),
       update: oc

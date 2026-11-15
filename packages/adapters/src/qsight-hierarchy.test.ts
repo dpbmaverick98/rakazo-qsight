@@ -133,3 +133,47 @@ it("rejects upstream errors, wrong project, malformed and oversized commercial d
   await expect(source.readCommercial("roof")).resolves.toEqual(commercialFixture);
 });
 
+it("mints a project-scoped bearer server-side and uses the configured MCP endpoint", async () => {
+  const fetch = vi.fn().mockResolvedValue(Response.json({ token: "fake-read-only-token" }));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv({
+    ...config,
+    QSIGHT_MCP_ENDPOINT: "https://tools.example.test/mcp",
+  })!;
+  const server = await source.managerServer("roof/survey", "Roof survey");
+  expect(fetch).toHaveBeenCalledExactlyOnceWith(
+    new URL("https://hierarchy.example.test/api/v2/agent/projects/roof%2Fsurvey/manager-token"),
+    expect.objectContaining({
+      method: "POST",
+      headers: { Authorization: "Bearer fake-token", Accept: "application/json" },
+      redirect: "error",
+      signal: expect.any(AbortSignal),
+    }),
+  );
+  expect(server).toMatchObject({
+    name: "QSight PM — Roof survey",
+    transport: "streamable_http",
+    endpoint: "https://tools.example.test/mcp",
+    headers: { Authorization: "Bearer fake-read-only-token" },
+  });
+  expect(server.slug).toMatch(/^pm-[a-f0-9]{60}$/);
+});
+it("defaults to the origin's MCP endpoint", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ token: "fake-scoped" })));
+  expect(await qsightHierarchyFromEnv(config)!.managerServer("roof", "Roof")).toHaveProperty(
+    "endpoint",
+    "https://hierarchy.example.test/mcp",
+  );
+});
+it.each([
+  () => Promise.resolve(new Response("fake-sensitive-body", { status: 403 })),
+  () => Promise.resolve(Response.json({ token: "fake-sensitive\r\nvalue" })),
+  () => Promise.resolve(Response.json({ access_token: "fake-sensitive" })),
+  () => Promise.resolve(Response.json({ token: "x".repeat(33_000) })),
+  () => Promise.reject(new Error("fake-sensitive-network-error")),
+])("sanitizes minting errors and malformed credentials", async (response) => {
+  vi.stubGlobal("fetch", vi.fn(response));
+  await expect(qsightHierarchyFromEnv(config)!.managerServer("roof", "Roof")).rejects.toThrow(
+    "Project manager credentials unavailable",
+  );
+});

@@ -381,6 +381,7 @@ describe("MCP OAuth prepared persistence", () => {
         },
       });
       Object.assign(prisma, {
+        bot: { findFirst: async () => ({ inheritMcpServers: true }) },
         botMcpServer: { findMany: async () => [assignment()], findFirst: async () => assignment() },
       });
       const broker = new McpOAuthBroker(prisma, store);
