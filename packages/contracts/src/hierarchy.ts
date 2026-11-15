@@ -95,3 +95,19 @@ export type CreateBuilding = z.infer<typeof CreateBuildingSchema>;
 export type CreatedBuilding = z.infer<typeof CreatedBuildingSchema>;
 
 export const HierarchyOperationIdSchema = z.uuid();
+
+/** Canonical assignments, projected only after current Space authorization. */
+export const ClientNavigationSchema = z.object({
+  spaceId: Id,
+  bindingRevision: z.number().int().positive(),
+  client: z.object({ id: Id, name: Name }),
+  setupBotIds: z.array(Id),
+  buildings: z.array(
+    z.object({
+      id: Id,
+      name: Name,
+      projects: z.array(z.object({ id: Id, name: Name, botIds: z.array(Id) })),
+    }),
+  ),
+});
+export type ClientNavigation = z.infer<typeof ClientNavigationSchema>;

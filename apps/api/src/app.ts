@@ -1013,6 +1013,13 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountHierarchyRoute(app, {
     sessionActor,
     source: hierarchySource,
+    navigationBots: (actor) =>
+      runAsTenant(actor, () =>
+        prisma.bot.findMany({
+          where: { spaceId: actor.spaceId, archivedAt: null },
+          select: { id: true, spawnKey: true },
+        }),
+      ),
     setupClient: hierarchySource
       ? async (actor, name) => {
           try {
