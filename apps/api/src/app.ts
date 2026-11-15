@@ -1000,20 +1000,36 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     return actor && { actor, sessionId: session.session.id };
   };
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
+  const canCreateHierarchyProject = async (actor: Actor) =>
+    actor.isDeploymentOwner ||
+    (await runAsTenant(
+      actor,
+      async () =>
+        (
+          await prisma.spaceMember.findUnique({
+            where: { spaceId_userId: { spaceId: actor.spaceId, userId: actor.userId } },
+            select: { role: true },
+          })
+        )?.role === "owner",
+    ));
   mountHierarchyRoute(app, {
     sessionActor,
     source: qsightHierarchyFromEnv(),
+    canCreateProject: canCreateHierarchyProject,
+    trustedOrigin: (origin) => isTrustedOrigin(origin, env),
+    changed: async (actor) => {
+      await events.publishRosterChange?.({ spaceIds: [actor.spaceId] });
+    },
     spaceClientName: async (actor) => {
       // Avoid turning a renameable Space into another client's authority.
-      if (!actor.isDeploymentOwner) return null;
+      if (!(await canCreateHierarchyProject(actor))) return null;
       const space = await runAsTenant(actor, () =>
         prisma.space.findUnique({
           where: { id: actor.spaceId },
-          select: { isDefault: true, name: true, createdByUserId: true },
+          select: { isDefault: true, name: true },
         }),
       );
       if (!space || space.isDefault) return null;
-      if (!actor.isDeploymentOwner && space.createdByUserId !== actor.userId) return null;
       return space.name;
     },
   });

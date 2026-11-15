@@ -6,8 +6,9 @@ import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useRef, useState } from "react";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { CreateProject } from "./create-project";
 import { HierarchyHandoff } from "./hierarchy-handoff";
-import { addBuildingRequest, addProjectRequest } from "./hierarchy-handoff.prompt";
+import { addBuildingRequest } from "./hierarchy-handoff.prompt";
 import { CommercialSelection } from "./project-commercial";
 
 const BuildingMap = lazy(() => import("./building-map"));
@@ -137,9 +138,11 @@ export function HierarchyRail({
                     summaryClassName="min-h-10 w-full justify-between break-words text-body"
                   >
                     {open.has(building.id) ? (
-                      <HierarchyHandoff text={addProjectRequest(building.name)}>
-                        <Trans>Add project</Trans>
-                      </HierarchyHandoff>
+                      <CreateProject
+                        buildingId={building.id}
+                        spaceId={scope?.spaceId ?? null}
+                        refresh={retry}
+                      />
                     ) : null}
                     {building.projects.length === 0 ? (
                       <p className="ps-4 text-body text-muted-foreground">

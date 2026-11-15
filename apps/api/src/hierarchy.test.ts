@@ -145,12 +145,12 @@ it("resolves two authenticated spaces by their server names for hierarchy and co
       headers: { "x-rakazo-space-id": spaceId },
     });
     expect(await response.json()).toHaveProperty("client.name", name);
-    expect(read).toHaveBeenLastCalledWith(name);
+    expect(read).toHaveBeenLastCalledWith(name, true);
     const commercial = await app.request("/api/agent-plane/projects/roof/commercial", {
       headers: { "x-rakazo-space-id": spaceId },
     });
     expect(commercial.status).toBe(spaceId === "client-space" ? 200 : 404);
-    expect(read).toHaveBeenLastCalledWith(name);
+    expect(read).toHaveBeenLastCalledWith(name, true);
   }
   expect(readCommercial).toHaveBeenCalledTimes(1);
 });
@@ -172,8 +172,112 @@ it("does not use a default client for an empty or mismatched Space name", async 
     ]) {
       expect((await app.request(path)).status).toBe(502);
     }
-    if (name.trim()) expect(read.mock.calls).toEqual([[name], [name]]);
+    if (name.trim())
+      expect(read.mock.calls).toEqual([
+        [name, true],
+        [name, true],
+      ]);
     else expect(read).not.toHaveBeenCalled();
     expect(readCommercial).not.toHaveBeenCalled();
+  }
+});
+
+it("creates only for authorized owners and mapped buildings with valid, unique names", async () => {
+  const project = {
+    id: "new",
+    name: "New",
+    currency: "GBP",
+    building_id: "b",
+    url: "https://example.test/projects/new",
+  };
+  for (const [session, owner, body, status] of [
+    [null, true, { buildingId: "b", name: "New" }, 401],
+    [actor, false, { buildingId: "b", name: "New" }, 403],
+    [actor, true, { buildingId: "other", name: "New" }, 404],
+    [actor, true, { buildingId: "b", name: " " }, 400],
+    [actor, true, { buildingId: "b", name: " roof " }, 409],
+    [actor, true, { buildingId: "b", name: "New" }, 201],
+  ] as const) {
+    const createProject = vi.fn(async () => project);
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      sessionActor: async () => session,
+      canCreateProject: async () => owner,
+      spaceClientName: async () => data.client.name,
+      source: {
+        read: async () => ({
+          ...data,
+          buildings: [
+            {
+              id: "b",
+              name: "Building",
+              projects: [{ id: "roof", name: "Roof", url: "https://example.test/roof" }],
+            },
+          ],
+        }),
+        createProject,
+      },
+    });
+    const response = await app.request("/api/agent-plane/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(status);
+    expect(createProject).toHaveBeenCalledTimes(status === 201 ? 1 : 0);
+  }
+});
+
+it("maps upstream conflicts and sanitizes creation failures", async () => {
+  for (const [message, status] of [
+    ["Project already exists", 409],
+    ["private details", 502],
+  ] as const) {
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      sessionActor: async () => actor,
+      canCreateProject: async () => true,
+      spaceClientName: async () => data.client.name,
+      source: {
+        read: async () => ({ ...data, buildings: [{ id: "b", name: "Building", projects: [] }] }),
+        createProject: async () => {
+          throw new Error(message);
+        },
+      },
+    });
+    const response = await app.request("/api/agent-plane/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ buildingId: "b", name: "New" }),
+    });
+    expect(response.status).toBe(status);
+    expect(await response.text()).not.toContain("private");
+  }
+});
+
+it("rejects missing Space bindings, malformed JSON, non-JSON and foreign-origin writes", async () => {
+  for (const [name, body, headers, status] of [
+    [null, '{"buildingId":"b","name":"New"}', { "Content-Type": "application/json" }, 403],
+    ["Example Client", "{", { "Content-Type": "application/json" }, 400],
+    ["Example Client", '{"buildingId":"b","name":"New"}', { "Content-Type": "text/plain" }, 400],
+    [
+      "Example Client",
+      '{"buildingId":"b","name":"New"}',
+      { "Content-Type": "application/json", Origin: "https://foreign.example.test" },
+      403,
+    ],
+  ] as const) {
+    const createProject = vi.fn();
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      sessionActor: async () => actor,
+      canCreateProject: async () => true,
+      spaceClientName: async () => name,
+      source: { read: async () => data, createProject },
+    });
+    expect(
+      (await app.request("/api/agent-plane/projects", { method: "POST", headers, body })).status,
+    ).toBe(status);
+    expect(createProject).not.toHaveBeenCalled();
   }
 });

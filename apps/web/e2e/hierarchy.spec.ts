@@ -7,6 +7,20 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await signup(page, `hierarchy-${Date.now()}@rakazo.test`, "password12", "Test User");
   await completeOnboarding(page);
   const space = await rpc<{ id: string }>(page, "spaces/create", { name: "Example Client" });
+  const createdProjects: { id: string; name: string; url: string }[] = [];
+  await page.route("**/api/agent-plane/projects", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ buildingId: "north", name: "Window survey" });
+    const project = {
+      id: "windows",
+      name: "Window survey",
+      url: "https://hierarchy.example.test/projects/windows",
+    };
+    createdProjects.push(project);
+    await route.fulfill({
+      status: 201,
+      json: { ...project, currency: "GBP", building_id: "north" },
+    });
+  });
   await page.route("**/api/agent-plane/hierarchy", async (route) => {
     if (route.request().headers()["x-rakazo-space-id"] !== space.id)
       return route.fulfill({ status: 204 });
@@ -20,6 +34,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
             latitude: 51.505,
             longitude: -0.09,
             projects: [
+              ...createdProjects,
               {
                 id: "roof",
                 name: "Roof survey",
@@ -65,10 +80,16 @@ test("client hierarchy shares the right region with chat details", async ({ page
   );
   await expect(composer).toBeFocused();
   await rail.getByRole("button", { name: "Add project", exact: true }).click();
+  const projectForm = rail.getByRole("form", { name: "Add project", exact: true });
+  await expect(projectForm.getByRole("textbox", { name: "Project name" })).toBeFocused();
+  await captureScreenshot(page, testInfo, "add-project-form");
+  await projectForm.getByRole("textbox", { name: "Project name" }).fill("Window survey");
+  await projectForm.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(rail.getByRole("button", { name: "Window survey", exact: true })).toBeVisible();
   await expect(composer).toHaveValue(
-    "Add a project under North Building. Ask me for the project name and show the record before creating.",
+    "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
   );
-  await expect(composer).toBeFocused();
+  await captureScreenshot(page, testInfo, "add-project-created");
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
   await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
