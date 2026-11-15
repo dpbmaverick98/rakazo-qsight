@@ -698,3 +698,31 @@ it.each([false, true])(
     act(() => root.unmount());
   },
 );
+
+it.each([false, true])(
+  "refreshes hierarchy, navigation and package queries on live tool events (group: %s)",
+  async (inGroup) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const input = syncInput({ inGroup, get: vi.fn(), commitSnapshot: vi.fn() });
+    function Probe() {
+      useThreadSync(input);
+      return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    await act(async () => root.render(createElement(Probe)));
+    const subscription = vi.mocked(runThreadSubscription).mock.calls[0]![0];
+    try {
+      await act(async () => {
+        subscription.onEvent(
+          { type: "agent.tool.completed", payload: {}, botId: "bot-1" } as ProductEvent,
+          { cursor: 0 } as ThreadSnapshot,
+        );
+      });
+      for (const key of ["hierarchy", "client-navigation", "project-commercial"]) {
+        expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: [key, "user-1"] });
+      }
+    } finally {
+      await act(async () => root.unmount());
+    }
+  },
+);

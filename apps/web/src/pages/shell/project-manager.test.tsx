@@ -31,7 +31,7 @@ afterEach(async () => {
   expect(fetch).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
-async function mount(onOpenBot?: () => void) {
+async function mount(onOpenBot?: () => void, onChanged?: () => void) {
   const container = document.createElement("div");
   const root = createRoot(container);
   await act(async () =>
@@ -41,6 +41,7 @@ async function mount(onOpenBot?: () => void) {
         client="Example Client"
         spaceId="space"
         onOpenBot={onOpenBot}
+        onChanged={onChanged}
       />,
     ),
   );
@@ -110,4 +111,14 @@ it("opens through the panel callback and ignores late results after unmount", as
   await close();
   await act(async () => finish({ bot: { id: "late" } }));
   expect(onOpenBot).toHaveBeenCalledTimes(1);
+});
+
+it("refreshes the hierarchy only after successful setup provisioning", async () => {
+  const changed = vi.fn();
+  mocks.provision.mockRejectedValueOnce(new Error("temporary"));
+  const view = await mount(undefined, changed);
+  await view.click();
+  expect(changed).not.toHaveBeenCalled();
+  await view.click();
+  expect(changed).toHaveBeenCalledOnce();
 });

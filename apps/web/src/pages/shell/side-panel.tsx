@@ -24,6 +24,7 @@ import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
+import { hierarchyRetry } from "./hierarchy-refresh";
 import { firstThreadRoute } from "./use-shell-navigation";
 
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
@@ -96,9 +97,7 @@ export function ShellSidePanel({
     hierarchyScope.enabled,
   );
   const [hierarchyOpen, setHierarchyOpen] = useState(true);
-  const hierarchyAvailable =
-    hierarchyScope.enabled &&
-    (hierarchy.isFetching || hierarchy.data !== null || hierarchy.isError);
+  const hierarchyAvailable = hierarchyScope.enabled;
   const showHierarchy = hierarchyAvailable && hierarchyOpen;
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
   const botTab =
@@ -148,7 +147,11 @@ export function ShellSidePanel({
               key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
               scope={hierarchyScope}
               onOpenBot={openCreatedBot}
-              data={hierarchy.isError ? undefined : hierarchy.data}
+              data={
+                hierarchy.isError && !hierarchyRetry(0, hierarchy.error)
+                  ? undefined
+                  : hierarchy.data
+              }
               loading={hierarchy.isFetching}
               error={hierarchy.isError}
               retry={() => {

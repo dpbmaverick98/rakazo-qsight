@@ -373,3 +373,9 @@ it("rejects ambiguous project ancestry instead of duplicating a PM", async () =>
   expect((await app.request("/api/agent-plane/navigation")).status).toBe(502);
   expect(deps.navigationBots).not.toHaveBeenCalled();
 });
+
+it("requests a fresh commercial projection for live hierarchy activity", async () => {
+  const { app, deps } = setup();
+  expect((await app.request("/api/agent-plane/projects/roof/commercial")).status).toBe(200);
+  expect(deps.source.readCommercial).toHaveBeenCalledWith("roof", true);
+});
