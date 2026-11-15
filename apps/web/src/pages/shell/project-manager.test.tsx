@@ -40,7 +40,7 @@ beforeEach(() => {
   mocks.rpc.bots.list.mockResolvedValue([]);
   mocks.rpc.bots.create.mockResolvedValue({ id: "new-bot" });
   mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "tools", name: "QSight Pilot", enabled: true },
+    { id: "tools", name: "QSight PM Pilot", enabled: true },
   ]);
   mocks.rpc.mcp.assignments.list.mockResolvedValue([]);
   mocks.rpc.mcp.assignments.replace.mockResolvedValue([]);
@@ -191,4 +191,34 @@ it("reports creation failure and checks the roster again on retry", async () => 
   await view.click();
   expect(mocks.rpc.bots.create).toHaveBeenCalledTimes(1);
   expect(mocks.navigate).toHaveBeenCalledWith("/app/recovered");
+});
+it("never falls back to the owner-level server", async () => {
+  mocks.rpc.mcp.servers.list.mockResolvedValue([
+    { id: "owner", name: "QSight Pilot", enabled: true },
+  ]);
+  const view = await mount();
+  await view.click();
+  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
+  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
+});
+it("selects the scoped server when owner and scoped both exist", async () => {
+  mocks.rpc.mcp.servers.list.mockResolvedValue([
+    { id: "owner", name: "QSight Pilot", enabled: true },
+    { id: "scoped", name: "QSight PM Pilot", enabled: true },
+  ]);
+  const view = await mount();
+  await view.click();
+  expect(mocks.rpc.mcp.assignments.replace).toHaveBeenCalledExactlyOnceWith({
+    botId: "new-bot",
+    assignments: [{ serverId: "scoped", allowAllTools: true, allowedTools: [] }],
+  });
+});
+it("fails when the scoped server is disabled", async () => {
+  mocks.rpc.mcp.servers.list.mockResolvedValue([
+    { id: "scoped", name: "QSight PM Pilot", enabled: false },
+  ]);
+  const view = await mount();
+  await view.click();
+  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
+  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
 });
