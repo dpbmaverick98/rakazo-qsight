@@ -406,3 +406,30 @@ describe("QSight business approvals", () => {
     expect(JSON.stringify(block)).not.toContain(tool);
   });
 });
+
+describe("prefixed QSight tool names", () => {
+  it("uses the same business card for an installed MCP prefix and redacts secrets", () => {
+    const block = buildApprovalAskBlock(
+      "effect-1",
+      "mcp__qsight__create_project",
+      { name: "Lobby token-secret", building_id: "secret-building" },
+      ["token-secret"],
+    );
+    if (block.kind !== "ask") throw new Error("expected ask block");
+    expect(block.text).toBe("Create project “Lobby [redacted]”");
+    expect(block.detail).toBe("Project: Lobby [redacted]");
+    expect(JSON.stringify(block)).not.toContain("secret-building");
+    expect(JSON.stringify(block)).not.toContain("create_project");
+  });
+});
+it("does not relabel another server's create_project as QSight", () => {
+  const block = buildApprovalAskBlock(
+    "effect-1",
+    "other__create_project",
+    { name: "Lobby", building_id: "secret-building" },
+    [],
+  );
+  if (block.kind !== "ask") throw new Error("expected ask block");
+  expect(block.text).toBe("Review before other__create_project");
+  expect(block.detail).toContain("building_id: secret-building");
+});

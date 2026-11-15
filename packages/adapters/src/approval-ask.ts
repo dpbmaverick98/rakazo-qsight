@@ -233,30 +233,49 @@ function webFetchSite(toolName: string, args: Record<string, unknown>): string |
     : undefined;
 }
 
+const QSIGHT_CREATE_TOOLS = [
+  "create_client",
+  "create_building",
+  "create_project",
+  "create_work_package",
+] as const;
+
+/** Installed MCP tools may arrive as `mcp__qsight__create_project` or `qsight_create_project`. */
+function qsightCreateTool(toolName: string): (typeof QSIGHT_CREATE_TOOLS)[number] | undefined {
+  return QSIGHT_CREATE_TOOLS.find(
+    (name) =>
+      toolName === name ||
+      (toolName.toLowerCase().includes("qsight") &&
+        (toolName.endsWith(`__${name}`) ||
+          toolName.endsWith(`:${name}`) ||
+          toolName.endsWith(`_${name}`))),
+  );
+}
+
 function qsightApprovalSummary(toolName: string, args: Record<string, unknown>): string | undefined {
+  const name = qsightCreateTool(toolName);
   const text = (key: string) => (typeof args[key] === "string" ? args[key].trim() : "");
-  if (toolName === "create_client") return `Create client “${text("name") || "Untitled"}”`;
-  if (toolName === "create_building")
+  if (!name) return undefined;
+  if (name === "create_client") return `Create client “${text("name") || "Untitled"}”`;
+  if (name === "create_building")
     return `Add building “${text("nickname") || text("address") || "Untitled"}”`;
-  if (toolName === "create_project") return `Create project “${text("name") || "Untitled"}”`;
-  if (toolName === "create_work_package")
-    return `Create work package “${text("title") || "Untitled"}”`;
-  return undefined;
+  if (name === "create_project") return `Create project “${text("name") || "Untitled"}”`;
+  return `Create work package “${text("title") || "Untitled"}”`;
 }
 
 function qsightApprovalDetail(toolName: string, args: Record<string, unknown>): string[] {
+  const name = qsightCreateTool(toolName);
   const text = (key: string) => (typeof args[key] === "string" ? args[key].trim() : "");
-  if (toolName === "create_client") return [`Client: ${text("name")}`];
-  if (toolName === "create_building")
+  if (!name) return [];
+  if (name === "create_client") return [`Client: ${text("name")}`];
+  if (name === "create_building")
     return [`Building: ${text("nickname") || text("address")}`, `Address: ${text("address")}`];
-  if (toolName === "create_project") return [`Project: ${text("name")}`];
-  if (toolName === "create_work_package")
-    return [
-      `Work package: ${text("title")}`,
-      `Claim: ${text("claim")}`,
-      `Sub vendor: ${text("subcontractor")}`,
-    ];
-  return [];
+  if (name === "create_project") return [`Project: ${text("name")}`];
+  return [
+    `Work package: ${text("title")}`,
+    `Claim: ${text("claim")}`,
+    `Sub vendor: ${text("subcontractor")}`,
+  ];
 }
 
 function describeApprovalAction(
