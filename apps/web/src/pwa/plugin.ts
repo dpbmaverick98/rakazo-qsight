@@ -17,8 +17,8 @@ export function webManifest() {
   }));
   return {
     id: "/",
-    name: "Rakazo",
-    short_name: "Rakazo",
+    name: "Vendor One Management",
+    short_name: "Vendor One",
     description: "Your team of always-on agents.",
     start_url: "/",
     scope: "/",
