@@ -1,4 +1,4 @@
-# Read-only client hierarchy pilot
+# Client hierarchy pilot
 
 The optional hierarchy source is configured on the API server only. Set
 `QSIGHT_BASE_URL` to the upstream HTTP(S) origin, `QSIGHT_AGENT_TOKEN` to the
@@ -11,8 +11,9 @@ Keep credentials out of frontend build variables.
 `x-rakazo-space-id` membership selection. It returns 204 when disabled or in
 Personal, 401 without a session, and a generic 502 for unmatched/empty names or
 upstream failures. Requests have a five-second deadline and no redirects.
-Successful validated responses are cached per client key for 15 seconds in a
-bounded 100-client process-local cache; downstream responses use
+Direct adapter reads cache validated responses per client key for 15 seconds in a
+bounded 100-client process-local cache. API reads request fresh data so roster
+signals work across instances; downstream responses use
 `Cache-Control: no-store`. Optional upstream fields (including address and
 nickname) are omitted from the browser DTO.
 
@@ -217,3 +218,26 @@ and retry. The hierarchy E2E spec checks the unconfigured failure without leavin
 a PM behind; CI owns full web/Electron E2E. Local visual checks use the real
 commercial panel with synthetic data; captures are in `docs/screenshots/hierarchy/`.
 No live token issuer or database migration was exercised.
+
+## Creating projects
+
+The web/Electron rail opens an inline name form under an expanded building.
+`POST /api/agent-plane/projects` accepts `{buildingId, name}` with the selected
+Space header and an authenticated session. Only a Space owner or deployment
+owner can create; Personal and unbound Spaces cannot. The API verifies building
+membership against a fresh hierarchy, rejects blank or duplicate names, and
+calls the server adapter. The adapter posts `{name}` to
+`/api/v2/agent/buildings/{building_id}/projects` using the existing server token,
+with a five-second deadline, bounded response validation and no redirects.
+The configured credential must have owner-level write access upstream.
+
+Successful creation invalidates the adapter cache, signals the Space through the
+existing live stream and refreshes the rail. Conflicts stay in the form for
+correction. There is no automatic write retry: a timeout or malformed response
+can happen after the upstream committed, so check the refreshed hierarchy before
+retrying. Concurrent duplicate creation ultimately depends on the upstream
+returning 409; the local name check alone cannot enforce uniqueness.
+
+Space names remain the integration binding, so Space owners must be trusted to
+select that binding. There is no new native mobile screen; the existing native
+app has no hierarchy rail, and server authorization also applies to native callers.

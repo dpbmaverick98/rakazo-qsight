@@ -239,15 +239,11 @@ it.each(["/app", "/app/g/group-1", "/app/bot-1"])(
         );
         expect(document.activeElement).toBe(textarea);
         await act(async () => find("Add project")!.click());
-        expect(replaceComposerDraft).toHaveBeenLastCalledWith(
-          "bot:bot-1",
-          "Add a project under North Building. Ask me for the project name and show the record before creating.",
-          [],
-        );
-        expect(document.activeElement).toBe(textarea);
+        expect(view.container.querySelector('form[aria-label="Add project"]')).not.toBeNull();
+        expect(replaceComposerDraft).toHaveBeenCalledTimes(1);
       } else {
         expect(find("Add building")).toBeUndefined();
-        expect(find("Add project")).toBeUndefined();
+        expect(find("Add project")).toBeDefined();
         expect(replaceComposerDraft).not.toHaveBeenCalled();
       }
       expect(fetch).not.toHaveBeenCalled();
@@ -257,3 +253,62 @@ it.each(["/app", "/app/g/group-1", "/app/bot-1"])(
     }
   },
 );
+
+it("submits in the rail, retains errors and refreshes after success without a chat handoff", async () => {
+  const project = {
+    id: "new",
+    name: "New",
+    currency: "GBP",
+    building_id: "north",
+    url: "https://example.test/projects/new",
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(new Response(null, { status: 502 }))
+    .mockResolvedValueOnce(Response.json(project));
+  vi.stubGlobal("fetch", fetch);
+  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
+  try {
+    const click = async (name: string) =>
+      act(async () =>
+        [...view.container.querySelectorAll("button")]
+          .find((button) => button.textContent === name)!
+          .click(),
+      );
+    await click("North Building");
+    await click("Add project");
+    const form = view.container.querySelector("form")!;
+    const input = form.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        input,
+        " New ",
+      );
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    for (const message of [
+      "Project already exists",
+      "Could not create project. Try again.",
+      null,
+    ]) {
+      await act(async () =>
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
+      );
+      if (message) {
+        expect(view.container.querySelector('[role="alert"]')?.textContent).toBe(message);
+        expect(input.value).toBe(" New ");
+        expect(view.retry).not.toHaveBeenCalled();
+      }
+    }
+    expect(fetch.mock.calls[0]![1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ buildingId: "north", name: "New" }),
+    });
+    expect(view.retry).toHaveBeenCalledOnce();
+    expect(view.container.querySelector("form")).toBeNull();
+    expect(document.activeElement?.textContent).toBe("Add project");
+  } finally {
+    await view.close();
+  }
+});

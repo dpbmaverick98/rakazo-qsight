@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
-import { HierarchySchema } from "@rakazo/contracts/hierarchy";
+import {
+  CreatedProjectSchema,
+  CreateProjectSchema,
+  HierarchySchema,
+} from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
 import { z } from "zod";
@@ -62,6 +66,43 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   >();
   return {
     spaceId,
+    async createProject(buildingId: string, name: string) {
+      const input = CreateProjectSchema.parse({ buildingId, name });
+      const signal = deadlineSignal(5000);
+      try {
+        const response = await fetch(
+          new URL(
+            `/api/v2/agent/buildings/${encodeURIComponent(input.buildingId)}/projects`,
+            origin,
+          ),
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: input.name }),
+            redirect: "error",
+            signal,
+          },
+        );
+        if (response.status === 409) throw new Error("Project already exists");
+        if (!response.ok) throw new Error("Project creation unavailable");
+        // A successful write must invalidate reads even when its response is malformed.
+        cache.clear();
+        const project = CreatedProjectSchema.extend({ id: Id, building_id: Id }).parse(
+          await readBoundedJsonResponse(response, 32_000, signal),
+        );
+        if (project.building_id !== input.buildingId)
+          throw new Error("Project creation unavailable");
+        project.url = new URL(`/projects/${encodeURIComponent(project.id)}`, origin).href;
+        return project;
+      } catch (error) {
+        if (error instanceof Error && error.message === "Project already exists") throw error;
+        throw new Error("Project creation unavailable");
+      }
+    },
     async managerServer(id: string, name: string) {
       const signal = deadlineSignal(5000);
       try {
@@ -132,13 +173,13 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       commercialCache.set(id, { data, expires: Date.now() + 15_000 });
       return data;
     },
-    async read(clientName?: string): Promise<Hierarchy> {
+    async read(clientName?: string, fresh = false): Promise<Hierarchy> {
       // A supplied name must never fall back to the deployment's legacy client.
       const name = clientName === undefined ? undefined : Name.parse(clientName);
       if (name === undefined && !clientId) throw new Error("Hierarchy client required");
       const key = name === undefined ? `id:${clientId}` : `name:${name}`;
       const cached = cache.get(key);
-      if (cached && cached.expires > Date.now()) return cached.data;
+      if (!fresh && cached && cached.expires > Date.now()) return cached.data;
       cache.delete(key);
       const url = new URL("/api/v2/agent/hierarchy", origin);
       url.searchParams.set(name === undefined ? "client_id" : "client_name", name ?? clientId!);

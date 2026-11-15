@@ -227,3 +227,62 @@ it("never falls back on empty, mismatched, or failed named reads and does not ca
   for (const [url] of fetch.mock.calls)
     expect(new URL(String(url)).searchParams.has("client_id")).toBe(false);
 });
+
+it("creates with a server token, validates the result and invalidates hierarchy cache", async () => {
+  const project = {
+    id: 9,
+    name: "New",
+    building_id: 1,
+    currency: "GBP",
+    url: "https://untrusted.example.test/",
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(raw))
+    .mockResolvedValueOnce(Response.json(project))
+    .mockResolvedValueOnce(Response.json(raw));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await source.read();
+  expect(await source.createProject("1", " New ")).toEqual({
+    ...project,
+    id: "9",
+    building_id: "1",
+    url: "https://hierarchy.example.test/projects/9",
+  });
+  expect(fetch.mock.calls[1]![0].href).toBe(
+    "https://hierarchy.example.test/api/v2/agent/buildings/1/projects",
+  );
+  expect(fetch.mock.calls[1]![1]).toMatchObject({
+    method: "POST",
+    body: '{"name":"New"}',
+    headers: { Authorization: "Bearer fake-token" },
+    redirect: "error",
+    signal: expect.any(AbortSignal),
+  });
+  await source.read();
+  expect(fetch).toHaveBeenCalledTimes(3);
+});
+
+it("never writes invalid input and rejects conflicts, mismatches and malformed results", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.createProject("..", "New")).rejects.toThrow();
+  await expect(source.createProject("1", " ")).rejects.toThrow();
+  expect(fetch).not.toHaveBeenCalled();
+  fetch.mockResolvedValueOnce(new Response("private", { status: 409 }));
+  await expect(source.createProject("1", "New")).rejects.toThrow("Project already exists");
+  fetch.mockResolvedValueOnce(
+    Response.json({
+      id: "9",
+      name: "New",
+      building_id: "other",
+      currency: "GBP",
+      url: "https://example.test/",
+    }),
+  );
+  await expect(source.createProject("1", "New")).rejects.toThrow("Project creation unavailable");
+  fetch.mockResolvedValueOnce(Response.json({ token: "private" }));
+  await expect(source.createProject("1", "New")).rejects.toThrow("Project creation unavailable");
+});
