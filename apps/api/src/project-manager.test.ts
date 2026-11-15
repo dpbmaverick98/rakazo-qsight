@@ -2,6 +2,7 @@ import { createRouterClient } from "@orpc/server";
 import { EncryptedSecretStore } from "@rakazo/adapters";
 import { qsightHierarchyFromEnv } from "@rakazo/adapters/qsight-hierarchy";
 import type { Actor } from "@rakazo/contracts";
+import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
 import {
   createLogger,
   createTestSink,
@@ -145,6 +146,15 @@ function setup() {
     vaultCredential: { count: async () => 0 },
     integrationProviderConfig: { count: async () => 0 },
     botMcpServer: {
+      findFirst: vi.fn(async ({ where }: Row) =>
+        state.assignments.find(
+          (row) =>
+            row.botId === where.botId &&
+            row.serverId === where.serverId &&
+            row.spaceId === where.spaceId &&
+            row.userId === where.userId,
+        ),
+      ),
       count: vi.fn(
         async ({ where }: Row) =>
           state.assignments.filter(
@@ -243,8 +253,12 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
       serverId: result.server.id,
       spaceId: "space",
       userId: "user",
-      allowAllTools: true,
-      allowedTools: [],
+      allowAllTools: false,
+      allowedTools: [
+        ...PROJECT_MANAGER_TOOLS.trustedTools,
+        ...PROJECT_MANAGER_TOOLS.setupWriteTools,
+      ],
+      trustedTools: [...PROJECT_MANAGER_TOOLS.trustedTools],
     },
   ]);
   expect(test.state.servers.find((server) => server.id === "owner")).toHaveProperty(

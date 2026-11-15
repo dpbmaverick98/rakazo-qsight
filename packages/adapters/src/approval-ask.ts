@@ -64,6 +64,52 @@ export function buildApprovalAskBlock(
   },
 ): MessageBlock {
   const onceOnly = toolRequiresExplicitApproval(toolName) || Boolean(options?.onceOnly);
+  if (toolName.startsWith("mcp__")) {
+    const privateValues = Object.entries(args).flatMap(([key, value]) =>
+      /token|secret|password|credential|_id$|^id$/i.test(key) && typeof value === "string" && value
+        ? [value]
+        : [],
+    );
+    const cardSecrets = [...secrets, ...privateValues];
+    const action = toolName.split("__").slice(2).join("__");
+    const titles: Record<string, string> = {
+      create_client: "Create client?",
+      create_building: "Create building?",
+      create_project: "Create project?",
+      create_work_package: "Create work package?",
+      publish_documents: "Publish documents?",
+      approve_documents: "Approve documents?",
+      delete_document: "Delete document?",
+    };
+    // Select display fields only. Credentials, identifiers, documents and arbitrary
+    // structured arguments never enter the approval payload.
+    const fields = ["client_name", "building_name", "project_name", "name", "nickname", "title"];
+    const lines = fields.flatMap((key) => {
+      const value = args[key];
+      if (typeof value !== "string") return [];
+      const clean = value.replace(/[\r\n]/g, " ").trim();
+      if (
+        !clean ||
+        /^[[{]/.test(clean) ||
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(clean)
+      )
+        return [];
+      return [redactSecrets(clean, cardSecrets).slice(0, 160)];
+    });
+    return {
+      kind: "ask",
+      approvalEffectId: effectId,
+      text: titles[action] ?? "Allow action?",
+      detail: [...new Set(lines)].join(" · ") || undefined,
+      detailFormat: "text",
+      status: "pending",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        ...(!onceOnly ? [{ id: "always", label: "Always allow this action" }] : []),
+        { id: "deny", label: "Deny" },
+      ],
+    };
+  }
   if (options?.summary) {
     // Built from what was resolved before the effect was recorded, not from what the model typed.
     return {
@@ -252,7 +298,10 @@ function qsightCreateTool(toolName: string): (typeof QSIGHT_CREATE_TOOLS)[number
   );
 }
 
-function qsightApprovalSummary(toolName: string, args: Record<string, unknown>): string | undefined {
+function qsightApprovalSummary(
+  toolName: string,
+  args: Record<string, unknown>,
+): string | undefined {
   const name = qsightCreateTool(toolName);
   const text = (key: string) => (typeof args[key] === "string" ? args[key].trim() : "");
   if (!name) return undefined;

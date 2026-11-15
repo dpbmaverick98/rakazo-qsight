@@ -106,7 +106,13 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
     });
     expect(await system.secret.count({ where: { userId: id } })).toBe(1);
     expect(await system.botMcpServer.findMany({ where: { serverId: server.id } })).toMatchObject([
-      { botId: missing.botId, userId: id, spaceId: missing.spaceId, allowAllTools: true },
+      {
+        botId: missing.botId,
+        userId: id,
+        spaceId: missing.spaceId,
+        allowAllTools: false,
+        trustedTools: [...PROJECT_MANAGER_TOOLS.trustedTools],
+      },
     ]);
     expect(
       await runAsTenant({ ...actor, spaceId: missing.spaceId }, () =>

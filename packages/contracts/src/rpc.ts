@@ -1236,6 +1236,7 @@ export const appContract = {
                 serverId: Id,
                 allowAllTools: z.boolean().default(true),
                 allowedTools: z.array(z.string().min(1).max(200)).max(500).default([]),
+                trustedTools: z.array(z.string().min(1).max(200)).max(500).optional(),
               }),
             ),
           }),

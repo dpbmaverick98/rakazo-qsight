@@ -1044,3 +1044,24 @@ it("leaves plain questions to the composer and dims the question after answering
   ).toBe(true);
   expect(container.textContent).not.toContain("Paris");
 });
+
+it("preserves the business action label for MCP approvals", async () => {
+  const card: AskBlock = {
+    kind: "ask",
+    approvalEffectId: "effect",
+    text: "Create building?",
+    status: "pending",
+    detail: "Example Client · North Tower",
+    actions: [
+      { id: "allow", label: "Allow once" },
+      { id: "always", label: "Always allow this action" },
+      { id: "deny", label: "Deny" },
+    ],
+  };
+  await render(card);
+  expect([...container.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+    "Allow once",
+    "Always allow this action",
+    "Deny",
+  ]);
+});

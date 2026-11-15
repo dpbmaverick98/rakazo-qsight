@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
-import { PROJECT_MANAGER_TOOLS, retry } from "@rakazo/core";
+import { PROJECT_MANAGER_TOOLS, projectManagerToolPolicy, retry } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import { lockSpaceDeletion } from "@rakazo/db";
 import { bestEffort, clientSetupDebug, clientSetupStage } from "@rakazo/logging";
@@ -174,6 +174,9 @@ async function provision(
                 : {}),
             },
           });
+          const previousAssignment = await tx.botMcpServer.findFirst({
+            where: { botId, serverId: server.id, spaceId: actor.spaceId, userId: actor.userId },
+          });
           await tx.botMcpServer.deleteMany({ where: { botId, spaceId: actor.spaceId } });
           await tx.botMcpServer.create({
             data: {
@@ -181,8 +184,7 @@ async function provision(
               serverId: server.id,
               spaceId: actor.spaceId,
               userId: actor.userId,
-              allowAllTools: true,
-              allowedTools: [],
+              ...projectManagerToolPolicy(previousAssignment?.trustedTools),
             },
           });
           seededBotId = botId;
@@ -201,8 +203,9 @@ async function provision(
           throw new ORPCError("CONFLICT", {
             message: "Finish setup before creating project managers",
           });
-        const existing =
-          bots.find((bot) => bot.spawnKey === spawnKey) ?? (input.finishSetup ? setup : undefined);
+        const existing = bots.find(
+          (bot) => bot.spawnKey === spawnKey || (input.finishSetup && bot.id === setup?.id),
+        );
         const bot =
           existing ??
           (await repos.createBot(actor, {

@@ -4636,3 +4636,86 @@ it("does not blame the webhook on cards every run shows", async () => {
   expect(connection.pauseRunForInput).toHaveBeenCalledOnce();
   expect(askDetail(connection)).toBe("Telegram: fake");
 });
+
+describe("MCP assignment approval policy", () => {
+  function mcp(
+    tool: string,
+    trusted: string[],
+    options: {
+      readOnly?: boolean;
+      skipApprovals?: boolean;
+      autoReview?: boolean;
+      deny?: boolean;
+      catalog?: boolean;
+      globalAllow?: boolean;
+    } = {},
+  ) {
+    const name = `mcp__example__${tool}`;
+    const f = fixture({
+      name,
+      catalog: options.catalog,
+      readOnly: options.readOnly ?? false,
+      skipApprovals: options.skipApprovals,
+      autoReview: options.autoReview,
+      rules: options.deny
+        ? [{ effect: "deny", matchKind: "tool", matchValue: name }]
+        : options.globalAllow
+          ? [{ effect: "always_allow", matchKind: "tool", matchValue: name }]
+          : [],
+      route: { connectorId: "mcp", resourceId: "server-1", toolName: tool },
+    });
+    const findFirst = vi.fn(async () => ({
+      allowAllTools: false,
+      allowedTools: ["search_clients", "create_project"],
+      trustedTools: trusted,
+    }));
+    Object.assign(f.prisma, { botMcpServer: { findFirst } });
+    return { ...f, findFirst };
+  }
+
+  it.each([false, true])(
+    "runs a trusted preparation tool without hints (catalog: %s)",
+    async (catalog) => {
+      const f = mcp("search_clients", ["search_clients"], { catalog });
+      await f.run();
+      expect(f.execute).toHaveBeenCalledOnce();
+      expect(f.pauseRunForInput).not.toHaveBeenCalled();
+      expect(f.findFirst).toHaveBeenCalledWith({
+        where: { botId: "bot-1", serverId: "server-1", spaceId: "space-1", userId: "user-1" },
+      });
+    },
+  );
+
+  it.each([
+    { skipApprovals: true },
+    { autoReview: true },
+    { readOnly: true },
+    { globalAllow: true },
+    { catalog: true },
+    {},
+  ])("asks for an untrusted write despite preferences and hints: %j", async (options) => {
+    const f = mcp("create_project", ["search_clients"], options);
+    await f.run();
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.pauseRunForInput).toHaveBeenCalledOnce();
+    expect(reviewMock).not.toHaveBeenCalled();
+  });
+
+  it("runs an explicitly trusted write, but an explicit deny still wins", async () => {
+    const trusted = mcp("create_project", ["create_project"]);
+    await trusted.run();
+    expect(trusted.execute).toHaveBeenCalledOnce();
+    const denied = mcp("create_project", ["create_project"], { deny: true });
+    await denied.run();
+    expect(denied.execute).not.toHaveBeenCalled();
+    expect(denied.pauseRunForInput).not.toHaveBeenCalled();
+  });
+
+  it("denies unknown tools even if their name appears in trust", async () => {
+    const f = mcp("unknown", ["unknown"]);
+    await f.run();
+    expect(f.execute).not.toHaveBeenCalled();
+    expect(f.pauseRunForInput).not.toHaveBeenCalled();
+    expect(JSON.stringify(f.results)).toContain("not assigned");
+  });
+});
