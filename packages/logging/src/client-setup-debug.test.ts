@@ -4,7 +4,7 @@ import {
   clientSetupDebug,
   clientSetupStage,
 } from "./client-setup-debug.js";
-import { runWithLogContext } from "./context.js";
+import { getLogContext, runWithLogContext } from "./context.js";
 import { createLogger, getLogger, installLogger } from "./logger.js";
 import { createTestSink } from "./test-sink.js";
 
@@ -74,4 +74,15 @@ it("rejects unsafe correlation ids rather than forwarding header values", async 
   );
   expect(headers["x-request-id"]).toMatch(/^[\w.:-]{1,128}$/);
   expect(headers["x-request-id"]).not.toContain("private");
+});
+
+it("leaves ordinary log context unchanged when debugging is off", async () => {
+  vi.stubEnv("CLIENT_SETUP_DEBUG", "0");
+  await runWithLogContext({ "request.id": "ordinary-request" }, async () => {
+    const result = await clientSetupStage("binding", { actorId: "debug-actor" }, async () => {
+      expect(getLogContext()).toEqual({ "request.id": "ordinary-request" });
+      return 42;
+    });
+    expect(result).toBe(42);
+  });
 });

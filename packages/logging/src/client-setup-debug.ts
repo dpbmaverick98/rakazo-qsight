@@ -65,6 +65,7 @@ export async function clientSetupStage<T>(
   fields: SetupFields,
   work: () => Promise<T>,
 ): Promise<T> {
+  if (process.env.CLIENT_SETUP_DEBUG !== "1") return work();
   const started = performance.now();
   try {
     const context: Record<string, string> = {};
