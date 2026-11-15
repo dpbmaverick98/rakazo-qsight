@@ -2,18 +2,32 @@
 
 The optional hierarchy source is configured on the API server only. Set
 `QSIGHT_BASE_URL` to the upstream HTTP(S) origin, `QSIGHT_AGENT_TOKEN` to the
-agent credential, `QSIGHT_CLIENT_ID` to the client ID, and `QSIGHT_SPACE_ID` to
-one existing, non-Personal Rakazo space ID. Missing settings disable the feature.
-The explicit space binding is required: membership in another space never grants
-access to this client's hierarchy. Keep credentials out of frontend build variables.
+agent credential. Missing base/token settings disable the feature. The API resolves
+the authenticated, non-Personal Space's stored name and requests
+`GET /api/v2/agent/hierarchy?client_name=...`. The returned client name must match.
+Keep credentials out of frontend build variables.
 
 `GET /api/agent-plane/hierarchy` uses the existing Rakazo session and
-`x-rakazo-space-id` membership selection. It returns 204 when disabled or outside
-the bound space, 401 without a session, and a generic 502 when the upstream fails.
-The adapter calls only `GET /api/v2/agent/hierarchy?client_id=...`, with a five-second
-deadline and no redirects. Successful validated responses are cached in process
-for 15 seconds; downstream responses use `Cache-Control: no-store`. Optional
-upstream fields (including address and nickname) are omitted from the browser DTO.
+`x-rakazo-space-id` membership selection. It returns 204 when disabled or in
+Personal, 401 without a session, and a generic 502 for unmatched/empty names or
+upstream failures. Requests have a five-second deadline and no redirects.
+Successful validated responses are cached per client key for 15 seconds in a
+bounded 100-client process-local cache; downstream responses use
+`Cache-Control: no-store`. Optional upstream fields (including address and
+nickname) are omitted from the browser DTO.
+
+Client names must uniquely identify an owner client upstream; duplicate or
+ambiguous client names are unsupported and must be resolved upstream. Rakazo
+Spaces sharing a name intentionally resolve the same client. Renaming a Space
+changes its binding on the next read. All members of a bound Space must be
+allowed to read that client's projects. Space naming/membership must therefore
+be restricted to trusted administrators for this integration.
+
+`QSIGHT_CLIENT_ID` is optional legacy configuration used only by direct adapter
+`read()` calls without a name. Named reads never fall back to it, including when
+the name is empty or unmatched. `QSIGHT_SPACE_ID` remains optional legacy metadata
+and no longer gates API access or provisioning.
+
 Nullable building latitude/longitude are accepted; missing, non-numeric, non-finite
 or out-of-range upstream coordinates become null. Coordinates are never inferred.
 
@@ -33,15 +47,14 @@ there is no offline basemap or service availability guarantee. Native Expo
 navigation remains unchanged; this map is a web/Electron enhancement.
 
 Project links currently use the upstream origin plus `/projects/<encoded-id>`.
-Confirm that route with the upstream app before enabling the pilot. This is one
-client binding per deployment, not a multi-client mapping system. The navigation reads do not write upstream. Project-manager provisioning is described below.
+Confirm that route with the upstream app before enabling the pilot. Each Space binds by its stored name. The navigation reads do not write upstream. Project-manager provisioning is described below.
 
 The web/Electron Shell shares one resizable right region between the hierarchy
 and existing details. On narrow screens the hierarchy starts behind its button;
 Hide restores the chat. Personal and unconfigured spaces have no hierarchy rail.
 Archive remains the existing chat-history view and gains no hierarchy actions.
 Full-screen Pages/computer views may cover the region. Native Expo navigation is
-unchanged in this web pilot; the server enforces the same space binding for callers.
+unchanged in this web pilot; the server enforces the same Space-name binding for callers.
 
 The hierarchy reads on entry, window focus, manual retry and existing roster
 stream signals (including reconnect). There is no polling. Upstream-only changes
@@ -92,9 +105,9 @@ outside this pilot. No chat messages, model calls, writes or commercial totals
 are introduced.
 
 `GET /api/agent-plane/projects/:id/commercial` uses the same authenticated
-session, membership selection and configured non-Personal space binding as the
+session, membership selection and non-Personal Space-name binding as the
 hierarchy. Before every commercial read (including cache hits), the project ID
-must appear in the configured client's hierarchy. All members of this configured
+must appear in the Space-named client's hierarchy. All members of this bound
 space must be permitted to read all its mapped projects; mixed readership is not
 supported. The hierarchy's existing 15-second cache also bounds mapping freshness.
 
@@ -155,7 +168,7 @@ speech were not exercised.
 Web and Electron use `mcp.servers.provisionProjectManager`, available at
 `POST /rpc/mcp/servers/provisionProjectManager`, with
 `{ projectId, projectName, clientName }`. It requires the existing signed-in session
-and `x-rakazo-space-id` membership selection. The configured non-Personal space
+and `x-rakazo-space-id` membership selection. The non-Personal Space-name
 binding and client hierarchy are checked before minting. Canonical names from the
 hierarchy replace browser-supplied names. The response is `{ bot, server, created }`;
 `created` means this request created the bot. Neither bearer nor ciphertext appears
@@ -190,7 +203,7 @@ all-agent servers. Failed persistence rolls back product records and uses the
 existing prepared-secret cleanup. An already-issued upstream token cannot be
 revoked on database failure because no revocation API was supplied.
 
-Limits: one configured client/space per deployment; hierarchy membership may be
+Limits: unique upstream client names are required; hierarchy membership may be
 cached for 15 seconds; provisioning an existing bot owned by another member fails
 safely rather than replacing that member's credentials. Each provisioning request
 mints a scoped token, including retries and reuse. There is no token-refresh timer

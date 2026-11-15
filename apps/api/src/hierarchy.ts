@@ -7,10 +7,9 @@ export function mountHierarchyRoute(
   app: Hono,
   deps: {
     sessionActor: (request: Request) => Promise<Actor | null>;
-    isPersonalSpace: (actor: Actor) => Promise<boolean>;
+    spaceClientName: (actor: Actor) => Promise<string | null>;
     source: {
-      spaceId: string;
-      read: () => Promise<Hierarchy>;
+      read: (clientName?: string) => Promise<Hierarchy>;
       readCommercial?: (id: string) => Promise<ProjectCommercial>;
     } | null;
   },
@@ -20,17 +19,15 @@ export function mountHierarchyRoute(
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
     const source = deps.source;
-    if (
-      !source?.readCommercial ||
-      actor.spaceId !== source.spaceId ||
-      (await deps.isPersonalSpace(actor))
-    )
-      return c.body(null, 204);
+    if (!source?.readCommercial) return c.body(null, 204);
     const id = c.req.param("id");
     if (!id || id.length > 200 || id === "." || id === ".." || new URL(c.req.url).search)
       return c.json({ error: "Invalid project request" }, 400);
     try {
-      const hierarchy = await source.read();
+      const name = await deps.spaceClientName(actor);
+      if (name === null) return c.body(null, 204);
+      if (!name.trim()) throw new Error("Space name required");
+      const hierarchy = await source.read(name);
       if (
         !hierarchy.buildings.some((building) =>
           building.projects.some((project) => project.id === id),
@@ -46,14 +43,12 @@ export function mountHierarchyRoute(
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
-    if (
-      !deps.source ||
-      actor.spaceId !== deps.source.spaceId ||
-      (await deps.isPersonalSpace(actor))
-    )
-      return c.body(null, 204);
+    if (!deps.source) return c.body(null, 204);
     try {
-      return c.json(await deps.source.read());
+      const name = await deps.spaceClientName(actor);
+      if (name === null) return c.body(null, 204);
+      if (!name.trim()) throw new Error("Space name required");
+      return c.json(await deps.source.read(name));
     } catch {
       // Never forward upstream bodies, URLs, headers or credentials.
       return c.json({ error: "Hierarchy unavailable" }, 502);

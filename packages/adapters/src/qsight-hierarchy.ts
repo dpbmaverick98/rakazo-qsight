@@ -39,7 +39,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     QSIGHT_CLIENT_ID: clientId,
     QSIGHT_SPACE_ID: spaceId,
   } = env;
-  if (!base || !token || !clientId || !spaceId) return null;
+  if (!base || !token) return null;
   const origin = new URL(base);
   if (
     !["https:", "http:"].includes(origin.protocol) ||
@@ -55,7 +55,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   if (origin.protocol === "http:" && !localHttp.has(origin.hostname)) {
     throw new Error("Hierarchy HTTP is allowed only for loopback/local Docker; use HTTPS");
   }
-  let cached: { data: Hierarchy; expires: number } | undefined;
+  const cache = new Map<string, { data: Hierarchy; expires: number }>();
   const commercialCache = new Map<
     string,
     { data: ReturnType<typeof ProjectCommercialSchema.parse>; expires: number }
@@ -132,10 +132,16 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       commercialCache.set(id, { data, expires: Date.now() + 15_000 });
       return data;
     },
-    async read(): Promise<Hierarchy> {
+    async read(clientName?: string): Promise<Hierarchy> {
+      // A supplied name must never fall back to the deployment's legacy client.
+      const name = clientName === undefined ? undefined : Name.parse(clientName);
+      if (name === undefined && !clientId) throw new Error("Hierarchy client required");
+      const key = name === undefined ? `id:${clientId}` : `name:${name}`;
+      const cached = cache.get(key);
       if (cached && cached.expires > Date.now()) return cached.data;
+      cache.delete(key);
       const url = new URL("/api/v2/agent/hierarchy", origin);
-      url.searchParams.set("client_id", clientId);
+      url.searchParams.set(name === undefined ? "client_id" : "client_name", name ?? clientId!);
       const signal = deadlineSignal(5000);
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -144,7 +150,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       });
       if (!response.ok) throw new Error("Hierarchy upstream unavailable");
       const raw = ResponseSchema.parse(await readBoundedJsonResponse(response, 1_000_000, signal));
-      if (raw.client.id !== clientId) throw new Error("Hierarchy client mismatch");
+      if (name === undefined ? raw.client.id !== clientId : raw.client.name !== name)
+        throw new Error("Hierarchy client mismatch");
       const data = HierarchySchema.parse({
         client: raw.client,
         buildings: raw.buildings.map((building) => ({
@@ -155,7 +162,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
           })),
         })),
       });
-      cached = { data, expires: Date.now() + 15_000 };
+      if (cache.size >= 100) cache.delete(cache.keys().next().value!);
+      cache.set(key, { data, expires: Date.now() + 15_000 });
       return data;
     },
   };

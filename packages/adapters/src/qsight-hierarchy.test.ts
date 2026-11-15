@@ -21,9 +21,13 @@ const raw = {
   ],
 };
 afterEach(() => vi.unstubAllGlobals());
-it("stays disabled without all settings and rejects unsafe base URLs", () => {
+it("requires only base and token and rejects unsafe base URLs", () => {
   expect(qsightHierarchyFromEnv({})).toBeNull();
-  expect(qsightHierarchyFromEnv({ ...config, QSIGHT_SPACE_ID: "" })).toBeNull();
+  expect(
+    qsightHierarchyFromEnv({ ...config, QSIGHT_SPACE_ID: "", QSIGHT_CLIENT_ID: "" }),
+  ).not.toBeNull();
+  expect(qsightHierarchyFromEnv({ ...config, QSIGHT_AGENT_TOKEN: "" })).toBeNull();
+  expect(qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "" })).toBeNull();
   expect(() => qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "file:///tmp" })).toThrow();
   expect(() =>
     qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://example.test" }),
@@ -176,4 +180,50 @@ it.each([
   await expect(qsightHierarchyFromEnv(config)!.managerServer("roof", "Roof")).rejects.toThrow(
     "Project manager credentials unavailable",
   );
+});
+
+it("selects by name without legacy IDs and isolates name and ID caches", async () => {
+  const fetch = vi.fn(async (input: URL | RequestInfo) => {
+    const url = new URL(String(input));
+    return Response.json({
+      ...raw,
+      client: { id: 7, name: url.searchParams.get("client_name") ?? raw.client.name },
+    });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await source.read("Example Client");
+  await source.read("Other & Client");
+  await source.read();
+  await source.read("Example Client");
+  expect(fetch).toHaveBeenCalledTimes(3);
+  expect(new URL(String(fetch.mock.calls[1]![0])).searchParams.get("client_name")).toBe(
+    "Other & Client",
+  );
+  expect(new URL(String(fetch.mock.calls[0]![0])).searchParams.has("client_id")).toBe(false);
+  const namedOnly = qsightHierarchyFromEnv({
+    QSIGHT_BASE_URL: config.QSIGHT_BASE_URL,
+    QSIGHT_AGENT_TOKEN: config.QSIGHT_AGENT_TOKEN,
+  })!;
+  await expect(namedOnly.read("Example Client")).resolves.toHaveProperty("client.id", "7");
+  await expect(namedOnly.read()).rejects.toThrow("Hierarchy client required");
+});
+it("never falls back on empty, mismatched, or failed named reads and does not cache failures", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(raw));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.read("")).rejects.toThrow();
+  await expect(source.read("   ")).rejects.toThrow();
+  expect(fetch).not.toHaveBeenCalled();
+  await expect(source.read("Other Client")).rejects.toThrow("Hierarchy client mismatch");
+  await expect(source.read("Other Client")).rejects.toThrow("Hierarchy client mismatch");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  fetch.mockResolvedValueOnce(new Response(null, { status: 404 }));
+  await expect(source.read("Example Client")).rejects.toThrow();
+  await expect(source.read("Example Client")).resolves.toHaveProperty(
+    "client.name",
+    "Example Client",
+  );
+  for (const [url] of fetch.mock.calls)
+    expect(new URL(String(url)).searchParams.has("client_id")).toBe(false);
 });
