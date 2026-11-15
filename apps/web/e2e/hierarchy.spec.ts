@@ -73,10 +73,18 @@ test("client hierarchy shares the right region with chat details", async ({ page
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
   await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
   await commercial.getByRole("button", { name: "Create project manager", exact: true }).click();
-  await expect(composer).toHaveValue(
-    "Create a project manager agent for Roof survey. Give it this project's context and ask before creating anything.",
-  );
-  await expect(composer).toBeFocused();
+  await expect(commercial.getByRole("alert")).toContainText("created, but");
+  await expect(commercial.getByRole("button", { name: "Retry connection" })).toBeEnabled();
+  await expect(commercial.getByRole("button", { name: "Open project manager" })).toBeEnabled();
+  const managersResponse = await page.request.post("/rpc/bots/list", {
+    headers: { "x-rakazo-space-id": space.id },
+    data: { json: {} },
+  });
+  expect(managersResponse.ok()).toBeTruthy();
+  const { json: managers } = (await managersResponse.json()) as {
+    json: { id: string; name: string }[];
+  };
+  expect(managers.filter((item) => item.name === "PM — Roof survey")).toHaveLength(1);
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
