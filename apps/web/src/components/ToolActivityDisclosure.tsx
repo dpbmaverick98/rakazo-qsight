@@ -1,7 +1,7 @@
 import { Plural, Trans } from "@lingui/react/macro";
 import { ChatMarkdown } from "@rakazo/chat-ui/web";
 import type { ThreadMessage } from "@rakazo/contracts";
-import { formatCompactDuration } from "@rakazo/core";
+import { formatCompactDuration, friendlyMcpToolLabel } from "@rakazo/core";
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,22 +17,9 @@ type ToolStep = Extract<ThreadMessage["blocks"][number], { kind: "steps" }>["ste
 /** While a run is live, only the most recent steps are listed so a long run does not push the chat down. */
 export const LIVE_TOOL_STEP_WINDOW = 6;
 
-/** Construction-facing labels for Vendor One / MCP tool steps. */
+/** Handles both saved raw protocol names and current business labels. */
 export function friendlyToolLabel(label: string): string {
-  return label
-    .replace(/^Vendor One\s+/i, "")
-    .replace(/\bsearch_locations\b/g, "Checking address")
-    .replace(/\bget_location_proof\b/g, "Confirming address")
-    .replace(/\bsearch_documents\b/g, "Checking documents")
-    .replace(/\blist_clients\b/g, "Looking up client")
-    .replace(/\bcreate_client\b/g, "Creating client")
-    .replace(/\blist_buildings\b/g, "Looking up buildings")
-    .replace(/\bcreate_building\b/g, "Creating building")
-    .replace(/\blist_projects\b/g, "Looking up projects")
-    .replace(/\bcreate_project\b/g, "Creating project")
-    .replace(/\bget_project\b/g, "Reading project")
-    .replace(/\bget_hierarchy\b/g, "Reading client hierarchy")
-    .replace(/\bsearch\b/g, "Searching");
+  return friendlyMcpToolLabel(label);
 }
 
 export function ToolSteps({

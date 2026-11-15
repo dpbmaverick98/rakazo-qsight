@@ -150,10 +150,13 @@ function PromptAskCard({
 }: AskCardProps) {
   const { t } = useLingui();
   // Old saved MCP approvals may contain credentials in their argument detail.
-  if (isApprovalAskBlock(block) && block.text.startsWith("Review before mcp__")) {
+  if (
+    isApprovalAskBlock(block) &&
+    (block.text.startsWith("Review before mcp__") || block.text.startsWith("mcp__"))
+  ) {
     block = {
       ...block,
-      text: mcpApprovalTitle(block.text.slice("Review before ".length))!,
+      text: mcpApprovalTitle(block.text.replace(/^Review before /, ""))!,
       detail: undefined,
       actions: block.actions?.map((action) =>
         action.id === "always" ? { ...action, label: "Always allow this action" } : action,
