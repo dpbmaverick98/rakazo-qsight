@@ -26,7 +26,13 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
         signal,
       });
       if (response.status === 204) return null;
-      if (!response.ok) throw new Error("Hierarchy unavailable");
+      if (!response.ok) {
+        if (response.status === 409) {
+          const body = await response.json();
+          if (["personal", "binding_missing"].includes(body.status)) return null;
+        }
+        throw new Error("Hierarchy unavailable");
+      }
       return HierarchySchema.parse(await response.json());
     },
   });
