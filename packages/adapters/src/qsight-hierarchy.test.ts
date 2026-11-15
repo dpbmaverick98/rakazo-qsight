@@ -39,12 +39,12 @@ it("authenticates server-side, sanitizes data, encodes links and caches briefly"
   const result = await source.read();
   expect(result.client).toEqual({ id: "7", name: "Example Client" });
   expect(result.buildings[0]).not.toHaveProperty("address");
-  expect(result.buildings[0].projects[0].url).toBe(
+  expect(result.buildings[0]!.projects[0]!.url).toBe(
     "https://hierarchy.example.test/projects/roof%2Fsurvey",
   );
   await source.read();
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(fetch.mock.calls[0][1]).toMatchObject({
+  expect(fetch.mock.calls[0]![1]).toMatchObject({
     headers: { Authorization: "Bearer fake-token" },
     redirect: "error",
   });
@@ -104,10 +104,10 @@ it("reads bounded commercial projections with bearer auth, canonical links and a
   expect(result).toEqual(commercialFixture);
   await source.readCommercial("roof");
   expect(fetch).toHaveBeenCalledTimes(1);
-  expect(String(fetch.mock.calls[0][0])).toBe(
+  expect(String(fetch.mock.calls[0]![0])).toBe(
     "https://hierarchy.example.test/api/v2/agent/projects/roof/commercial",
   );
-  expect(fetch.mock.calls[0][1]).toMatchObject({
+  expect(fetch.mock.calls[0]![1]).toMatchObject({
     redirect: "error",
     headers: { Authorization: "Bearer fake-token" },
     signal: expect.any(AbortSignal),
