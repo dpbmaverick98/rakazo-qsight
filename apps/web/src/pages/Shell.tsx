@@ -1274,6 +1274,8 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
+        artifactStage={rightPanel.artifactStage}
+        onSelectArtifact={rightPanel.selectArtifact}
         hierarchyScope={{
           userId: userId ?? null,
           spaceId: shellSpaceId ?? bootstrapMe?.spaceId ?? null,
