@@ -155,12 +155,24 @@ it("mints a project-scoped bearer server-side and uses the configured MCP endpoi
     }),
   );
   expect(server).toMatchObject({
-    name: "QSight PM — Roof survey",
+    name: "Vendor One PM — Roof survey",
     transport: "streamable_http",
     endpoint: "https://tools.example.test/mcp",
     headers: { Authorization: "Bearer fake-read-only-token" },
   });
   expect(server.slug).toMatch(/^pm-[a-f0-9]{60}$/);
+});
+it("caps the branded server name without changing project identity", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ token: "fake-scoped" })),
+  );
+  const source = qsightHierarchyFromEnv(config)!;
+  const short = await source.managerServer("roof", "Roof");
+  const long = await source.managerServer("roof", "X".repeat(150));
+  expect(long.name).toBe(`Vendor One PM — ${"X".repeat(104)}`);
+  expect(long.name).toHaveLength(120);
+  expect(long.slug).toBe(short.slug);
 });
 it("defaults to the origin's MCP endpoint", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ token: "fake-scoped" })));

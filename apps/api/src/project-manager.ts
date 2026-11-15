@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import { itemSecretIn } from "@rakazo/db";
 import { lockOwner } from "./availability.js";
@@ -21,7 +22,9 @@ export async function provisionProjectManager(
   if (!space || space.isDefault || !space.name.trim())
     throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   if (!actor.isDeploymentOwner && space.createdByUserId !== actor.userId)
-    throw new ORPCError("FORBIDDEN", { message: "Only the Space owner can provision a project manager" });
+    throw new ORPCError("FORBIDDEN", {
+      message: "Only the Space owner can provision a project manager",
+    });
   // Only canonical upstream names enter instructions or deterministic resource names.
   const hierarchy = await source.read(space.name).catch(() => {
     throw new ORPCError("BAD_GATEWAY", { message: "Project unavailable" });
@@ -40,14 +43,17 @@ export async function provisionProjectManager(
       spaceId: actor.spaceId,
       userId: actor.userId,
       allBots: true,
-      name: { startsWith: "QSight" },
+      OR: [
+        { name: { startsWith: PROJECT_MANAGER_TOOLS.legacyServerPrefix } },
+        { name: { startsWith: PROJECT_MANAGER_TOOLS.name } },
+      ],
     },
     select: { id: true },
   });
   if (shared)
     throw new ORPCError("CONFLICT", {
       message:
-        "Disable All bots on the owner-level QSight server before creating a project manager",
+        "Disable All bots on the owner-level Vendor One server before creating a project manager",
     });
   const stored = await prepareMcpServer(actor, config);
   if (!stored) throw new ORPCError("INTERNAL_SERVER_ERROR");

@@ -1,4 +1,3 @@
-import { BOT_NAME_MAX_LENGTH } from "@rakazo/contracts";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ spaces: vi.fn(), list: vi.fn(), create: vi.fn() }));
@@ -22,25 +21,25 @@ beforeEach(() => {
   });
 });
 
-it("creates the current client's lead even when Personal is listed first", async () => {
+it("creates the current client's PM even when Personal is listed first", async () => {
   await ensureFirstBot();
   expect(mocks.create).toHaveBeenCalledWith(
     expect.objectContaining({
-      name: "Example Client Lead",
+      name: "PM",
       instructions:
-        "You are the client lead for Example Client. Help with its buildings, projects and commercial work; ask what to take care of for this client first, and keep work scoped to this client unless asked otherwise.",
+        "You are the PM for Example Client. Help with its buildings, projects and commercial work; ask what to take care of for this client first, and keep work scoped to this client unless asked otherwise.",
       spawnKey: "onboarding:first",
     }),
   );
 });
 
-it("preserves Lead within the contract's name limit", async () => {
+it("uses PM even for a long client name", async () => {
   mocks.spaces.mockResolvedValue({
     current: { id: "client", name: "X".repeat(120) },
     spaces: [{ id: "client", isDefault: false }],
   });
   await ensureFirstBot();
-  expect(mocks.create.mock.calls[0]?.[0].name).toBe(`${"X".repeat(BOT_NAME_MAX_LENGTH - 5)} Lead`);
+  expect(mocks.create.mock.calls[0]?.[0].name).toBe("PM");
 });
 
 it("keeps Chief and its empty instructions in Personal", async () => {
@@ -61,7 +60,7 @@ it("does not reuse a legacy Chief in a client Space", async () => {
 
 it("reuses the idempotency key and shares concurrent attempts", async () => {
   mocks.list.mockResolvedValue([
-    { id: "existing", name: "Example Client Lead", spawnKey: "onboarding:first" },
+    { id: "existing", name: "Renamed by user", spawnKey: "onboarding:first" },
   ]);
   expect(await Promise.all([ensureFirstBot(), ensureFirstBot()])).toEqual([
     { id: "existing" },
