@@ -72,7 +72,7 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
     expect(repeated).toEqual([missing, missing]);
     expect(await system.bot.count({ where: { spaceId: missing.spaceId } })).toBe(1);
     expect(await system.bot.findUnique({ where: { id: missing.botId } })).toMatchObject({
-      name: "PM",
+      name: "Proj. Manager - Sam",
       spawnKey: `setup:${client.id}`,
       inheritMcpServers: false,
       crossSpaceCommunication: false,
