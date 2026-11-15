@@ -262,7 +262,7 @@ A crash during an unused-token revocation can leave that token active. No local
 record can reliably inventory a mint whose response was lost. Receipt-backed
 building/project writes do not close this separate token window.
 
-In the configured Rakazo operator environment, list retained issuer IDs:
+In the configured Vendor One Management operator environment, list retained issuer IDs:
 
 ```sh
 pnpm exec tsx packages/adapters/src/cli/qsight-manager-token.ts retained

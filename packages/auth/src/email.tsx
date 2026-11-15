@@ -268,10 +268,10 @@ export function verificationEmail(
   return message(
     email,
     locale,
-    say("Verify your Rakazo email"),
+    say("Verify your Vendor One Management email"),
     <>
       <Button href={url}>{say("Verify email")}</Button>
-      <Text>{say("Then return to Rakazo to sign in.")}</Text>
+      <Text>{say("Then return to Vendor One Management to sign in.")}</Text>
       <FinePrint>
         {say("This link expires in one hour. If you did not register, ignore this email.")}
       </FinePrint>
@@ -288,9 +288,9 @@ export function signInCodeEmail(
   return message(
     email,
     locale,
-    say("Your Rakazo sign-in code"),
+    say("Your Vendor One Management sign-in code"),
     <>
-      <Text>{say("Enter this code to sign in to Rakazo:")}</Text>
+      <Text>{say("Enter this code to sign in to Vendor One Management:")}</Text>
       <Code>{code}</Code>
       <FinePrint>
         {say("This code expires in ten minutes. If you did not request it, ignore this email.")}
@@ -308,10 +308,10 @@ export function passwordResetEmail(
   return message(
     user.email,
     locale,
-    say("Reset your Rakazo password"),
+    say("Reset your Vendor One Management password"),
     <>
       <Text>{greeting(say, user.name)}</Text>
-      <Text>{say("Reset your Rakazo password:")}</Text>
+      <Text>{say("Reset your Vendor One Management password:")}</Text>
       <Button href={resetUrl}>{say("Reset password")}</Button>
       <FinePrint>
         {say(
@@ -331,9 +331,9 @@ export function accountDeletionEmail(
   return message(
     email,
     locale,
-    say("Confirm Rakazo account deletion"),
+    say("Confirm Vendor One Management account deletion"),
     <>
-      <Text>{say("Enter this code in Rakazo to delete your account:")}</Text>
+      <Text>{say("Enter this code in Vendor One Management to delete your account:")}</Text>
       <Code>{code}</Code>
       <FinePrint>
         {say(
@@ -353,9 +353,9 @@ export function identityCodeEmail(
   return message(
     email,
     locale,
-    say("Your Rakazo confirmation code"),
+    say("Your Vendor One Management confirmation code"),
     <>
-      <Text>{say("Enter this code in Rakazo to confirm it's you:")}</Text>
+      <Text>{say("Enter this code in Vendor One Management to confirm it's you:")}</Text>
       <Code>{code}</Code>
       <FinePrint>
         {say("This code expires in ten minutes. If you did not request it, ignore this email.")}

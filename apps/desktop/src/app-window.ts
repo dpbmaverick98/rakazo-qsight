@@ -151,6 +151,7 @@ export function createWindow(url: string, partition: string | null) {
   const icon = developmentIcon();
   const win = new BrowserWindow({
     ...browserWindowOptions(process.platform, screen.getPrimaryDisplay().workAreaSize),
+    title: "Vendor One Management",
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: path.join(import.meta.dirname, "preload.cjs"),

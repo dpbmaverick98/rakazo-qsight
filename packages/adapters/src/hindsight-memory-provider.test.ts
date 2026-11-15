@@ -255,7 +255,7 @@ describe("Hindsight saves", () => {
         {
           content: "Prefers tea.",
           context:
-            "A fact a Rakazo AI assistant chose to remember about the people it works for and their work",
+            "A fact a Vendor One Management AI assistant chose to remember about the people it works for and their work",
           timestamp: expect.any(String),
         },
       ],
@@ -732,7 +732,7 @@ describe("Hindsight conversations", () => {
               timestamp: "2026-11-11T10:00:03.000Z",
             },
           ]),
-          context: "Conversation in Rakazo with Sam, Ada and Bob",
+          context: "Conversation in Vendor One Management with Sam, Ada and Bob",
           timestamp: "2026-11-11T10:00:03.000Z",
           document_id: SESSION,
           update_mode: "append",
@@ -992,22 +992,22 @@ describe("Hindsight conversations", () => {
     expect(writes(fake.requests).map((request) => request.body?.items)).toEqual([
       [
         expect.objectContaining({
-          context: "Chat in Rakazo between Sam and Ada, an AI assistant",
+          context: "Chat in Vendor One Management between Sam and Ada, an AI assistant",
         }),
       ],
       [
         expect.objectContaining({
-          context: "Conversation in Rakazo with Sam, Ada and Bob",
+          context: "Conversation in Vendor One Management with Sam, Ada and Bob",
         }),
       ],
       [
         expect.objectContaining({
-          context: "Conversation in Rakazo with Sam, Ada, Bob and Carol",
+          context: "Conversation in Vendor One Management with Sam, Ada, Bob and Carol",
         }),
       ],
       [
         expect.objectContaining({
-          context: "Group chat in Rakazo with Sam, Ada, Bob and Carol",
+          context: "Group chat in Vendor One Management with Sam, Ada, Bob and Carol",
         }),
       ],
     ]);

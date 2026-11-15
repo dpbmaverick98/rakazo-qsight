@@ -55,8 +55,8 @@ describe("withAppIntents prebuild", () => {
         hasFile: (file) => files.has(file),
         pbxTargetByName: (name) => (name === "RakazoWidgets" ? {} : undefined),
         pbxNativeTargetSection: () => ({
-          "app-target": { name: "Rakazo" },
-          "app-target_comment": "Rakazo",
+          "app-target": { name: "Vendor One Management" },
+          "app-target_comment": "Vendor One Management",
           "widget-target": { name: '"RakazoWidgets"' },
         }),
         pbxXCBuildConfigurationSection: () => ({ widget: { buildSettings: widgetSettings } }),
@@ -85,7 +85,7 @@ describe("withAppIntents prebuild", () => {
             withXcodeProject: (value, mod) => mod(value),
             IOSConfig: {
               XcodeUtils: {
-                getProjectName: () => "Rakazo",
+                getProjectName: () => "Vendor One Management",
                 addBuildSourceFileToGroup: (input) => {
                   // Like the real helper, a file already in its group is skipped.
                   const key = `${input.groupName}/${input.filepath}`;

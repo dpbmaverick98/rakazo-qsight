@@ -873,7 +873,7 @@ export default function BotSettingsScreen() {
               label={t`Icon set`}
               choices={[
                 { key: "organic", label: t`Original` },
-                { key: "rakazo", label: t`Rakazo` },
+                { key: "rakazo", label: t`Vendor One Management` },
               ]}
               value={avatarSet}
               onChange={(next) => {

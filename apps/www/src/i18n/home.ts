@@ -917,7 +917,7 @@ const TESTIMONIALS: HomeCopy["testimonials"]["items"] = [
   },
   {
     quote:
-      "Hermes is good but more complicated setup. Rakazo has better multi agent workflow and simpler to setup",
+      "Hermes is good but more complicated setup. Vendor One Management has better multi agent workflow and simpler to setup",
     attribution: "@notabot_92732",
   },
   {
@@ -933,14 +933,14 @@ const TESTIMONIALS: HomeCopy["testimonials"]["items"] = [
 
 const HOME_COPY: Record<Locale, HomeCopy> = {
   pl: {
-    title: "Rakazo | Otwarta alternatywa dla Grok Bot",
+    title: "Vendor One Management | Otwarta alternatywa dla Grok Bot",
     description:
-      "Rakazo to otwarta alternatywa dla Grok Bot. Boty AI z własną pamięcią wykonują zadania na Twoim komputerze, z wybranym przez Ciebie modelem.",
-    ogImageAlt: "Rakazo. Twój zespół AI na Twoim komputerze, z Twoimi kluczami i modelem.",
+      "Vendor One Management to otwarta alternatywa dla Grok Bot. Boty AI z własną pamięcią wykonują zadania na Twoim komputerze, z wybranym przez Ciebie modelem.",
+    ogImageAlt: "Vendor One Management. Twój zespół AI na Twoim komputerze, z Twoimi kluczami i modelem.",
     availableLanguage: "Polish",
     skipToContent: "Przejdź do treści",
     nav: {
-      home: "Strona główna Rakazo",
+      home: "Strona główna Vendor One Management",
       primary: "Nawigacja główna",
       menu: "Menu",
       docs: "Dokumentacja",
@@ -971,7 +971,7 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
     selfHost: {
       heading: "Na własnym serwerze",
-      copy: "Uruchom Rakazo na swoim komputerze i wybierz modele dla swoich botów.",
+      copy: "Uruchom Vendor One Management na swoim komputerze i wybierz modele dla swoich botów.",
       worksWith: "Współpracuje z",
       mock: {
         weekdays: "W dni robocze o 9:00",
@@ -1052,7 +1052,7 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
     openSource: {
       heading: "Otwarty kod źródłowy",
-      copy: "Licencja Apache-2.0. Uruchom Rakazo i dostosuj kod do swoich potrzeb.",
+      copy: "Licencja Apache-2.0. Uruchom Vendor One Management i dostosuj kod do swoich potrzeb.",
       starOnGithub: "Dodaj gwiazdkę na GitHubie",
       readTheDocs: "Przeczytaj dokumentację",
       cloudTitle: "Chmura",
@@ -1096,14 +1096,14 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   en: {
-    title: "Rakazo | Open source Grok Bot alternative",
+    title: "Vendor One Management | Open source Grok Bot alternative",
     description: SITE_DESCRIPTION,
     ogImageAlt:
-      "Rakazo. AI teammates you actually own. Your keys, your model, your machine.",
+      "Vendor One Management. AI teammates you actually own. Your keys, your model, your machine.",
     availableLanguage: "English",
     skipToContent: "Skip to content",
     nav: {
-      home: "Rakazo home",
+      home: "Vendor One Management home",
       primary: "Primary",
       menu: "Menu",
       docs: "Docs",
@@ -1247,15 +1247,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   de: {
-    title: "Rakazo | Open-Source-Alternative zu Grok Bot",
+    title: "Vendor One Management | Open-Source-Alternative zu Grok Bot",
     description:
-      "Rakazo ist eine Open-Source-Alternative zu Grok Bot für persistente KI-Teamkollegen, die echte Arbeit erledigen. Deine Keys, dein Modell, deine Maschine.",
+      "Vendor One Management ist eine Open-Source-Alternative zu Grok Bot für persistente KI-Teamkollegen, die echte Arbeit erledigen. Deine Keys, dein Modell, deine Maschine.",
     ogImageAlt:
-      "Rakazo. KI-Teamkollegen, die dir wirklich gehören. Deine Keys, dein Modell, deine Maschine.",
+      "Vendor One Management. KI-Teamkollegen, die dir wirklich gehören. Deine Keys, dein Modell, deine Maschine.",
     availableLanguage: "German",
     skipToContent: "Zum Inhalt springen",
     nav: {
-      home: "Rakazo-Startseite",
+      home: "Vendor One Management-Startseite",
       primary: "Hauptnavigation",
       menu: "Menü",
       docs: "Docs",
@@ -1403,14 +1403,14 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   ko: {
-    title: "Rakazo | 오픈소스 Grok Bot 대안",
+    title: "Vendor One Management | 오픈소스 Grok Bot 대안",
     description:
-      "Rakazo는 실제 업무를 수행하는 지속형 AI 팀원을 위한 오픈소스 Grok Bot 대안입니다. 키, 모델, 머신, 모두 당신 것.",
-    ogImageAlt: "Rakazo. 진짜로 내 것인 AI 팀원. 키, 모델, 머신, 모두 당신 것.",
+      "Vendor One Management는 실제 업무를 수행하는 지속형 AI 팀원을 위한 오픈소스 Grok Bot 대안입니다. 키, 모델, 머신, 모두 당신 것.",
+    ogImageAlt: "Vendor One Management. 진짜로 내 것인 AI 팀원. 키, 모델, 머신, 모두 당신 것.",
     availableLanguage: "Korean",
     skipToContent: "본문으로 건너뛰기",
     nav: {
-      home: "Rakazo 홈",
+      home: "Vendor One Management 홈",
       primary: "주 메뉴",
       menu: "메뉴",
       docs: "Docs",
@@ -1558,14 +1558,14 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   zh: {
-    title: "Rakazo | 开源 Grok Bot 替代品",
+    title: "Vendor One Management | 开源 Grok Bot 替代品",
     description:
-      "Rakazo 是一个开源 Grok Bot 替代品，用于运行真正干活的持久化 AI 队友。密钥、模型、机器，都归你所有。",
-    ogImageAlt: "Rakazo：真正属于你的 AI 队友。密钥、模型、机器，都归你所有。",
+      "Vendor One Management 是一个开源 Grok Bot 替代品，用于运行真正干活的持久化 AI 队友。密钥、模型、机器，都归你所有。",
+    ogImageAlt: "Vendor One Management：真正属于你的 AI 队友。密钥、模型、机器，都归你所有。",
     availableLanguage: "Chinese",
     skipToContent: "跳到主要内容",
     nav: {
-      home: "Rakazo 首页",
+      home: "Vendor One Management 首页",
       primary: "主导航",
       menu: "菜单",
       docs: "文档",
@@ -1713,15 +1713,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   ja: {
-    title: "Rakazo | オープンソースの Grok Bot 代替ツール",
+    title: "Vendor One Management | オープンソースの Grok Bot 代替ツール",
     description:
-      "Rakazo は、実際の仕事をこなす常駐型 AI チームメイトのための、オープンソースの Grok Bot 代替ツールです。キーもモデルもマシンも、すべてあなたのものです。",
+      "Vendor One Management は、実際の仕事をこなす常駐型 AI チームメイトのための、オープンソースの Grok Bot 代替ツールです。キーもモデルもマシンも、すべてあなたのものです。",
     ogImageAlt:
-      "Rakazo。本当に自分のものにできる AI チームメイト。キーもモデルもマシンも、すべてあなたのもの。",
+      "Vendor One Management。本当に自分のものにできる AI チームメイト。キーもモデルもマシンも、すべてあなたのもの。",
     availableLanguage: "Japanese",
     skipToContent: "本文へスキップ",
     nav: {
-      home: "Rakazo ホーム",
+      home: "Vendor One Management ホーム",
       primary: "メインナビゲーション",
       menu: "メニュー",
       docs: "ドキュメント",
@@ -1869,15 +1869,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "es": {
-    title: "Rakazo | Alternativa de código abierto a Grok Bot",
+    title: "Vendor One Management | Alternativa de código abierto a Grok Bot",
     description:
-      "Rakazo es una alternativa de código abierto a Grok Bot para compañeros de IA persistentes que hacen trabajo real. Tus claves, tu modelo, tu máquina.",
+      "Vendor One Management es una alternativa de código abierto a Grok Bot para compañeros de IA persistentes que hacen trabajo real. Tus claves, tu modelo, tu máquina.",
     ogImageAlt:
-      "Rakazo. Compañeros de IA que de verdad son tuyos. Tus claves, tu modelo, tu máquina.",
+      "Vendor One Management. Compañeros de IA que de verdad son tuyos. Tus claves, tu modelo, tu máquina.",
     availableLanguage: "Spanish",
     skipToContent: "Saltar al contenido",
     nav: {
-      home: "Inicio de Rakazo",
+      home: "Inicio de Vendor One Management",
       primary: "Navegación principal",
       menu: "Menú",
       docs: "Documentación",
@@ -2025,15 +2025,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "fr": {
-    title: "Rakazo | Alternative open source à Grok Bot",
+    title: "Vendor One Management | Alternative open source à Grok Bot",
     description:
-      "Rakazo est une alternative open source à Grok Bot pour des coéquipiers IA persistants qui font un vrai travail. Vos clés, votre modèle, votre machine.",
+      "Vendor One Management est une alternative open source à Grok Bot pour des coéquipiers IA persistants qui font un vrai travail. Vos clés, votre modèle, votre machine.",
     ogImageAlt:
-      "Rakazo. Des coéquipiers IA qui vous appartiennent vraiment. Vos clés, votre modèle, votre machine.",
+      "Vendor One Management. Des coéquipiers IA qui vous appartiennent vraiment. Vos clés, votre modèle, votre machine.",
     availableLanguage: "French",
     skipToContent: "Aller au contenu",
     nav: {
-      home: "Accueil Rakazo",
+      home: "Accueil Vendor One Management",
       primary: "Navigation principale",
       menu: "Menu",
       docs: "Documentation",
@@ -2181,15 +2181,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "pt-br": {
-    title: "Rakazo | Alternativa de código aberto ao Grok Bot",
+    title: "Vendor One Management | Alternativa de código aberto ao Grok Bot",
     description:
-      "Rakazo é uma alternativa de código aberto ao Grok Bot para colegas de IA persistentes que fazem trabalho de verdade. Suas chaves, seu modelo, sua máquina.",
+      "Vendor One Management é uma alternativa de código aberto ao Grok Bot para colegas de IA persistentes que fazem trabalho de verdade. Suas chaves, seu modelo, sua máquina.",
     ogImageAlt:
-      "Rakazo. Colegas de IA que são realmente seus. Suas chaves, seu modelo, sua máquina.",
+      "Vendor One Management. Colegas de IA que são realmente seus. Suas chaves, seu modelo, sua máquina.",
     availableLanguage: "Portuguese",
     skipToContent: "Pular para o conteúdo",
     nav: {
-      home: "Página inicial do Rakazo",
+      home: "Página inicial do Vendor One Management",
       primary: "Navegação principal",
       menu: "Menu",
       docs: "Documentação",
@@ -2337,15 +2337,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "nl": {
-    title: "Rakazo | Open source alternatief voor Grok Bot",
+    title: "Vendor One Management | Open source alternatief voor Grok Bot",
     description:
-      "Rakazo is een open source alternatief voor Grok Bot voor blijvende AI-teamgenoten die echt werk doen. Jouw keys, jouw model, jouw machine.",
+      "Vendor One Management is een open source alternatief voor Grok Bot voor blijvende AI-teamgenoten die echt werk doen. Jouw keys, jouw model, jouw machine.",
     ogImageAlt:
-      "Rakazo. AI-teamgenoten die echt van jou zijn. Jouw keys, jouw model, jouw machine.",
+      "Vendor One Management. AI-teamgenoten die echt van jou zijn. Jouw keys, jouw model, jouw machine.",
     availableLanguage: "Dutch",
     skipToContent: "Naar inhoud springen",
     nav: {
-      home: "Rakazo-startpagina",
+      home: "Vendor One Management-startpagina",
       primary: "Hoofdnavigatie",
       menu: "Menu",
       docs: "Docs",
@@ -2493,15 +2493,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "ru": {
-    title: "Rakazo | Альтернатива Grok Bot с открытым исходным кодом",
+    title: "Vendor One Management | Альтернатива Grok Bot с открытым исходным кодом",
     description:
-      "Rakazo — альтернатива Grok Bot с открытым исходным кодом: постоянные ИИ-коллеги, которые выполняют реальную работу. Ваши ключи, ваша модель, ваш компьютер.",
+      "Vendor One Management — альтернатива Grok Bot с открытым исходным кодом: постоянные ИИ-коллеги, которые выполняют реальную работу. Ваши ключи, ваша модель, ваш компьютер.",
     ogImageAlt:
-      "Rakazo. ИИ-коллеги, которые действительно принадлежат вам. Ваши ключи, ваша модель, ваш компьютер.",
+      "Vendor One Management. ИИ-коллеги, которые действительно принадлежат вам. Ваши ключи, ваша модель, ваш компьютер.",
     availableLanguage: "Russian",
     skipToContent: "Перейти к содержимому",
     nav: {
-      home: "Главная Rakazo",
+      home: "Главная Vendor One Management",
       primary: "Основная навигация",
       menu: "Меню",
       docs: "Документация",
@@ -2649,15 +2649,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "tr": {
-    title: "Rakazo | Açık kaynaklı Grok Bot alternatifi",
+    title: "Vendor One Management | Açık kaynaklı Grok Bot alternatifi",
     description:
-      "Rakazo, gerçek işler yapan kalıcı yapay zekâ ekip arkadaşları için açık kaynaklı bir Grok Bot alternatifidir. Sizin anahtarlarınız, sizin modeliniz, sizin makineniz.",
+      "Vendor One Management, gerçek işler yapan kalıcı yapay zekâ ekip arkadaşları için açık kaynaklı bir Grok Bot alternatifidir. Sizin anahtarlarınız, sizin modeliniz, sizin makineniz.",
     ogImageAlt:
-      "Rakazo. Gerçekten size ait yapay zekâ ekip arkadaşları. Sizin anahtarlarınız, sizin modeliniz, sizin makineniz.",
+      "Vendor One Management. Gerçekten size ait yapay zekâ ekip arkadaşları. Sizin anahtarlarınız, sizin modeliniz, sizin makineniz.",
     availableLanguage: "Turkish",
     skipToContent: "İçeriğe geç",
     nav: {
-      home: "Rakazo ana sayfa",
+      home: "Vendor One Management ana sayfa",
       primary: "Ana menü",
       menu: "Menü",
       docs: "Belgeler",
@@ -2805,15 +2805,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "he": {
-    title: "Rakazo | חלופת קוד פתוח ל-Grok Bot",
+    title: "Vendor One Management | חלופת קוד פתוח ל-Grok Bot",
     description:
-      "Rakazo היא חלופת קוד פתוח ל-Grok Bot לעמיתי AI קבועים שעושים עבודה אמיתית. המפתחות שלך, המודל שלך, המכונה שלך.",
+      "Vendor One Management היא חלופת קוד פתוח ל-Grok Bot לעמיתי AI קבועים שעושים עבודה אמיתית. המפתחות שלך, המודל שלך, המכונה שלך.",
     ogImageAlt:
-      "Rakazo. עמיתי AI ששייכים לך באמת. המפתחות שלך, המודל שלך, המכונה שלך.",
+      "Vendor One Management. עמיתי AI ששייכים לך באמת. המפתחות שלך, המודל שלך, המכונה שלך.",
     availableLanguage: "Hebrew",
     skipToContent: "דילוג לתוכן",
     nav: {
-      home: "דף הבית של Rakazo",
+      home: "דף הבית של Vendor One Management",
       primary: "ניווט ראשי",
       menu: "תפריט",
       docs: "תיעוד",
@@ -2961,15 +2961,15 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "hi": {
-    title: "Rakazo | Grok Bot का ओपन सोर्स विकल्प",
+    title: "Vendor One Management | Grok Bot का ओपन सोर्स विकल्प",
     description:
-      "Rakazo, Grok Bot का ओपन सोर्स विकल्प है, ऐसे स्थायी AI साथियों के लिए जो असली काम करते हैं। आपकी कुंजियाँ, आपका मॉडल, आपकी मशीन।",
+      "Vendor One Management, Grok Bot का ओपन सोर्स विकल्प है, ऐसे स्थायी AI साथियों के लिए जो असली काम करते हैं। आपकी कुंजियाँ, आपका मॉडल, आपकी मशीन।",
     ogImageAlt:
-      "Rakazo. ऐसे AI साथी जो सच में आपके अपने हैं। आपकी कुंजियाँ, आपका मॉडल, आपकी मशीन।",
+      "Vendor One Management. ऐसे AI साथी जो सच में आपके अपने हैं। आपकी कुंजियाँ, आपका मॉडल, आपकी मशीन।",
     availableLanguage: "Hindi",
     skipToContent: "सामग्री पर जाएं",
     nav: {
-      home: "Rakazo होम",
+      home: "Vendor One Management होम",
       primary: "मुख्य नेविगेशन",
       menu: "मेनू",
       docs: "दस्तावेज़",
@@ -3117,14 +3117,14 @@ const HOME_COPY: Record<Locale, HomeCopy> = {
     },
   },
   "zh-tw": {
-    title: "Rakazo | 開源 Grok Bot 替代方案",
+    title: "Vendor One Management | 開源 Grok Bot 替代方案",
     description:
-      "Rakazo 是開源的 Grok Bot 替代方案，讓常駐的 AI 隊友幫你完成實際工作。金鑰、模型、機器，全都屬於你。",
-    ogImageAlt: "Rakazo：真正屬於你的 AI 隊友。金鑰、模型、機器，全都屬於你。",
+      "Vendor One Management 是開源的 Grok Bot 替代方案，讓常駐的 AI 隊友幫你完成實際工作。金鑰、模型、機器，全都屬於你。",
+    ogImageAlt: "Vendor One Management：真正屬於你的 AI 隊友。金鑰、模型、機器，全都屬於你。",
     availableLanguage: "Chinese (Traditional)",
     skipToContent: "跳至主要內容",
     nav: {
-      home: "Rakazo 首頁",
+      home: "Vendor One Management 首頁",
       primary: "主要導覽",
       menu: "選單",
       docs: "說明文件",

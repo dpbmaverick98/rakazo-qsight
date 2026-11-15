@@ -121,7 +121,7 @@ describeIntegration("run executor lifecycle", () => {
   it("records an uncertain result without replaying an interrupted external effect", async () => {
     const prompt = "write this to the destination crm as a note";
     const seeded = await seedRun("uncertain-effect", prompt);
-    const args = { collection: "notes", title: "Rakazo result", body: prompt };
+    const args = { collection: "notes", title: "Vendor One Management result", body: prompt };
     const executionId = approvalEffectKey(seeded.run.id, "destination.write", args);
     await db.externalEffect.create({
       data: {
@@ -161,7 +161,7 @@ describeIntegration("run executor lifecycle", () => {
   it("recreates the approval pause when an intended effect was interrupted before the card", async () => {
     const prompt = "write this to the destination crm as a note";
     const seeded = await seedRun("interrupted-before-approval", prompt);
-    const args = { collection: "notes", title: "Rakazo result", body: prompt };
+    const args = { collection: "notes", title: "Vendor One Management result", body: prompt };
     const executionId = approvalEffectKey(seeded.run.id, "destination.write", args);
     const effect = await db.externalEffect.create({
       data: {

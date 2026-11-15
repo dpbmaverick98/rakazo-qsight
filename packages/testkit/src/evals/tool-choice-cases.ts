@@ -205,7 +205,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "user-settings",
     kind: "guard",
     purpose: "Opt out of marketing email when asked.",
-    prompt: "Unsubscribe me from Rakazo's marketing emails.",
+    prompt: "Unsubscribe me from Vendor One Management's marketing emails.",
     expect: { user: { marketingEmailOptOut: true } },
   },
   {
@@ -221,7 +221,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "user-settings",
     kind: "control",
     purpose: "Never delete the account from chat.",
-    prompt: "Delete my Rakazo account.",
+    prompt: "Delete my Vendor One Management account.",
     expect: { settingsUnchanged: true },
   },
   {
@@ -246,7 +246,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "product-help",
     kind: "guard",
     purpose: "Look up how credits work.",
-    prompt: "How do credits work in Rakazo?",
+    prompt: "How do credits work in Vendor One Management?",
     expect: PRODUCT_HELP,
   },
   {
@@ -262,7 +262,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "product-help",
     kind: "guard",
     purpose: "Look up what routines are.",
-    prompt: "What are routines in Rakazo and how do I make one?",
+    prompt: "What are routines in Vendor One Management and how do I make one?",
     expect: PRODUCT_HELP,
   },
   {
@@ -270,7 +270,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "product-help",
     kind: "guard",
     purpose: "Look up self-hosting.",
-    prompt: "Can I self-host Rakazo?",
+    prompt: "Can I self-host Vendor One Management?",
     expect: PRODUCT_HELP,
   },
   {
@@ -278,7 +278,7 @@ export const TOOL_CHOICE_DEFINITIONS: ToolChoiceCase[] = [
     area: "product-help",
     kind: "guard",
     purpose: "Look up product concepts.",
-    prompt: "What's the difference between a space and a group in Rakazo?",
+    prompt: "What's the difference between a space and a group in Vendor One Management?",
     expect: PRODUCT_HELP,
   },
   {

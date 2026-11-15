@@ -1,70 +1,78 @@
 export const JA_MESSAGES: Record<string, string> = {
   "Hi {name},": "{name}さん",
   "Hi there,": "こんにちは",
-  "Verify your Rakazo email": "Rakazoのメールアドレスを確認してください",
+  "Verify your Vendor One Management email":
+    "Vendor One Managementのメールアドレスを確認してください",
   "Verify email": "メールアドレスを確認",
-  "Then return to Rakazo to sign in.": "確認後、Rakazoに戻ってサインインしてください。",
+  "Then return to Vendor One Management to sign in.":
+    "確認後、Vendor One Managementに戻ってサインインしてください。",
   "This link expires in one hour. If you did not register, ignore this email.":
     "このリンクの有効期限は1時間です。登録した覚えがない場合は、このメールを無視してください。",
-  "Your Rakazo sign-in code": "Rakazoのサインインコード",
-  "Enter this code to sign in to Rakazo:":
-    "Rakazoにサインインするには、次のコードを入力してください:",
+  "Your Vendor One Management sign-in code": "Vendor One Managementのサインインコード",
+  "Enter this code to sign in to Vendor One Management:":
+    "Vendor One Managementにサインインするには、次のコードを入力してください:",
   "This code expires in ten minutes. If you did not request it, ignore this email.":
     "このコードの有効期限は10分です。リクエストした覚えがない場合は、このメールを無視してください。",
-  "Reset your Rakazo password": "Rakazoのパスワードをリセット",
-  "Reset your Rakazo password:": "Rakazoのパスワードをリセットしてください:",
+  "Reset your Vendor One Management password": "Vendor One Managementのパスワードをリセット",
+  "Reset your Vendor One Management password:":
+    "Vendor One Managementのパスワードをリセットしてください:",
   "Reset password": "パスワードをリセット",
   "This link expires in one hour. If you did not request this, you can ignore this email.":
     "このリンクの有効期限は1時間です。リクエストした覚えがない場合は、このメールを無視してかまいません。",
-  "Confirm Rakazo account deletion": "Rakazoアカウントの削除を確認",
-  "Enter this code in Rakazo to delete your account:":
-    "アカウントを削除するには、Rakazoで次のコードを入力してください:",
+  "Confirm Vendor One Management account deletion": "Vendor One Managementアカウントの削除を確認",
+  "Enter this code in Vendor One Management to delete your account:":
+    "アカウントを削除するには、Vendor One Managementで次のコードを入力してください:",
   "This code expires in ten minutes. If you did not request deletion, ignore this email.":
     "このコードの有効期限は10分です。削除をリクエストした覚えがない場合は、このメールを無視してください。",
-  "Your Rakazo confirmation code": "Rakazoの確認コード",
-  "Enter this code in Rakazo to confirm it's you:":
-    "ご本人であることを確認するには、Rakazoで次のコードを入力してください:",
-  "Welcome to Rakazo": "Rakazoへようこそ",
-  "Welcome to Rakazo. The people who get the most out of it do three things:":
-    "Rakazo へようこそ。Rakazo を最大限に活用している人は、次の 3 つをしています。",
+  "Your Vendor One Management confirmation code": "Vendor One Managementの確認コード",
+  "Enter this code in Vendor One Management to confirm it's you:":
+    "ご本人であることを確認するには、Vendor One Managementで次のコードを入力してください:",
+  "Welcome to Vendor One Management": "Vendor One Managementへようこそ",
+  "Welcome to Vendor One Management. The people who get the most out of it do three things:":
+    "Vendor One Management へようこそ。Vendor One Management を最大限に活用している人は、次の 3 つをしています。",
   "Get the apps": "アプリを入手する",
-  "Rakazo runs on {platforms}, so your bots can reach you wherever you are.":
-    "Rakazo は {platforms} で使えるので、ボットはどこにいてもあなたに連絡できます。",
+  "Vendor One Management runs on {platforms}, so your bots can reach you wherever you are.":
+    "Vendor One Management は {platforms} で使えるので、ボットはどこにいてもあなたに連絡できます。",
   "Join the community": "コミュニティに参加する",
   "See what others are building, get help fast, and tell us what to build next on {discord}.":
     "{discord} で、ほかの人が作っているものを見たり、すぐに助けを得たり、次に作ってほしいものを教えてください。",
   "Star us on GitHub": "GitHub でスターを付ける",
-  "Rakazo is open source. {star} helps more people find it.":
-    "Rakazo はオープンソースです。{star} は、より多くの人が Rakazo を見つける助けになります。",
+  "Vendor One Management is open source. {star} helps more people find it.":
+    "Vendor One Management はオープンソースです。{star} は、より多くの人が Vendor One Management を見つける助けになります。",
   "A star on GitHub": "GitHub のスター",
   "Questions? Just reply. I read every one.":
     "質問があれば、このメールに返信してください。すべて読んでいます。",
   Unsubscribe: "配信停止",
   "Invite a friend": "友だちを招待",
-  "Invite a friend to Rakazo: they get {weeks} weeks free, and you earn a free month when they start a qualifying subscription with a new card.":
-    "友だちをRakazoに招待しましょう。友だちは{weeks}週間無料で使え、新しいカードで対象のサブスクリプションを始めると、あなたは1か月無料になります。",
-  "Open Rakazo": "Rakazoを開き",
+  "Invite a friend to Vendor One Management: they get {weeks} weeks free, and you earn a free month when they start a qualifying subscription with a new card.":
+    "友だちをVendor One Managementに招待しましょう。友だちは{weeks}週間無料で使え、新しいカードで対象のサブスクリプションを始めると、あなたは1か月無料になります。",
+  "Open Vendor One Management": "Vendor One Managementを開き",
   "and choose Invite friends for your link.": "「友だちを招待」を選ぶとリンクを取得できます。",
-  "We received your Rakazo plugin": "Rakazoプラグインを受け付けました",
-  "Thanks for submitting a plugin to the Rakazo marketplace.":
-    "Rakazoマーケットプレイスにプラグインを申請いただきありがとうございます。",
+  "We received your Vendor One Management plugin":
+    "Vendor One Managementプラグインを受け付けました",
+  "Thanks for submitting a plugin to the Vendor One Management marketplace.":
+    "Vendor One Managementマーケットプレイスにプラグインを申請いただきありがとうございます。",
   "We review every submission and will email you when it's done.":
     "すべての申請を審査し、完了したらメールでお知らせします。",
   "If you did not submit a plugin, ignore this email.":
     "プラグインを申請した覚えがない場合は、このメールを無視してください。",
-  "{name} is in the Rakazo marketplace": "{name}がRakazoマーケットプレイスに掲載されました",
-  "Your Rakazo plugin submission: {name}": "Rakazoプラグインの申請: {name}",
-  "{name} is now listed in the Rakazo plugin marketplace.":
-    "{name}はRakazoプラグインマーケットプレイスに掲載されました。",
-  "We couldn't list {name} in the Rakazo plugin marketplace.":
-    "{name}をRakazoプラグインマーケットプレイスに掲載できませんでした。",
-  "Confirm your Rakazo page claim": "Rakazo のページ所有権申請を確認してください",
+  "{name} is in the Vendor One Management marketplace":
+    "{name}がVendor One Managementマーケットプレイスに掲載されました",
+  "Your Vendor One Management plugin submission: {name}":
+    "Vendor One Managementプラグインの申請: {name}",
+  "{name} is now listed in the Vendor One Management plugin marketplace.":
+    "{name}はVendor One Managementプラグインマーケットプレイスに掲載されました。",
+  "We couldn't list {name} in the Vendor One Management plugin marketplace.":
+    "{name}をVendor One Managementプラグインマーケットプレイスに掲載できませんでした。",
+  "Confirm your Vendor One Management page claim":
+    "Vendor One Management のページ所有権申請を確認してください",
   "Confirm claim": "所有権申請を確認",
   "We review every claim once it's confirmed and will email you when it's done.":
     "所有権申請は確認後にすべて審査し、完了したらメールでお知らせします。",
   "This link expires in one day. If you did not claim a page, ignore this email.":
     "このリンクの有効期限は1日です。ページの所有権を申請していない場合は、このメールを無視してください。",
-  "Your Rakazo page claim: {name}": "Rakazo のページ所有権申請: {name}",
+  "Your Vendor One Management page claim: {name}":
+    "Vendor One Management のページ所有権申請: {name}",
   "Your changes to the {name} page are approved.": "{name} ページへの変更が承認されました。",
   "We couldn't approve your changes to the {name} page.":
     "{name} ページへの変更を承認できませんでした。",

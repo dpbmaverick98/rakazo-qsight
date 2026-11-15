@@ -134,6 +134,9 @@ const updaterEnvironment = {
 let requestingComputerAccess = false;
 let hostScreen: HostScreen | undefined;
 markOnce("rk:main:module-evaluated");
+// Keep existing profiles and local stacks when the display name changes.
+app.setPath("userData", path.join(app.getPath("appData"), "Rakazo"));
+app.setName("Vendor One Management");
 if (PERFORMANCE_USER_DATA) {
   app.setPath("userData", PERFORMANCE_USER_DATA);
   app.setPath("sessionData", path.join(PERFORMANCE_USER_DATA, "session"));
@@ -197,7 +200,9 @@ async function probeServer(
         ok: false,
         status: response.status,
         url,
-        error: t("That address redirects elsewhere. Enter the final Rakazo server address."),
+        error: t(
+          "That address redirects elsewhere. Enter the final Vendor One Management server address.",
+        ),
       };
     }
     if (!response.ok) {
@@ -214,7 +219,7 @@ async function probeServer(
         ok: false,
         status: response.status,
         url,
-        error: t("That address did not respond like a Rakazo server."),
+        error: t("That address did not respond like a Vendor One Management server."),
       };
     }
     return {
@@ -244,7 +249,7 @@ async function offerDockerMove(userStackDir: string): Promise<StackChoice> {
     return "docker";
   const { response } = await dialog.showMessageBox({
     type: "question",
-    message: t("Run Rakazo without Docker?"),
+    message: t("Run Vendor One Management without Docker?"),
     detail: t("Your bots and data move over. Docker is stopped, not removed."),
     buttons: [t("Move"), t("Keep Docker")],
     defaultId: 0,

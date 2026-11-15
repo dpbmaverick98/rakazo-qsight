@@ -12,9 +12,9 @@ export function pluginSubmissionReceivedEmail(
   return message(
     email,
     locale,
-    say("We received your Rakazo plugin"),
+    say("We received your Vendor One Management plugin"),
     <>
-      <Text>{say("Thanks for submitting a plugin to the Rakazo marketplace.")}</Text>
+      <Text>{say("Thanks for submitting a plugin to the Vendor One Management marketplace.")}</Text>
       <Text>{say("We review every submission and will email you when it's done.")}</Text>
       <FinePrint>{say("If you did not submit a plugin, ignore this email.")}</FinePrint>
     </>,
@@ -31,7 +31,7 @@ export function integrationClaimConfirmEmail(
   return message(
     email,
     locale,
-    say("Confirm your Rakazo page claim"),
+    say("Confirm your Vendor One Management page claim"),
     <>
       <Button href={url}>{say("Confirm claim")}</Button>
       <Text>
@@ -82,10 +82,10 @@ export function pluginSubmissionReviewedEmail(
     submission.email,
     locale,
     submission.claim
-      ? say("Your Rakazo page claim: {name}", { name })
+      ? say("Your Vendor One Management page claim: {name}", { name })
       : approved
-        ? say("{name} is in the Rakazo marketplace", { name })
-        : say("Your Rakazo plugin submission: {name}", { name }),
+        ? say("{name} is in the Vendor One Management marketplace", { name })
+        : say("Your Vendor One Management plugin submission: {name}", { name }),
     <>
       <Text>
         {submission.claim
@@ -93,8 +93,10 @@ export function pluginSubmissionReviewedEmail(
             ? say("Your changes to the {name} page are approved.", { name })
             : say("We couldn't approve your changes to the {name} page.", { name })
           : approved
-            ? say("{name} is now listed in the Rakazo plugin marketplace.", { name })
-            : say("We couldn't list {name} in the Rakazo plugin marketplace.", { name })}
+            ? say("{name} is now listed in the Vendor One Management plugin marketplace.", { name })
+            : say("We couldn't list {name} in the Vendor One Management plugin marketplace.", {
+                name,
+              })}
       </Text>
       {submission.reason ? <Text>{submission.reason}</Text> : null}
     </>,

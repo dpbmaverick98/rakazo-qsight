@@ -1117,7 +1117,7 @@ export class MessagingDelivery {
           )
         : ambient
           ? ""
-          : `${run.bot.name} could not complete that request. Open Rakazo for details.`;
+          : `${run.bot.name} could not complete that request. Open Vendor One Management for details.`;
     const recorded = await this.deps.prisma.$transaction(async (tx) => {
       const claimed = await tx.externalMessage.updateMany({
         where: { id: message.id, status: "running" },
@@ -1163,7 +1163,7 @@ export class MessagingDelivery {
         : null;
     const body =
       run.status === "failed"
-        ? `${run.bot.name} could not complete the delegated request. Open Rakazo for details.`
+        ? `${run.bot.name} could not complete the delegated request. Open Vendor One Management for details.`
         : teamChatResponseText(
             Array.isArray(reply?.blocks) ? (reply.blocks as MessageBlock[]) : [],
             run.bot.name,

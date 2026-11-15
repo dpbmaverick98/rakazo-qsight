@@ -105,7 +105,9 @@ test(
     await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
     await captureScreenshot(page, testInfo, "signup-verification-required");
     await page.getByRole("link", { name: "Back to sign in" }).click();
-    await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Sign in to Vendor One Management" }),
+    ).toBeVisible();
   },
 );
 
@@ -127,7 +129,9 @@ test(
     await captureScreenshot(page, testInfo, "logged-out-sign-up-phone");
     await page.getByRole("link", { name: "Sign in", exact: true }).click();
     await expect(page).toHaveURL(/\/sign-in$/);
-    await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Sign in to Vendor One Management" }),
+    ).toBeVisible();
   },
 );
 
@@ -198,7 +202,9 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   };
   page.on("request", trackRefresh);
   await page.getByRole("button", { name: "Log out" }).click();
-  await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Vendor One Management" }),
+  ).toBeVisible();
   page.off("request", trackRefresh);
   await Promise.all(refreshes);
   await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 250)));
@@ -206,12 +212,16 @@ test("logout protects bot deep links and sign-in restores the session", async ({
   // Someone who has signed in here before reopens the app to sign in, not to a new account.
   await page.goto("/");
   await expect(page).toHaveURL(/\/sign-in$/);
-  await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Vendor One Management" }),
+  ).toBeVisible();
   await captureScreenshot(page, testInfo, "37-logged-out-returning");
 
   await page.goto(protectedBotPath);
   await page.waitForURL((url) => url.pathname === "/sign-in");
-  await expect(page.getByRole("heading", { name: "Sign in to Rakazo" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Sign in to Vendor One Management" }),
+  ).toBeVisible();
   await expect(page.getByText("Chief", { exact: true })).toHaveCount(0);
   await expect(page.getByText(userName, { exact: true })).toHaveCount(0);
   await openEmailSignIn(page);
@@ -350,7 +360,8 @@ test("changes and recovers an email password", async ({ page }, testInfo) => {
       html: string;
     }>;
     return messages.filter(
-      (message) => message.to === email && message.subject === "Reset your Rakazo password",
+      (message) =>
+        message.to === email && message.subject === "Reset your Vendor One Management password",
     );
   };
   await expect.poll(async () => (await sentToUser()).length).toBeGreaterThan(0);

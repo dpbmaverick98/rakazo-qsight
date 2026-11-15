@@ -4,7 +4,7 @@ export const PL_MESSAGES: Record<string, string> = {
   "Check for Updates…": "Sprawdź aktualizacje…",
   "Computer Access…": "Dostęp do komputera…",
   "Revoke Local Computer Access": "Cofnij dostęp do lokalnego komputera",
-  "Change Rakazo Server…": "Zmień serwer Rakazo…",
+  "Change Vendor One Management Server…": "Zmień serwer Vendor One Management…",
   "Stop Local Stack": "Zatrzymaj lokalne usługi",
   "Hide {name}": "Ukryj {name}",
   "Hide Others": "Ukryj pozostałe",
@@ -38,12 +38,13 @@ export const PL_MESSAGES: Record<string, string> = {
   "Bring All to Front": "Przenieś wszystkie na wierzch",
 
   // Updates
-  "Rakazo {version} is ready to install.": "Rakazo {version} jest gotowe do zainstalowania.",
+  "Vendor One Management {version} is ready to install.":
+    "Vendor One Management {version} jest gotowe do zainstalowania.",
   Restart: "Uruchom ponownie",
   Later: "Później",
   "Could not install the update.": "Nie udało się zainstalować aktualizacji.",
   "Could not check for updates.": "Nie udało się sprawdzić aktualizacji.",
-  "Rakazo is up to date.": "Rakazo jest aktualne.",
+  "Vendor One Management is up to date.": "Vendor One Management jest aktualne.",
   "Version {version}": "Wersja {version}",
   "Automatic updates are turned off for this install.":
     "Automatyczne aktualizacje są wyłączone w tej instalacji.",
@@ -51,12 +52,12 @@ export const PL_MESSAGES: Record<string, string> = {
     "Automatyczne aktualizacje działają tylko w zainstalowanej aplikacji.",
   "No desktop releases are published for this build yet.":
     "Dla tej kompilacji nie opublikowano jeszcze wersji desktopowej.",
-  "Move Rakazo to Applications to install updates.":
-    "Przenieś Rakazo do folderu Aplikacje, aby instalować aktualizacje.",
+  "Move Vendor One Management to Applications to install updates.":
+    "Przenieś Vendor One Management do folderu Aplikacje, aby instalować aktualizacje.",
   "Free up disk space to install updates.":
     "Zwolnij miejsce na dysku, aby zainstalować aktualizacje.",
-  "This update could not be verified. Reinstall Rakazo from a trusted download.":
-    "Nie udało się zweryfikować aktualizacji. Zainstaluj Rakazo ponownie z zaufanego źródła.",
+  "This update could not be verified. Reinstall Vendor One Management from a trusted download.":
+    "Nie udało się zweryfikować aktualizacji. Zainstaluj Vendor One Management ponownie z zaufanego źródła.",
   "The update could not be completed. Try again later.":
     "Nie udało się dokończyć aktualizacji. Spróbuj ponownie później.",
   "Could not reach the update server.": "Nie udało się połączyć z serwerem aktualizacji.",
@@ -79,15 +80,16 @@ export const PL_MESSAGES: Record<string, string> = {
     "Logowanie już trwa. Anuluj je i spróbuj ponownie.",
   "Could not open browser sign-in. Close other sign-in attempts and retry.":
     "Nie udało się otworzyć logowania w przeglądarce. Zamknij inne próby logowania i spróbuj ponownie.",
-  "Sign-in callback rejected. Return to Rakazo to retry.":
-    "Odrzucono odpowiedź logowania. Wróć do Rakazo i spróbuj ponownie.",
-  "You can close this tab and return to Rakazo.": "Możesz zamknąć tę kartę i wrócić do Rakazo.",
+  "Sign-in callback rejected. Return to Vendor One Management to retry.":
+    "Odrzucono odpowiedź logowania. Wróć do Vendor One Management i spróbuj ponownie.",
+  "You can close this tab and return to Vendor One Management.":
+    "Możesz zamknąć tę kartę i wrócić do Vendor One Management.",
 
   // Setup window
-  "Set up Rakazo": "Skonfiguruj Rakazo",
-  "Quit Rakazo": "Zakończ Rakazo",
-  "Welcome to Rakazo": "Witaj w Rakazo",
-  "Choose where Rakazo runs.": "Wybierz, gdzie działa Rakazo.",
+  "Set up Vendor One Management": "Skonfiguruj Vendor One Management",
+  "Quit Vendor One Management": "Zakończ Vendor One Management",
+  "Welcome to Vendor One Management": "Witaj w Vendor One Management",
+  "Choose where Vendor One Management runs.": "Wybierz, gdzie działa Vendor One Management.",
   Instance: "Instancja",
   "This computer": "Ten komputer",
   "Existing instance": "Istniejąca instancja",
@@ -100,14 +102,15 @@ export const PL_MESSAGES: Record<string, string> = {
   Continue: "Kontynuuj",
   Retry: "Spróbuj ponownie",
   "Getting ready…": "Przygotowywanie…",
-  "Downloading Rakazo…": "Pobieranie Rakazo…",
-  "Starting Rakazo…": "Uruchamianie Rakazo…",
+  "Downloading Vendor One Management…": "Pobieranie Vendor One Management…",
+  "Starting Vendor One Management…": "Uruchamianie Vendor One Management…",
   "Almost ready…": "Prawie gotowe…",
-  "Rakazo is ready.": "Rakazo jest gotowe.",
+  "Vendor One Management is ready.": "Vendor One Management jest gotowe.",
   "{size} downloaded": "Pobrano {size}",
   "Connecting…": "Łączenie…",
   "Checking…": "Sprawdzanie…",
-  "Rakazo answered at {url}.": "Rakazo odpowiedziało pod adresem {url}.",
+  "Vendor One Management answered at {url}.":
+    "Vendor One Management odpowiedziało pod adresem {url}.",
   "Enter a server address first.": "Najpierw wpisz adres serwera.",
   "Could not save that address.": "Nie udało się zapisać tego adresu.",
   "Could not save that address. Try again.": "Nie udało się zapisać tego adresu. Spróbuj ponownie.",
@@ -118,8 +121,8 @@ export const PL_MESSAGES: Record<string, string> = {
   "Could not run the connection check. Try again.":
     "Nie udało się sprawdzić połączenia. Spróbuj ponownie.",
   "Setup bridge unavailable.": "Moduł konfiguracji jest niedostępny.",
-  "Setup could not start. Quit Rakazo and try again.":
-    "Nie udało się rozpocząć konfiguracji. Zamknij Rakazo i spróbuj ponownie.",
+  "Setup could not start. Quit Vendor One Management and try again.":
+    "Nie udało się rozpocząć konfiguracji. Zamknij Vendor One Management i spróbuj ponownie.",
 
   // Connecting to a server
   "Enter a server address.": "Wpisz adres serwera.",
@@ -127,10 +130,10 @@ export const PL_MESSAGES: Record<string, string> = {
   "Enter a valid server address. Public servers require HTTPS; a new local instance must use localhost.":
     "Wpisz poprawny adres serwera. Serwery publiczne wymagają HTTPS. Nowa lokalna instancja musi używać localhost.",
   "Invalid custom headers": "Nieprawidłowe nagłówki niestandardowe",
-  "That address redirects elsewhere. Enter the final Rakazo server address.":
-    "Ten adres przekierowuje w inne miejsce. Wpisz docelowy adres serwera Rakazo.",
-  "That address did not respond like a Rakazo server.":
-    "Ten adres nie odpowiedział jak serwer Rakazo.",
+  "That address redirects elsewhere. Enter the final Vendor One Management server address.":
+    "Ten adres przekierowuje w inne miejsce. Wpisz docelowy adres serwera Vendor One Management.",
+  "That address did not respond like a Vendor One Management server.":
+    "Ten adres nie odpowiedział jak serwer Vendor One Management.",
   "The server answered with HTTP {status}.": "Serwer odpowiedział kodem HTTP {status}.",
   "Timed out reaching that address.": "Przekroczono czas oczekiwania na połączenie z tym adresem.",
   "Nothing is listening at that address yet.": "Pod tym adresem nie działa jeszcze żadna usługa.",
@@ -155,8 +158,8 @@ export const PL_MESSAGES: Record<string, string> = {
     "Nie udało się zapisać konfiguracji. Przywrócono poprzednią instancję.",
   "Connected, but could not save setup for the next launch. Try Continue again.":
     "Połączono, ale nie udało się zapisać konfiguracji na następne uruchomienie. Kliknij ponownie Kontynuuj.",
-  "The app-managed Rakazo services are not ready. Retry setup.":
-    "Usługi Rakazo zarządzane przez aplikację nie są gotowe. Ponów konfigurację.",
+  "The app-managed Vendor One Management services are not ready. Retry setup.":
+    "Usługi Vendor One Management zarządzane przez aplikację nie są gotowe. Ponów konfigurację.",
 
   // Docker
   "Docker is installed, but Docker Compose is missing. Install Docker Desktop or the docker-compose-plugin.":
@@ -179,10 +182,10 @@ export const PL_MESSAGES: Record<string, string> = {
     "Docker przestał odpowiadać. Uruchom Docker i spróbuj ponownie.",
   "Docker Compose is missing. Install Docker Desktop or the docker-compose-plugin, then retry.":
     "Brakuje Docker Compose. Zainstaluj Docker Desktop lub docker-compose-plugin i spróbuj ponownie.",
-  "Downloading Rakazo images failed. Check the output below, then retry.":
-    "Nie udało się pobrać obrazów Rakazo. Sprawdź poniższe komunikaty i spróbuj ponownie.",
-  "Rakazo services did not start. Check the output below, then retry.":
-    "Usługi Rakazo nie uruchomiły się. Sprawdź poniższe komunikaty i spróbuj ponownie.",
+  "Downloading Vendor One Management images failed. Check the output below, then retry.":
+    "Nie udało się pobrać obrazów Vendor One Management. Sprawdź poniższe komunikaty i spróbuj ponownie.",
+  "Vendor One Management services did not start. Check the output below, then retry.":
+    "Usługi Vendor One Management nie uruchomiły się. Sprawdź poniższe komunikaty i spróbuj ponownie.",
   "The stack started but the web app did not answer. Retry, and check the output below.":
     "Usługi uruchomiły się, ale aplikacja webowa nie odpowiedziała. Spróbuj ponownie i sprawdź poniższe komunikaty.",
   "Could not prepare the local stack. Retry.":
@@ -206,15 +209,15 @@ export const PL_MESSAGES: Record<string, string> = {
   "Chat Details": "Szczegóły czatu",
   Help: "Pomoc",
   "Keyboard Shortcuts": "Skróty klawiszowe",
-  "Downloading Rakazo failed. Check the internet connection, then retry.":
-    "Nie udało się pobrać Rakazo. Sprawdź połączenie z internetem i spróbuj ponownie.",
+  "Downloading Vendor One Management failed. Check the internet connection, then retry.":
+    "Nie udało się pobrać Vendor One Management. Sprawdź połączenie z internetem i spróbuj ponownie.",
   "Could not move your data from Docker. Check the output below, then retry.":
     "Nie udało się przenieść danych z Dockera. Sprawdź dane wyjściowe poniżej i spróbuj ponownie.",
   "The computer runtime already running is too old. Update or quit it, then retry.":
     "Uruchomione już środowisko komputerów jest zbyt stare. Zaktualizuj je lub zamknij, a potem spróbuj ponownie.",
-  "Your Rakazo data is in a different computer runtime. Quit the one running, then retry.":
-    "Twoje dane Rakazo są w innym środowisku komputerów. Zamknij to, które jest uruchomione, a potem spróbuj ponownie.",
-  "Run Rakazo without Docker?": "Uruchamiać Rakazo bez Dockera?",
+  "Your Vendor One Management data is in a different computer runtime. Quit the one running, then retry.":
+    "Twoje dane Vendor One Management są w innym środowisku komputerów. Zamknij to, które jest uruchomione, a potem spróbuj ponownie.",
+  "Run Vendor One Management without Docker?": "Uruchamiać Vendor One Management bez Dockera?",
   "Your bots and data move over. Docker is stopped, not removed.":
     "Twoje boty i dane zostaną przeniesione. Docker zostanie zatrzymany, nie usunięty.",
   Move: "Przenieś",
@@ -223,12 +226,12 @@ export const PL_MESSAGES: Record<string, string> = {
   "Your data stays on this computer.": "Twoje dane zostają na tym komputerze.",
   "Connect to a server you or your team already run.":
     "Połącz się z serwerem, który Ty lub Twój zespół już prowadzicie.",
-  "Rakazo needs Docker Desktop to run on this computer.":
-    "Rakazo potrzebuje Docker Desktop, aby działać na tym komputerze.",
-  "Rakazo needs Docker to run on this computer.":
-    "Rakazo potrzebuje Dockera, aby działać na tym komputerze.",
-  "Docker Desktop is a free app that runs Rakazo in the background. Install it and open it once.":
-    "Docker Desktop to darmowa aplikacja, która uruchamia Rakazo w tle. Zainstaluj ją i otwórz raz.",
+  "Vendor One Management needs Docker Desktop to run on this computer.":
+    "Vendor One Management potrzebuje Docker Desktop, aby działać na tym komputerze.",
+  "Vendor One Management needs Docker to run on this computer.":
+    "Vendor One Management potrzebuje Dockera, aby działać na tym komputerze.",
+  "Docker Desktop is a free app that runs Vendor One Management in the background. Install it and open it once.":
+    "Docker Desktop to darmowa aplikacja, która uruchamia Vendor One Management w tle. Zainstaluj ją i otwórz raz.",
   "Install Docker Engine and start it.": "Zainstaluj Docker Engine i uruchom go.",
   "Download Docker Desktop": "Pobierz Docker Desktop",
   "Install Docker": "Zainstaluj Dockera",

@@ -34,3 +34,5 @@
 - On mobile, use built-in native iOS controls (@expo/ui SwiftUI and Liquid Glass, native header items, context menus, alerts, pickers, and switches) wherever possible instead of custom React Native pills or buttons.
 
 - External client hierarchy authority comes only from an explicit `SpaceClientBinding` canonical ID, never Space names or equal-name backfills. Bind/unbind requires current Space owner/admin membership; deployment ownership alone is insufficient.
+
+- Product display branding is Vendor One Management. Preserve Rakazo package names, application IDs, schemes, storage keys, routes and export/protocol identifiers for compatibility (`product-branding` check).

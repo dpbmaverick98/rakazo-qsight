@@ -322,7 +322,7 @@ describe.skipIf(process.platform === "win32")("Claude Code CLI provider", () => 
     expect(events.at(-1)?.type).toBe("error");
   });
 
-  it("hands a tool call back to Rakazo and stops the CLI before it goes on", async () => {
+  it("hands a tool call back to Vendor One Management and stops the CLI before it goes on", async () => {
     const cli = fakeClaude("tool");
     const { events, message } = await run(hello);
 
@@ -569,7 +569,7 @@ describe.skipIf(process.platform === "win32")("Claude Code CLI provider", () => 
     ["crash", /exit code 3/],
     ["old-version", /older than \d+\.\d+\.\d+\. Run `claude update`/],
     ["built-in-tools", /its own tools enabled: Bash, Read/],
-    ["no-tool-server", /could not load Rakazo's tools/],
+    ["no-tool-server", /could not load Vendor One Management's tools/],
     ["incomplete-tool", /incomplete content blocks/],
   ])("fails clearly on %s", async (scenario, error) => {
     fakeClaude(scenario);
@@ -639,7 +639,7 @@ describe.skipIf(process.platform === "win32")("Claude Code CLI provider", () => 
     const cli = fakeClaude("reply");
     configureProvider(undefined);
     expect((await run(hello)).message.errorMessage).toMatch(
-      /only inside the Rakazo API and worker/,
+      /only inside the Vendor One Management API and worker/,
     );
     configureProvider(async () => PERSONAL_CLI_SHARED_REFUSAL);
     expect((await run(hello)).message.errorMessage).toBe(PERSONAL_CLI_SHARED_REFUSAL);

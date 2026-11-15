@@ -925,7 +925,7 @@ async function handleChannelEvent(
           idempotencyKey: `intro:${channel.id}`,
           kind: "intro",
           threadId: channel.threadId,
-          body: "Hi. This line hosts Rakazo personal agents. Some people in this group haven't messaged it yet; send any message to this line first if you want your own agent here.",
+          body: "Hi. This line hosts Vendor One Management personal agents. Some people in this group haven't messaged it yet; send any message to this line first if you want your own agent here.",
         },
       ]);
       await tx.messagingChannel.update({
@@ -1025,7 +1025,7 @@ async function queueInvite(
     idempotencyKey,
     kind: "dm",
     identityId: identity.id,
-    body: `"${name}" was linked to your Rakazo agent. Reply YES to let your agent join the conversation there, or NO to stay out.`,
+    body: `"${name}" was linked to your Vendor One Management agent. Reply YES to let your agent join the conversation there, or NO to stay out.`,
   });
   return true;
 }

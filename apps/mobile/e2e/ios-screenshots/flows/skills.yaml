@@ -12,9 +12,9 @@ name: Skills
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 01-skills
-- tapOn: "Rakazo"
+- tapOn: "Vendor One Management"
 - extendedWaitUntil:
-    visible: ".*name: Rakazo.*"
+    visible: ".*name: Vendor One Management.*"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 3000

@@ -180,7 +180,7 @@ export function detectRestartSupervisor(
 
 export function restartSupervisorAdvice(supervisor: RestartSupervisor): string {
   if (supervisor.kind !== "none") {
-    return `Rakazo will exit after updating and ${supervisor.label} will start it on the new code.`;
+    return `Vendor One Management will exit after updating and ${supervisor.label} will start it on the new code.`;
   }
-  return `No process supervisor was detected, so Rakazo will not exit on its own. Restart the API, worker, and web processes yourself, or set ${RESTART_SUPERVISOR_ENV} to the supervisor that restarts them (for example "docker" with restart: unless-stopped, or run under systemd with Restart=always).`;
+  return `No process supervisor was detected, so Vendor One Management will not exit on its own. Restart the API, worker, and web processes yourself, or set ${RESTART_SUPERVISOR_ENV} to the supervisor that restarts them (for example "docker" with restart: unless-stopped, or run under systemd with Restart=always).`;
 }

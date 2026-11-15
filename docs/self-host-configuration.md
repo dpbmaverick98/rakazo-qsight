@@ -1,6 +1,6 @@
 # Configuration
 
-Rakazo reads its settings from environment variables, normally kept in the `.env` file next to
+Vendor One Management reads its settings from environment variables, normally kept in the `.env` file next to
 the Compose file.
 
 ## Where settings live
@@ -73,7 +73,7 @@ retries let long turns survive brief provider failures.
 Model timeouts are configurable in milliseconds. Invalid or out-of-range values retain their
 defaults. Longer timeouts can help when several bots share a local inference server that queues
 requests. For `RAKAZO_LOCAL_MODELS` servers and compatible model connections added in the app,
-these settings are the only limits Rakazo applies, and a stream that is cut off names why in the
+these settings are the only limits Vendor One Management applies, and a stream that is cut off names why in the
 run's error details, such as `terminated (other side closed)`. Built-in providers still drop a
 response after 5 minutes without data, and a proxy or load balancer in between may cut off a
 silent stream sooner.
@@ -84,14 +84,14 @@ silent stream sooner.
   Other APIs, such as Google, Vertex AI, Bedrock and some routed models, use their own client
   timeouts.
 - `MODEL_STREAM_IDLE_TIMEOUT_MS` (default `180000`, range `0`–`2147483647`) bounds how long
-  a started response may remain silent. Set it to `0` to disable Rakazo's inactivity watchdog.
+  a started response may remain silent. Set it to `0` to disable Vendor One Management's inactivity watchdog.
   Explicit request cancellation remains available. Disabling this protection can leave stalled
   requests waiting indefinitely if neither the provider nor the caller terminates them.
 - `MODEL_CONNECT_TIMEOUT_MS` (default `30000`, range `1000`–`300000`) bounds connecting to an
   OpenAI-compatible model or speech connection added in the app. `RAKAZO_LOCAL_MODELS` servers
   and built-in providers retain Node's own connection timeout.
 
-### Reaching Rakazo from a second address
+### Reaching Vendor One Management from a second address
 
 Sign-in and API calls are accepted only from `WEB_ORIGIN`, `API_URL`, `BETTER_AUTH_URL` and the
 mobile app. If you also open the same install from another address, such as a Tailscale name or a
@@ -110,16 +110,16 @@ callbacks.
 
 ## Feature switches
 
-| Variable               | Default         | Effect                                                                                                                                                  |
-| ---------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TICKET_BOARD_ENABLED` | `false`         | Turns the ticket board on for every account. Otherwise each person turns it on in **Settings → Labs**. Set it on the API and worker.                    |
-| `USER_DEVICES_ENABLED` | on              | `false` stops signed-in desktop apps from letting bots run commands on the user's own computer. Set it on the API and worker.                           |
-| `PI_SESSION_RECORDING` | off             | `true` records agent sessions as JSONL under `DATA_DIR/pi-sessions`. The files are not encrypted, so do not use it on a shared or multi-tenant install. |
-| `PRIVACY_POLICY_URL`   | Rakazo's policy | The privacy policy linked from the AI data-sharing notice. Set it on the API.                                                                           |
+| Variable               | Default                        | Effect                                                                                                                                                  |
+| ---------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TICKET_BOARD_ENABLED` | `false`                        | Turns the ticket board on for every account. Otherwise each person turns it on in **Settings → Labs**. Set it on the API and worker.                    |
+| `USER_DEVICES_ENABLED` | on                             | `false` stops signed-in desktop apps from letting bots run commands on the user's own computer. Set it on the API and worker.                           |
+| `PI_SESSION_RECORDING` | off                            | `true` records agent sessions as JSONL under `DATA_DIR/pi-sessions`. The files are not encrypted, so do not use it on a shared or multi-tenant install. |
+| `PRIVACY_POLICY_URL`   | Vendor One Management's policy | The privacy policy linked from the AI data-sharing notice. Set it on the API.                                                                           |
 
 ## Database roles
 
-Rakazo uses two Postgres logins:
+Vendor One Management uses two Postgres logins:
 
 - The owner (`POSTGRES_USER`, or `DATABASE_MIGRATION_URL` outside Compose) runs migrations and
   owns the tables.

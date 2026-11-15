@@ -26,7 +26,7 @@ const BLOG_OG: readonly OgPage[] = [
   {
     id: "blog-openclaw-vs-hermes-vs-rakazo",
     kicker: "Comparison",
-    title: "OpenClaw vs Hermes Agent vs Rakazo",
+    title: "OpenClaw vs Hermes Agent vs Vendor One Management",
   },
   {
     id: "blog-self-host-an-ai-agent",
@@ -38,6 +38,7 @@ const BLOG_OG: readonly OgPage[] = [
 /** One Open Graph image per marketing page that should not share the homepage image. */
 export function ogPages(): OgPage[] {
   return [
+    { id: "home", kicker: "Vendor One Management", title: "AI teammates you actually own" },
     { id: "alternatives", kicker: "Alternatives", title: ALTERNATIVES_HUB.h1 },
     ...ALTERNATIVES.map((page) => ({
       id: page.slug,

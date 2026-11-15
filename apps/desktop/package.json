@@ -1,6 +1,6 @@
 {
   "name": "@rakazo/desktop",
-  "productName": "Rakazo",
+  "productName": "Vendor One Management",
   "version": "0.11.0",
   "author": {
     "name": "Rakazo"
@@ -39,6 +39,7 @@
   },
   "build": {
     "appId": "dev.rakazo.desktop",
+    "artifactName": "Rakazo-${version}.${ext}",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -66,14 +67,16 @@
       "main": "dist/main.js"
     },
     "mac": {
+      "executableName": "Rakazo",
+      "artifactName": "Rakazo-${version}-${arch}.${ext}",
       "icon": "../../packages/ui-tokens/assets/Rakazo.icon",
       "category": "public.app-category.productivity",
       "x64ArchFiles": "{**/node_modules/@koromix/koffi-darwin-*/darwin_*/koffi.node,**/node_modules/@oxc-parser/binding-darwin-*/parser.darwin-*.node}",
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Rakazo uses the microphone for dictation and voice calls with your bots.",
-        "NSSpeechRecognitionUsageDescription": "Rakazo turns what you say into text for dictation and voice calls with your bots."
+        "NSMicrophoneUsageDescription": "Vendor One Management uses the microphone for dictation and voice calls with your bots.",
+        "NSSpeechRecognitionUsageDescription": "Vendor One Management turns what you say into text for dictation and voice calls with your bots."
       },
       "extraResources": [
         {
@@ -121,7 +124,7 @@
       ]
     },
     "nsis": {
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Rakazo-Setup-${version}.${ext}"
     },
     "win": {
       "icon": "assets/icon.ico",

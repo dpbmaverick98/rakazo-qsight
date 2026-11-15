@@ -1,10 +1,10 @@
 {
   "ios": {
-    "NSCameraUsageDescription": "Rakazo korzysta z aparatu, aby umożliwić dołączanie zdjęć do wiadomości do bota.",
-    "NSPhotoLibraryUsageDescription": "Rakazo korzysta z biblioteki zdjęć, aby umożliwić dołączanie obrazów do wiadomości do bota.",
-    "NSLocalNetworkUsageDescription": "Rakazo łączy się z własnym serwerem Rakazo w Twojej sieci lokalnej.",
-    "NSMicrophoneUsageDescription": "Rakazo korzysta z mikrofonu podczas rozmów głosowych z botami.",
-    "NSSpeechRecognitionUsageDescription": "Rakazo zamienia Twoją mowę na wiadomości podczas rozmów głosowych.",
-    "NSFaceIDUsageDescription": "Zezwól Rakazo na korzystanie z Face ID."
+    "NSCameraUsageDescription": "Vendor One Management korzysta z aparatu, aby umożliwić dołączanie zdjęć do wiadomości do bota.",
+    "NSPhotoLibraryUsageDescription": "Vendor One Management korzysta z biblioteki zdjęć, aby umożliwić dołączanie obrazów do wiadomości do bota.",
+    "NSLocalNetworkUsageDescription": "Vendor One Management łączy się z własnym serwerem Vendor One Management w Twojej sieci lokalnej.",
+    "NSMicrophoneUsageDescription": "Vendor One Management korzysta z mikrofonu podczas rozmów głosowych z botami.",
+    "NSSpeechRecognitionUsageDescription": "Vendor One Management zamienia Twoją mowę na wiadomości podczas rozmów głosowych.",
+    "NSFaceIDUsageDescription": "Zezwól Vendor One Management na korzystanie z Face ID."
   }
 }

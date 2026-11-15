@@ -266,9 +266,9 @@ enum VoiceMessageError: Error, CustomLocalizedStringResourceConvertible {
 
   var localizedStringResource: LocalizedStringResource {
     switch self {
-    case .permission: "Start a voice call in Rakazo once to allow the microphone."
+    case .permission: "Start a voice call in Vendor One Management once to allow the microphone."
     case .unavailable: "Speech recognition isn't available right now."
-    case .liveActivitiesOff: "Turn on Live Activities for Rakazo in Settings."
+    case .liveActivitiesOff: "Turn on Live Activities for Vendor One Management in Settings."
     case .failed: "Couldn't start recording."
     }
   }

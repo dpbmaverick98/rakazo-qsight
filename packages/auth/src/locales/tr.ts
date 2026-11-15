@@ -1,70 +1,77 @@
 export const TR_MESSAGES: Record<string, string> = {
   "Hi {name},": "Merhaba {name},",
   "Hi there,": "Merhaba,",
-  "Verify your Rakazo email": "Rakazo e-posta adresinizi doğrulayın",
+  "Verify your Vendor One Management email": "Vendor One Management e-posta adresinizi doğrulayın",
   "Verify email": "E-postayı doğrula",
-  "Then return to Rakazo to sign in.": "Ardından oturum açmak için Rakazo’ya dönün.",
+  "Then return to Vendor One Management to sign in.":
+    "Ardından oturum açmak için Vendor One Management’ya dönün.",
   "This link expires in one hour. If you did not register, ignore this email.":
     "Bu bağlantının süresi bir saat içinde dolar. Kaydolmadıysanız bu e-postayı yok sayın.",
-  "Your Rakazo sign-in code": "Rakazo oturum açma kodunuz",
-  "Enter this code to sign in to Rakazo:": "Rakazo’da oturum açmak için bu kodu girin:",
+  "Your Vendor One Management sign-in code": "Vendor One Management oturum açma kodunuz",
+  "Enter this code to sign in to Vendor One Management:":
+    "Vendor One Management’da oturum açmak için bu kodu girin:",
   "This code expires in ten minutes. If you did not request it, ignore this email.":
     "Bu kodun süresi on dakika içinde dolar. Siz istemediyseniz bu e-postayı yok sayın.",
-  "Reset your Rakazo password": "Rakazo parolanızı sıfırlayın",
-  "Reset your Rakazo password:": "Rakazo parolanızı sıfırlayın:",
+  "Reset your Vendor One Management password": "Vendor One Management parolanızı sıfırlayın",
+  "Reset your Vendor One Management password:": "Vendor One Management parolanızı sıfırlayın:",
   "Reset password": "Parolayı sıfırla",
   "This link expires in one hour. If you did not request this, you can ignore this email.":
     "Bu bağlantının süresi bir saat içinde dolar. Bunu siz istemediyseniz bu e-postayı yok sayabilirsiniz.",
-  "Confirm Rakazo account deletion": "Rakazo hesabınızın silinmesini onaylayın",
-  "Enter this code in Rakazo to delete your account:":
-    "Hesabınızı silmek için bu kodu Rakazo’ya girin:",
+  "Confirm Vendor One Management account deletion":
+    "Vendor One Management hesabınızın silinmesini onaylayın",
+  "Enter this code in Vendor One Management to delete your account:":
+    "Hesabınızı silmek için bu kodu Vendor One Management’ya girin:",
   "This code expires in ten minutes. If you did not request deletion, ignore this email.":
     "Bu kodun süresi on dakika içinde dolar. Silme isteğinde bulunmadıysanız bu e-postayı yok sayın.",
-  "Your Rakazo confirmation code": "Rakazo onay kodunuz",
-  "Enter this code in Rakazo to confirm it's you:":
-    "Siz olduğunuzu onaylamak için bu kodu Rakazo’ya girin:",
-  "Welcome to Rakazo": "Rakazo’ya hoş geldiniz",
-  "Welcome to Rakazo. The people who get the most out of it do three things:":
-    "Rakazo'ya hoş geldiniz. Rakazo'dan en çok verimi alanlar üç şey yapıyor:",
+  "Your Vendor One Management confirmation code": "Vendor One Management onay kodunuz",
+  "Enter this code in Vendor One Management to confirm it's you:":
+    "Siz olduğunuzu onaylamak için bu kodu Vendor One Management’ya girin:",
+  "Welcome to Vendor One Management": "Vendor One Management’ya hoş geldiniz",
+  "Welcome to Vendor One Management. The people who get the most out of it do three things:":
+    "Vendor One Management'ya hoş geldiniz. Vendor One Management'dan en çok verimi alanlar üç şey yapıyor:",
   "Get the apps": "Uygulamaları indirin",
-  "Rakazo runs on {platforms}, so your bots can reach you wherever you are.":
-    "Rakazo {platforms} üzerinde çalışır; böylece botlarınız size her yerde ulaşabilir.",
+  "Vendor One Management runs on {platforms}, so your bots can reach you wherever you are.":
+    "Vendor One Management {platforms} üzerinde çalışır; böylece botlarınız size her yerde ulaşabilir.",
   "Join the community": "Topluluğa katılın",
   "See what others are building, get help fast, and tell us what to build next on {discord}.":
     "Başkalarının neler yaptığını görün, hızlıca yardım alın ve sırada ne yapmamız gerektiğini {discord} üzerinden bize söyleyin.",
   "Star us on GitHub": "GitHub'da bize yıldız verin",
-  "Rakazo is open source. {star} helps more people find it.":
-    "Rakazo açık kaynaklıdır. {star} daha fazla kişinin onu bulmasına yardımcı olur.",
+  "Vendor One Management is open source. {star} helps more people find it.":
+    "Vendor One Management açık kaynaklıdır. {star} daha fazla kişinin onu bulmasına yardımcı olur.",
   "A star on GitHub": "GitHub'da bir yıldız",
   "Questions? Just reply. I read every one.":
     "Sorunuz mu var? Yanıtlamanız yeterli. Her birini okuyorum.",
   Unsubscribe: "Abonelikten çık",
   "Invite a friend": "Bir arkadaşını davet et",
-  "Invite a friend to Rakazo: they get {weeks} weeks free, and you earn a free month when they start a qualifying subscription with a new card.":
-    "Bir arkadaşını Rakazo'ya davet et: {weeks} hafta ücretsiz kullanır, yeni bir kartla uygun bir aboneliğe başladığında da sen bir ay ücretsiz kazanırsın.",
-  "Open Rakazo": "Rakazo’yu açın",
+  "Invite a friend to Vendor One Management: they get {weeks} weeks free, and you earn a free month when they start a qualifying subscription with a new card.":
+    "Bir arkadaşını Vendor One Management'ya davet et: {weeks} hafta ücretsiz kullanır, yeni bir kartla uygun bir aboneliğe başladığında da sen bir ay ücretsiz kazanırsın.",
+  "Open Vendor One Management": "Vendor One Management’yu açın",
   "and choose Invite friends for your link.":
     "ve bağlantınızı almak için Arkadaşlarını davet et’i seçin.",
-  "We received your Rakazo plugin": "Rakazo eklentinizi aldık",
-  "Thanks for submitting a plugin to the Rakazo marketplace.":
-    "Rakazo pazaryerine eklenti gönderdiğiniz için teşekkürler.",
+  "We received your Vendor One Management plugin": "Vendor One Management eklentinizi aldık",
+  "Thanks for submitting a plugin to the Vendor One Management marketplace.":
+    "Vendor One Management pazaryerine eklenti gönderdiğiniz için teşekkürler.",
   "We review every submission and will email you when it's done.":
     "Her gönderiyi inceliyoruz ve işimiz bitince size e-posta göndereceğiz.",
   "If you did not submit a plugin, ignore this email.":
     "Eklenti göndermediyseniz bu e-postayı yok sayın.",
-  "{name} is in the Rakazo marketplace": "{name}, Rakazo pazaryerinde",
-  "Your Rakazo plugin submission: {name}": "Rakazo eklenti gönderiniz: {name}",
-  "{name} is now listed in the Rakazo plugin marketplace.":
-    "{name} artık Rakazo eklenti pazaryerinde listeleniyor.",
-  "We couldn't list {name} in the Rakazo plugin marketplace.":
-    "{name} eklentisini Rakazo eklenti pazaryerinde listeleyemedik.",
-  "Confirm your Rakazo page claim": "Rakazo sayfa sahiplik talebinizi onaylayın",
+  "{name} is in the Vendor One Management marketplace":
+    "{name}, Vendor One Management pazaryerinde",
+  "Your Vendor One Management plugin submission: {name}":
+    "Vendor One Management eklenti gönderiniz: {name}",
+  "{name} is now listed in the Vendor One Management plugin marketplace.":
+    "{name} artık Vendor One Management eklenti pazaryerinde listeleniyor.",
+  "We couldn't list {name} in the Vendor One Management plugin marketplace.":
+    "{name} eklentisini Vendor One Management eklenti pazaryerinde listeleyemedik.",
+  "Confirm your Vendor One Management page claim":
+    "Vendor One Management sayfa sahiplik talebinizi onaylayın",
   "Confirm claim": "Talebi onaylayın",
   "We review every claim once it's confirmed and will email you when it's done.":
     "Her talebi onaylandıktan sonra inceliyor ve işimiz bitince size e-posta gönderiyoruz.",
   "This link expires in one day. If you did not claim a page, ignore this email.":
     "Bu bağlantının süresi bir gün içinde dolar. Bir sayfa talep etmediyseniz bu e-postayı yok sayın.",
-  "Your Rakazo page claim: {name}": "Rakazo sayfa sahiplik talebiniz: {name}",
+  "Your Vendor One Management page claim: {name}":
+    "Vendor One Management sayfa sahiplik talebiniz: {name}",
   "Your changes to the {name} page are approved.":
     "{name} sayfasındaki değişiklikleriniz onaylandı.",
   "We couldn't approve your changes to the {name} page.":

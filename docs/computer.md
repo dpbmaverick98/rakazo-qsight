@@ -54,9 +54,9 @@ Open the computer and choose **More computer actions**:
 
 In the [desktop app](./desktop-app.md), bots can also run commands and use apps on the computer the
 app is installed on. Turn on **Let bots use this computer** in **Settings → General** under
-**Computers**. This works with Rakazo Cloud, an HTTPS server you connect to, and a
+**Computers**. This works with Vendor One Management Cloud, an HTTPS server you connect to, and a
 loopback server.
-Using apps on screen works on Mac and Windows; on a Mac, allow Rakazo under **Accessibility** and
+Using apps on screen works on Mac and Windows; on a Mac, allow Vendor One Management under **Accessibility** and
 **Screen Recording** in System Settings.
 
 In every [approval mode](./approvals.md), a bot asks before it first uses each app in a space, and

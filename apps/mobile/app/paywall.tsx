@@ -304,7 +304,7 @@ export default function Paywall() {
         </View>
         <View style={styles.footer}>
           <NativeActionButton
-            label={started === "byok" ? t`Connect your AI` : t`Start using Rakazo`}
+            label={started === "byok" ? t`Connect your AI` : t`Start using Vendor One Management`}
             onPress={() => {
               router.back();
               if (started === "byok") router.push("/models");
