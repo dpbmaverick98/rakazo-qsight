@@ -1009,10 +1009,12 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       const space = await runAsTenant(actor, () =>
         prisma.space.findUnique({
           where: { id: actor.spaceId },
-          select: { isDefault: true, name: true },
+          select: { isDefault: true, name: true, createdByUserId: true },
         }),
       );
-      return !space || space.isDefault ? null : space.name;
+      if (!space || space.isDefault) return null;
+      if (!actor.isDeploymentOwner && space.createdByUserId !== actor.userId) return null;
+      return space.name;
     },
   });
   if (userDeviceHub && userDevices) {

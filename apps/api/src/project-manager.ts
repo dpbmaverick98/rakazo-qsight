@@ -15,13 +15,13 @@ export async function provisionProjectManager(
   input: { projectId: string; projectName: string; clientName: string },
 ) {
   const { deps, repos, prepareMcpServer, insertMcpServer } = ctx;
-  if (!actor.isDeploymentOwner)
-    throw new ORPCError("FORBIDDEN", { message: "Only the deployment owner can provision a project manager" });
   const source = deps.projectManagers;
   if (!source) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   const space = await deps.prisma.space.findFirst({ where: { id: actor.spaceId } });
   if (!space || space.isDefault || !space.name.trim())
     throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
+  if (!actor.isDeploymentOwner && space.createdByUserId !== actor.userId)
+    throw new ORPCError("FORBIDDEN", { message: "Only the Space owner can provision a project manager" });
   // Only canonical upstream names enter instructions or deterministic resource names.
   const hierarchy = await source.read(space.name).catch(() => {
     throw new ORPCError("BAD_GATEWAY", { message: "Project unavailable" });
