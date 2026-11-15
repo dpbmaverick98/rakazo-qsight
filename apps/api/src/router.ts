@@ -35,7 +35,8 @@ import type {
   WorkActivities,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { LabFeature, ModelCredential, NavLink } from "@rakazo/contracts";
+import type { LabFeature, McpServerConfigInput, ModelCredential, NavLink } from "@rakazo/contracts";
+import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import type { BoardEvents, PrismaClient, ThreadEvents } from "@rakazo/db";
 import type { BillingService } from "./billing.js";
 import { accountRoutes } from "./routes/account.js";
@@ -68,6 +69,15 @@ export { HEARTBEAT_MS, SESSION_RECHECK_MS } from "./routes/shared.js";
 export { callMarkerClientNonce } from "./routes/threads.js";
 
 export interface RouterDeps {
+  projectManagers?: {
+    ownerServerPrefix: string;
+    read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
+    managerServer: (
+      id: string,
+      name: string,
+    ) => Promise<McpServerConfigInput & { tokenId: string }>;
+    revokeManagerToken: (tokenId: string) => Promise<void>;
+  } | null;
   pushTokens: PushTokenStore;
   /** Absent when the deployment cannot update a phone's live status card. */
   workActivities?: Pick<WorkActivities, "register" | "registerStarts">;

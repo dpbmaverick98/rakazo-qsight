@@ -21,6 +21,7 @@ export function SidebarHeader({
   setMobileSidebarOpen,
   setPanel,
   navigate,
+  setAddClientOpen,
   setNewSpaceOpen,
   setCreateBotOpen,
 }: {
@@ -36,6 +37,7 @@ export function SidebarHeader({
   setMobileSidebarOpen: (open: boolean) => void;
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
+  setAddClientOpen: (open: boolean) => void;
   setNewSpaceOpen: (open: boolean) => void;
   setCreateBotOpen: (open: boolean) => void;
 }) {
@@ -136,6 +138,11 @@ export function SidebarHeader({
                   setCreateMenuOpen(false);
                   setMobileSidebarOpen(false);
                   setPanel("create-group");
+                }}
+                onCreateClient={() => {
+                  setCreateMenuOpen(false);
+                  setMobileSidebarOpen(false);
+                  setAddClientOpen(true);
                 }}
                 onCreateSpace={() => {
                   setCreateMenuOpen(false);

@@ -632,7 +632,22 @@ model Member {
   @@map("member")
 }
 
+model SpaceClientBinding {
+  spaceId          String   @id
+  space            Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  externalClientId String   @unique
+  clientName       String
+  revision         Int      @default(1)
+  active           Boolean  @default(true)
+  userId           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("space_client_bindings")
+}
+
 model Space {
+  clientBinding SpaceClientBinding?
   aiDataConsents              AiDataConsent[]
   id                          String                       @id
   organizationId              String
@@ -1008,6 +1023,7 @@ model Bot {
   modelId           String?
   thinkingLevel     String?
   disabledBuiltinTools String[] @default([])
+  inheritMcpServers Boolean @default(true)
   webhookSecretId   String?
   teamChatAmbientEnabled Boolean @default(false)
   teamChatRules          String  @default("")
@@ -2132,6 +2148,8 @@ model McpServer {
   env           Json              @default("{}")
   files         Json              @default("{}")
   headers       Json              @default("{}")
+  /// Opaque issuer ID for operator reconciliation; never a bearer.
+  managedCredentialId String?
   secretId      String?
   secret        Secret?           @relation(fields: [secretId], references: [id], onDelete: SetNull)
   installId     String?

@@ -9,21 +9,21 @@ import {
   CommandList,
   CommandSeparator,
 } from "@rakazo/ui-web";
-import { Info, Lock, Plus, Users } from "lucide-react";
+import { Info, Lock, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 
 export function BotCreatePicker({
   bots,
-  onCreateBot,
   onOpenBot,
-  onCreateGroup,
+  onCreateClient,
   onCreateSpace,
 }: {
   bots: Bot[];
   onCreateBot: () => void;
   onOpenBot: (botId: string) => void;
   onCreateGroup: () => void;
+  onCreateClient?: () => void;
   onCreateSpace: () => void;
 }) {
   const { t } = useLingui();
@@ -33,11 +33,6 @@ export function BotCreatePicker({
     if (!needle) return bots;
     return bots.filter((bot) => bot.name.toLowerCase().includes(needle));
   }, [bots, needle]);
-  const showCreate =
-    !needle ||
-    "new bot".includes(needle) ||
-    needle.split(/\s+/).every((part) => "new bot".includes(part));
-
   return (
     <div data-testid="bot-create-picker" className="w-[min(320px,calc(100vw-2rem))]">
       <Command
@@ -61,30 +56,16 @@ export function BotCreatePicker({
             <Trans>No bots match</Trans>
           </CommandEmpty>
           <CommandGroup className="shrink-0">
-            {showCreate ? (
-              <CommandItem
-                value="create-new-bot"
-                data-testid="create-new-bot"
-                onSelect={() => onCreateBot()}
-                className="gap-2"
-              >
+            {onCreateClient ? (
+              <CommandItem value="add-client" onSelect={onCreateClient} className="gap-2">
                 <span className="flex size-[22px] shrink-0 items-center justify-center">
                   <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
                 </span>
-                <Trans>New bot</Trans>
+                <span className="min-w-0 flex-1 truncate">
+                  <Trans>Add client</Trans>
+                </span>
               </CommandItem>
             ) : null}
-            <CommandItem
-              value="create-group"
-              data-testid="create-new-group"
-              onSelect={() => onCreateGroup()}
-              className="gap-2"
-            >
-              <span className="flex size-[22px] shrink-0 items-center justify-center">
-                <Users size={16} strokeWidth={1.8} aria-hidden="true" />
-              </span>
-              <Trans>New group chat</Trans>
-            </CommandItem>
             <CommandItem
               value="create-space"
               data-testid="create-new-space"
@@ -95,7 +76,7 @@ export function BotCreatePicker({
                 <Lock size={16} strokeWidth={1.8} aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1 truncate">
-                <Trans>New private space</Trans>
+                <Trans>New client space</Trans>
               </span>
               <PickerInfo
                 testId="picker-info-space"

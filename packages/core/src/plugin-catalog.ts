@@ -1,6 +1,15 @@
 import type { PluginMarketplaceEntry, PluginPart } from "@rakazo/contracts";
 import { PluginPartSchema } from "@rakazo/contracts";
 
+/** Named project tools selected by the project-manager provisioning action. */
+export const PROJECT_MANAGER_TOOLS = {
+  name: "Vendor One",
+  legacyServerPrefix: "QSight",
+  serverName: "Vendor One Pilot",
+  legacyServerName: "QSight Pilot",
+  managerServerPrefix: "Vendor One PM — ",
+} as const;
+
 export const PLUGIN_CATEGORIES = [
   "productivity",
   "communication",

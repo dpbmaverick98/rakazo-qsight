@@ -2,6 +2,7 @@ import { Trans } from "@lingui/react/macro";
 import { BOT_COLOR_LIST } from "@rakazo/contracts";
 import { Button } from "@rakazo/ui-web";
 import { rpc } from "../../lib/rpc";
+import { clientLeadProfile } from "./first-bot.prompt";
 
 const FIRST_BOT_NAME = "Chief";
 const FIRST_BOT_COLOR = BOT_COLOR_LIST.find((color) => color.id === "orange")!.hex;
@@ -13,23 +14,30 @@ let firstBotEnsure: Promise<{ id: string }> | null = null;
 
 function findFirstBot(
   bots: Array<{ id: string; name: string; spawnKey: string | null }>,
+  personal: boolean,
 ): { id: string } | undefined {
   const bySpawnKey = bots.find((bot) => bot.spawnKey === FIRST_BOT_SPAWN_KEY);
   if (bySpawnKey) return { id: bySpawnKey.id };
   // Legacy first-run Chief created before spawnKey was set.
-  const byName = bots.find((bot) => bot.name === FIRST_BOT_NAME);
+  const byName = personal && bots.find((bot) => bot.name === FIRST_BOT_NAME);
   return byName ? { id: byName.id } : undefined;
 }
 
 async function createOrReuseFirstBot(): Promise<{ id: string }> {
+  const { current, spaces } = await rpc.spaces.list();
+  const space = spaces.find((space) => space.id === current.id);
+  const profile =
+    space && !space.isDefault
+      ? clientLeadProfile(current.name.trim())
+      : { name: FIRST_BOT_NAME, instructions: "" };
   const existing = await rpc.bots.list();
-  const reuse = findFirstBot(existing);
+  const reuse = findFirstBot(existing, space?.isDefault === true);
   if (reuse) return reuse;
   try {
     const created = await rpc.bots.create({
-      name: FIRST_BOT_NAME,
+      name: profile.name,
       description: "",
-      instructions: "",
+      instructions: profile.instructions,
       notifyOnFinish: true,
       color: FIRST_BOT_COLOR,
       spawnKey: FIRST_BOT_SPAWN_KEY,

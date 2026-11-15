@@ -403,6 +403,7 @@ describe("secrets model-visibility conformance", () => {
 
       const prisma = {
         mcpServer: NO_SHARED_SERVERS,
+        bot: { findFirst: async () => ({ inheritMcpServers: true }) },
         botMcpServer: {
           findMany: vi.fn().mockResolvedValue([assignment]),
           findFirst: vi.fn().mockResolvedValue(assignment),

@@ -43,6 +43,14 @@ describe("app content security policy", () => {
     expect(policy.get("frame-src")).toEqual(["'self'", "blob:"]);
   });
 
+  it("allows HTTPS map tile images without widening scripts or connections", () => {
+    const tile = new URL("https://tile.openstreetmap.org/0/0/0.png");
+    expect(policy.get("img-src")).toContain(`${tile.protocol}`);
+    expect(policy.get("script-src")).toEqual(["'self'"]);
+    expect(policy.get("connect-src")).toEqual(["'self'"]);
+    expect(APP_CONTENT_SECURITY_POLICY).not.toContain("*.openstreetmap.org");
+  });
+
   it("reports violations to the same-origin API endpoint with both mechanisms", () => {
     expect(CSP_REPORT_PATH).toBe("/api/csp-report");
     expect(policy.get("report-uri")).toEqual([CSP_REPORT_PATH]);

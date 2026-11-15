@@ -15,6 +15,7 @@ import { useSpaceQueries } from "../../lib/query";
 import type { Panel } from "../../lib/right-panel-state";
 import type { createSpaceRpc } from "../../lib/rpc";
 import { selectSpace } from "../../lib/rpc";
+import { AddClientDialog } from "./add-client-dialog";
 import type { CommandPaletteAction } from "./command-palette";
 import { CommandPalette } from "./command-palette";
 import type { CreateBotDialogInput } from "./create-bot-dialog";
@@ -52,6 +53,7 @@ export function useShellDialogs() {
   const [newSectionTarget, setNewSectionTarget] = useState<ChatTarget | null>(null);
   const [renameSectionTarget, setRenameSectionTarget] = useState<SectionTarget | null>(null);
   const [deleteSectionTarget, setDeleteSectionTarget] = useState<SectionTarget | null>(null);
+  const [addClientOpen, setAddClientOpen] = useState(false);
   const [newSpaceOpen, setNewSpaceOpen] = useState(false);
   const [createBotOpen, setCreateBotOpen] = useState(false);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -74,6 +76,8 @@ export function useShellDialogs() {
     setRenameSectionTarget,
     deleteSectionTarget,
     setDeleteSectionTarget,
+    addClientOpen,
+    setAddClientOpen,
     newSpaceOpen,
     setNewSpaceOpen,
     createBotOpen,
@@ -148,6 +152,8 @@ export function ShellDialogs({
     setRenameSectionTarget,
     deleteSectionTarget,
     setDeleteSectionTarget,
+    addClientOpen,
+    setAddClientOpen,
     newSpaceOpen,
     setNewSpaceOpen,
     createBotOpen,
@@ -340,6 +346,17 @@ export function ShellDialogs({
           avatarSet={botAvatarSet}
           onCancel={() => setCreateBotOpen(false)}
           onCreate={createBot}
+        />
+      ) : null}
+
+      {addClientOpen ? (
+        <AddClientDialog
+          onCancel={() => setAddClientOpen(false)}
+          onDone={(result) => {
+            if (!alive.current) return;
+            selectSpace(result.spaceId);
+            window.location.assign(`/app/${encodeURIComponent(result.botId)}`);
+          }}
         />
       ) : null}
 

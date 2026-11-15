@@ -30,6 +30,37 @@ function space(
 }
 
 describe("sidebarGroupsForSpaces", () => {
+  it("keeps Personal when it is the only Space", () => {
+    const personal = { ...space("personal", "Archive (Personal)"), isDefault: true };
+    expect(sidebarGroupsForSpaces([personal], "").map((group) => group.spaceId)).toEqual([
+      "personal",
+    ]);
+  });
+
+  it("hides Personal, including search matches, when even an empty client Space exists", () => {
+    const personal = { ...space("personal", "Archive (Personal)"), isDefault: true };
+    const client = { ...space("client", "Example Client", { bots: [] }), isDefault: false };
+    expect(sidebarGroupsForSpaces([personal, client], "")).toEqual([
+      expect.objectContaining({
+        spaceId: "client",
+        title: "Example Client",
+        emptySpaceId: "client",
+        showLock: false,
+      }),
+    ]);
+    expect(
+      sidebarGroupsForSpaces([personal, client], "Chief").some(
+        (group) => group.spaceId === "personal",
+      ),
+    ).toBe(false);
+    expect(
+      sidebarGroupsForSpaces([personal, client, space("other", "Other")], "").map(
+        (group) => group.spaceId,
+      ),
+    ).toEqual(["client", "other"]);
+    expect(sidebarGroupsForSpaces([], "")).toEqual([]);
+  });
+
   it("keeps an empty space with saved sections openable", () => {
     const empty = {
       ...space("space-2", "Support", { canRename: true, bots: [] }),

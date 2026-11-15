@@ -18,9 +18,9 @@ test("a new space chooses what it can use, and a skill can be limited to some sp
   });
 
   await openNewSpace(page);
-  const create = page.getByRole("dialog", { name: "New space" });
-  await create.getByLabel("Name").fill("Clients");
-  await create.getByRole("button", { name: "Create space", exact: true }).click();
+  const create = page.getByRole("dialog", { name: "New client space" });
+  await create.getByLabel("Client name").fill("Clients");
+  await create.getByRole("button", { name: "Create client space", exact: true }).click();
 
   // What the user added reaches every space, so it starts ticked and can be left out here.
   const chooser = page.getByRole("dialog", { name: "What can this space use?" });
@@ -32,17 +32,10 @@ test("a new space chooses what it can use, and a skill can be limited to some sp
   await chooser.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(chooser).toHaveCount(0);
 
-  // Continue switches to the new space and opens its own Chief in the background. Let that land
-  // before leaving it, or its late remount overrides the click below or closes the Skills dialog.
-  const chiefs = page
-    .locator("aside")
-    .first()
-    .getByRole("button", { name: /^Chief/ });
-  await expect(chiefs.nth(1)).toHaveAttribute("aria-current", "page");
-  const personalChief = chiefs.first();
-  await personalChief.click();
-  await expect(personalChief).toHaveAttribute("aria-current", "page");
-  await expect(page.getByPlaceholder("Message Chief")).toBeVisible();
+  // Wait for the client PM to land before opening Skills.
+  const lead = page.locator("aside").first().getByRole("button", { name: /^PM/ });
+  await expect(lead).toHaveAttribute("aria-current", "page");
+  await expect(page.getByPlaceholder("Message PM")).toBeVisible();
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   const skills = page.getByRole("dialog", { name: "Skills", exact: true });

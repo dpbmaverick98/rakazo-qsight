@@ -12,6 +12,13 @@ import { withTransactionRetry } from "./transaction-retry.js";
 /** Per member, per organization: one person cannot fan out unbounded boundaries. */
 const MAX_SPACES_PER_MEMBER = 32;
 
+export class ClientSpaceConflictError extends Error {
+  constructor() {
+    super("binding_conflict");
+    this.name = "ClientSpaceConflictError";
+  }
+}
+
 export class SpaceLimitError extends Error {
   constructor() {
     super("Space limit reached");
@@ -140,14 +147,16 @@ export async function createSpaceForMember(
     currentSpaceId: string;
     userId: string;
     name: string;
+    /** Explicit canonical authority, never inferred from a Space name. */
+    client?: { id: string; name: string };
   },
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string; reused: boolean }> {
   const name = normalizeSpaceName(input.name);
   const spaceId = randomUUID();
   const spaceMembershipId = randomUUID();
   const createdAt = new Date();
 
-  await withTransactionRetry(() =>
+  return withTransactionRetry(() =>
     prisma.$transaction(
       async (tx) => {
         // From a Space someone shared, a new Space goes in the person's own organization.
@@ -156,6 +165,28 @@ export async function createSpaceForMember(
           spaceId: input.currentSpaceId,
         });
         await lockOrganizationSpaces(tx, organizationId);
+        if (input.client) {
+          const binding = await tx.spaceClientBinding.findUnique({
+            where: { externalClientId: input.client.id },
+            include: { space: true },
+          });
+          if (binding) {
+            const membership = await tx.spaceMember.findUnique({
+              where: { spaceId_userId: { spaceId: binding.spaceId, userId: input.userId } },
+            });
+            const canManage = membership?.role
+              .split(",")
+              .some((role) => ["owner", "admin"].includes(role.trim()));
+            if (
+              !binding.active ||
+              !canManage ||
+              binding.space.deletingAt ||
+              binding.space.isDefault
+            )
+              throw new ClientSpaceConflictError();
+            return { id: binding.spaceId, name: binding.space.name, reused: true };
+          }
+        }
         const deleting = await tx.space.count({
           where: {
             organizationId,
@@ -176,17 +207,25 @@ export async function createSpaceForMember(
           name,
           createdAt,
         });
+        if (input.client)
+          await tx.spaceClientBinding.create({
+            data: {
+              spaceId,
+              externalClientId: input.client.id,
+              clientName: input.client.name,
+              userId: input.userId,
+            },
+          });
         await createSpaceDefaults(tx, {
           spaceId,
           userId: input.userId,
           memoryContent: "# Space memory\n\n",
         });
+        return { id: spaceId, name, reused: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     ),
   );
-
-  return { id: spaceId, name };
 }
 
 /**

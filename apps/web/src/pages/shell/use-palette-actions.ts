@@ -52,7 +52,7 @@ export function usePaletteActions({
     },
     {
       id: "new-space",
-      label: t`New private space`,
+      label: t`New client space`,
       icon: Lock,
       onSelect: onNewSpace,
     },
