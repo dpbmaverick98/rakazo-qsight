@@ -21,7 +21,6 @@ import {
   runThreadSubscription,
 } from "@rakazo/core";
 import { fetchFresh } from "@rakazo/core/query";
-import { bestEffort } from "@rakazo/logging";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -438,8 +437,7 @@ export function useThreadSync({
       applyEvent: (event) =>
         applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef),
       onEvent: (event, initial) => {
-        if (hierarchyChangedBy(event))
-          bestEffort("refresh hierarchy", hierarchyRefresh.invalidate());
+        if (hierarchyChangedBy(event)) void hierarchyRefresh.invalidate().catch(() => undefined);
         const currentBot = botsRef.current.find((bot) => bot.id === active.id);
         notifyBrowserForEvent(
           event,
@@ -550,8 +548,7 @@ export function useThreadSync({
           computerRef,
         ),
       onEvent: (event, initial) => {
-        if (hierarchyChangedBy(event))
-          bestEffort("refresh hierarchy", hierarchyRefresh.invalidate());
+        if (hierarchyChangedBy(event)) void hierarchyRefresh.invalidate().catch(() => undefined);
         const eventBot = botsRef.current.find((bot) => bot.id === event.botId);
         notifyBrowserForEvent(
           event,
