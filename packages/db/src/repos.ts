@@ -439,6 +439,8 @@ export function createRepos(
         parentBotId?: string | null;
         computerMode?: ComputerMode;
         spawnKey?: string;
+        /** Setup workflows preserve archived identities until an explicit restore. */
+        replaceArchived?: boolean;
         modelProvider?: string | null;
         modelId?: string | null;
         thinkingLevel?: string | null;
@@ -613,6 +615,7 @@ export function createRepos(
         const existing = await findBySpawnKey();
         if (
           !existing ||
+          (existing.archivedAt && input.replaceArchived === false) ||
           (input.id !== undefined && (existing.id !== input.id || existing.archivedAt))
         )
           throw error;

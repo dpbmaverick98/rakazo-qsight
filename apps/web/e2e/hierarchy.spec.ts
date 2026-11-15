@@ -151,11 +151,66 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Client hierarchy", exact: true })).toBeVisible();
   await expect(rail).toBeVisible();
   await building.click();
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   await rail.getByRole("button", { name: "Finishes", exact: true }).click();
   await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await captureScreenshot(page, testInfo, "project-commercial-narrow");
+});
+
+test("narrow hierarchy sheet recovers from loading and error, then releases the composer", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await signup(page, `narrow-hierarchy-${Date.now()}@rakazo.test`, "password12", "Test User");
+  await completeOnboarding(page);
+  const space = await rpc<{ id: string }>(page, "spaces/create", { name: "Example Client" });
+  const response = await page.request.post("/rpc/bots/create", {
+    headers: { "x-rakazo-space-id": space.id },
+    data: { json: { name: "PM", description: "", notifyOnFinish: false, computerMode: "team" } },
+  });
+  expect(response.ok()).toBeTruthy();
+  const { json: bot } = (await response.json()) as { json: { id: string } };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let attempts = 0;
+  await page.route("**/api/agent-plane/hierarchy", async (route) => {
+    if (route.request().headers()["x-rakazo-space-id"] !== space.id)
+      return route.fulfill({ status: 204 });
+    if (++attempts === 1) {
+      await held;
+      return route.fulfill({ status: 502 });
+    }
+    return route.fulfill({
+      json: { client: { id: "client", name: "Example Client" }, buildings: [] },
+    });
+  });
+  await page.evaluate((id) => localStorage.setItem("rakazo:space-id", id), space.id);
+  await page.goto(`/app/${bot.id}`);
+  const sheet = page.getByRole("dialog", { name: "Client hierarchy", exact: true });
+  await expect(sheet.getByRole("status")).toHaveText("Loading hierarchy…");
+  await captureScreenshot(page, testInfo, "narrow-hierarchy-loading");
+  release();
+  await expect(sheet.getByRole("alert")).toContainText("Hierarchy unavailable");
+  await captureScreenshot(page, testInfo, "narrow-hierarchy-error");
+  await sheet.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(sheet.getByText("No buildings", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Add building", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "narrow-hierarchy-setup");
+  await page.keyboard.press("Escape");
+  await expect(sheet).not.toBeVisible();
+  const trigger = page.getByRole("button", { name: "Hierarchy", exact: true });
+  await expect(trigger).toBeFocused();
+  const composer = page.getByTestId("composer-field").locator("textarea");
+  await composer.fill("Continue setup");
+  await expect(composer).toHaveValue("Continue setup");
+  await trigger.click();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Collapse hierarchy" }).click();
+  await expect(trigger).toBeFocused();
+  await captureScreenshot(page, testInfo, "narrow-hierarchy-composer");
 });

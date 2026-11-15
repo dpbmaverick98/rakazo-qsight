@@ -2,7 +2,7 @@ import { t } from "@lingui/core/macro";
 import type { RpcInput, RpcOutput, RpcPath } from "@rakazo/contracts";
 import type { DataTag, QueryFunction, QueryKey } from "@tanstack/react-query";
 import { QueryClient, useMutation } from "@tanstack/react-query";
-import type { RpcArgs } from "./api";
+import type { ApiRequestContext, RpcArgs } from "./api";
 import { captureApiRequestContext, currentApiBase, rpc, selectedSpaceId } from "./api";
 import { currentSessionGeneration } from "./session";
 
@@ -122,4 +122,22 @@ export function clearQueries(): void {
 export function removeSpaceQueries(spaceIds: readonly string[]): void {
   const scopes = new Set(spaceIds.map((id) => `space:${id}`));
   queryClient.removeQueries({ predicate: (query) => scopes.has(String(query.queryKey[2])) });
+}
+
+/** A Space-scoped HTTP read with the same cache and session boundary as RPC reads. */
+export function spaceHttpQuery<T>(
+  key: string,
+  read: (context: ApiRequestContext, signal: AbortSignal) => Promise<T>,
+  spaceId?: string,
+) {
+  const scope = spaceScope(spaceId);
+  const queryKey = [...scope, key] as unknown as DataTag<QueryKey, T, Error>;
+  const queryFn: QueryFunction<T> = async ({ signal }) => {
+    const unchanged = () => spaceScope(spaceId).join("\n") === scope.join("\n");
+    if (!unchanged()) throw new Error(t`Something went wrong. Try again.`);
+    const answer = await read(await captureApiRequestContext(spaceId), signal);
+    if (!unchanged()) throw new Error(t`Something went wrong. Try again.`);
+    return answer;
+  };
+  return { queryKey, queryFn };
 }

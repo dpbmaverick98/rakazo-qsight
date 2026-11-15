@@ -7,12 +7,19 @@ name: Compose
       RAKAZO_ACTIVE_EMAIL: ${RAKAZO_SCREENSHOT_EMAIL}
 - openLink: "rakazo:///new-space"
 - extendedWaitUntil:
-    visible: "Customer support|Create client space"
+    visible: "Add client"
     timeout: 15000
 - waitForAnimationToEnd:
     timeout: 3000
 - takeScreenshot: 02-new-space
 - tapOn: "Cancel"
+- openLink: "rakazo:///client-setup"
+- extendedWaitUntil:
+    visible: "Archived chats"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 02a-continue-setup
 - openLink: "rakazo:///new-bot"
 - extendedWaitUntil:
     visible: "Name your Bot"

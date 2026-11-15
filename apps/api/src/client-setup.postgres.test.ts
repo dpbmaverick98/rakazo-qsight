@@ -120,6 +120,29 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
         { revision: 1, client: null },
       ),
     ).rejects.toMatchObject({ message: "project_managers_exist" });
+    // Archiving preserves identity and history; retry never creates a replacement PM.
+    const original = await system.bot.findUniqueOrThrow({
+      where: { id: missing.botId },
+      include: { thread: true },
+    });
+    await system.bot.update({ where: { id: missing.botId }, data: { archivedAt: new Date() } });
+    await expect(setupClient(db.prisma, actor, source, client.name)).rejects.toMatchObject({
+      message: "setup_archived",
+    });
+    expect(await system.bot.count({ where: { spaceId: missing.spaceId } })).toBe(1);
+    expect(await system.bot.findUnique({ where: { id: missing.botId } })).toMatchObject({
+      spawnKey: original.spawnKey,
+    });
+    expect(
+      (
+        await system.bot.findUniqueOrThrow({
+          where: { id: missing.botId },
+          include: { thread: true },
+        })
+      ).thread?.id,
+    ).toBe(original.thread?.id);
+    await system.bot.update({ where: { id: missing.botId }, data: { archivedAt: null } });
+    expect(await setupClient(db.prisma, actor, source, client.name)).toEqual(ready);
     // A completed promotion must not let a setup retry restore broad owner tools.
     await system.bot.update({
       where: { id: missing.botId },
@@ -131,6 +154,11 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
     });
     expect(await system.bot.count({ where: { spaceId: missing.spaceId } })).toBe(1);
     expect(await system.botMcpServer.count({ where: { botId: missing.botId } })).toBe(0);
+    await system.bot.update({ where: { id: missing.botId }, data: { archivedAt: new Date() } });
+    await expect(setupClient(db.prisma, actor, source, client.name)).rejects.toMatchObject({
+      message: "setup_finished",
+    });
+    expect(await system.bot.count({ where: { spaceId: missing.spaceId } })).toBe(1);
   });
 
   it("rejects inactive bindings and member-only access even for deployment owners", async () => {
