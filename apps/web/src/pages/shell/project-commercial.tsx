@@ -1,21 +1,25 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import type { Bot } from "@rakazo/contracts";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { withSpaceHeaders } from "../../lib/rpc";
-import { HierarchyHandoff } from "./hierarchy-handoff";
-import { createProjectManagerRequest } from "./hierarchy-handoff.prompt";
+import { ProjectManagerAction } from "./project-manager";
 
 export function CommercialSelection({
   userId,
   spaceId,
   projectId,
+  client,
+  onOpenBot,
   back,
 }: {
   userId: string | null;
   spaceId: string | null;
   projectId: string;
+  client: string;
+  onOpenBot?: (bot: Bot) => void;
   back: () => void;
 }) {
   const query = useQuery({
@@ -41,6 +45,8 @@ export function CommercialSelection({
   });
   return (
     <CommercialPanel
+      onOpenBot={onOpenBot}
+      managerScope={userId && spaceId ? { userId, spaceId, client } : undefined}
       data={query.isFetching || query.isError ? undefined : query.data}
       loading={query.isFetching}
       error={query.isError}
@@ -54,12 +60,16 @@ export function CommercialSelection({
 
 export function CommercialPanel({
   data,
+  managerScope,
+  onOpenBot,
   loading,
   error,
   retry,
   back,
 }: {
   data?: ProjectCommercial;
+  onOpenBot?: (bot: Bot) => void;
+  managerScope?: { userId: string; spaceId: string; client: string };
   loading: boolean;
   error: boolean;
   retry: () => void;
@@ -99,9 +109,15 @@ export function CommercialPanel({
       {data ? (
         <>
           <SectionHeading className="break-words">{data.project.name}</SectionHeading>
-          <HierarchyHandoff text={createProjectManagerRequest(data.project.name)}>
-            <Trans>Create project manager</Trans>
-          </HierarchyHandoff>
+          {managerScope ? (
+            <ProjectManagerAction
+              key={`${managerScope.userId}:${managerScope.spaceId}:${data.project.id}`}
+              onOpenBot={onOpenBot}
+              project={data.project}
+              client={managerScope.client}
+              spaceId={managerScope.spaceId}
+            />
+          ) : null}
           <p className="text-body text-muted-foreground">
             <Trans>Read-only</Trans>
             {data.project.currency ? <span className="ms-2">{data.project.currency}</span> : null}

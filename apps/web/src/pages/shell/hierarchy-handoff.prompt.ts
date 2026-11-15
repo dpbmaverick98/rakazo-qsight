@@ -3,6 +3,3 @@ export const addBuildingRequest = (client: string) =>
 
 export const addProjectRequest = (building: string) =>
   `Add a project under ${building}. Ask me for the project name and show the record before creating.`;
-
-export const createProjectManagerRequest = (project: string) =>
-  `Create a project manager agent for ${project}. Give it this project's context and ask before creating anything.`;

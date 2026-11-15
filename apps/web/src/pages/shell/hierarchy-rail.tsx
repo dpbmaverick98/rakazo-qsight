@@ -1,4 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import type { Bot } from "@rakazo/contracts";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
@@ -37,7 +38,9 @@ export function HierarchyRail({
   retry,
   collapse,
   scope,
+  onOpenBot,
 }: {
+  onOpenBot?: (bot: Bot) => void;
   scope?: { userId: string | null; spaceId: string | null };
   data?: Hierarchy | null;
   loading: boolean;
@@ -172,7 +175,9 @@ export function HierarchyRail({
         <CommercialSelection
           key={selectedProject.id}
           {...scope}
+          onOpenBot={onOpenBot}
           projectId={selectedProject.id}
+          client={data!.client.name}
           back={() => {
             setSelected(null);
             selectionTrigger.current?.focus();
