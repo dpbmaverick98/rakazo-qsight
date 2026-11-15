@@ -95,7 +95,7 @@ export function BotCreatePicker({
                 <Lock size={16} strokeWidth={1.8} aria-hidden="true" />
               </span>
               <span className="min-w-0 flex-1 truncate">
-                <Trans>New private space</Trans>
+                <Trans>New client space</Trans>
               </span>
               <PickerInfo
                 testId="picker-info-space"

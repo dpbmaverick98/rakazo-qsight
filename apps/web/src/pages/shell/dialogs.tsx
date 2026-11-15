@@ -145,11 +145,11 @@ export function NewSpaceDialog({
               className="text-muted-foreground"
               aria-hidden="true"
             />
-            <Trans>New space</Trans>
+            <Trans>New client space</Trans>
           </DialogTitle>
         </DialogHeader>
         <label htmlFor={nameId} className="block text-body text-foreground/75">
-          <Trans>Name</Trans>
+          <Trans>Client name</Trans>
           <Input
             id={nameId}
             maxLength={60}
@@ -162,7 +162,7 @@ export function NewSpaceDialog({
               }
               if (event.key === "Enter") create();
             }}
-            placeholder={t`Customer support`}
+            placeholder={t`Example Client`}
             className="mt-2"
           />
         </label>
@@ -172,7 +172,7 @@ export function NewSpaceDialog({
             <Trans>Cancel</Trans>
           </Button>
           <Button disabled={saving || !name.trim()} onClick={create}>
-            {saving ? <Trans>Creating…</Trans> : <Trans>Create space</Trans>}
+            {saving ? <Trans>Creating…</Trans> : <Trans>Create client space</Trans>}
           </Button>
         </DialogFooter>
       </DialogContent>

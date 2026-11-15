@@ -4,6 +4,8 @@ import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { HierarchyHandoff } from "./hierarchy-handoff";
+import { createProjectManagerRequest } from "./hierarchy-handoff.prompt";
 
 export function CommercialSelection({
   userId,
@@ -97,6 +99,9 @@ export function CommercialPanel({
       {data ? (
         <>
           <SectionHeading className="break-words">{data.project.name}</SectionHeading>
+          <HierarchyHandoff text={createProjectManagerRequest(data.project.name)}>
+            <Trans>Create project manager</Trans>
+          </HierarchyHandoff>
           <p className="text-body text-muted-foreground">
             <Trans>Read-only</Trans>
             {data.project.currency ? <span className="ms-2">{data.project.currency}</span> : null}

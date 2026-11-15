@@ -5,6 +5,8 @@ import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useRef, useState } from "react";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { HierarchyHandoff } from "./hierarchy-handoff";
+import { addBuildingRequest, addProjectRequest } from "./hierarchy-handoff.prompt";
 import { CommercialSelection } from "./project-commercial";
 
 const BuildingMap = lazy(() => import("./building-map"));
@@ -66,6 +68,11 @@ export function HierarchyRail({
         <SectionHeading className="min-w-0 break-words">
           {data?.client.name ?? t`Hierarchy`}
         </SectionHeading>
+        {data ? (
+          <HierarchyHandoff text={addBuildingRequest(data.client.name)}>
+            <Trans>Add building</Trans>
+          </HierarchyHandoff>
+        ) : null}
         <Button variant="ghost" size="sm" onClick={collapse} aria-label={t`Collapse hierarchy`}>
           <Trans>Hide</Trans>
         </Button>
@@ -126,6 +133,11 @@ export function HierarchyRail({
                     summary={building.name}
                     summaryClassName="min-h-10 w-full justify-between break-words text-body"
                   >
+                    {open.has(building.id) ? (
+                      <HierarchyHandoff text={addProjectRequest(building.name)}>
+                        <Trans>Add project</Trans>
+                      </HierarchyHandoff>
+                    ) : null}
                     {building.projects.length === 0 ? (
                       <p className="ps-4 text-body text-muted-foreground">
                         <Trans>No projects</Trans>
