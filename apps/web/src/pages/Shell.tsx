@@ -1238,6 +1238,8 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
+        artifactStage={rightPanel.artifactStage}
+        onSelectArtifact={rightPanel.selectArtifact}
         rpc={rpc}
         panel={panel}
         setPanel={setPanel}

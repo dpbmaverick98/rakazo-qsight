@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   AgentSkillCatalogEntry,
+  ArtifactStageState,
   Bot,
   ComputerStatus,
   Group,
@@ -18,6 +19,7 @@ import { ResizableSidePanel } from "../ResizableSidePanel";
 import { RoutineEditor } from "../RoutineEditor";
 import type { SettingsSection } from "../shell-overlay";
 import { AgentImportForm } from "./agent-import";
+import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
 import { firstThreadRoute } from "./use-shell-navigation";
@@ -25,6 +27,8 @@ import { firstThreadRoute } from "./use-shell-navigation";
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
 export function ShellSidePanel({
   rpc,
+  artifactStage,
+  onSelectArtifact,
   panel,
   setPanel,
   active,
@@ -51,6 +55,8 @@ export function ShellSidePanel({
   onClearBot,
   discardChatAttachments,
 }: {
+  artifactStage: ArtifactStageState;
+  onSelectArtifact: (id: string) => void;
   rpc: ReturnType<typeof createSpaceRpc>;
   panel: Panel;
   setPanel: (panel: Panel) => void;
@@ -100,7 +106,15 @@ export function ShellSidePanel({
     <ResizableSidePanel open={open} panel={panel ?? "closed"}>
       {open ? (
         <div className="rk-scroll h-full w-full overflow-y-auto px-5 py-[17px]">
-          {panel !== "routine" &&
+          {panel === "artifact-stage" ? (
+            <ArtifactStage
+              state={artifactStage}
+              onSelect={onSelectArtifact}
+              onClose={() => setPanel(null)}
+            />
+          ) : null}
+          {panel !== "artifact-stage" &&
+          panel !== "routine" &&
           panel !== "create-group" &&
           panel !== "group-settings" &&
           panel !== "import-agent" ? (
