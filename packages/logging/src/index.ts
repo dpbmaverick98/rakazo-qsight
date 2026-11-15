@@ -1,4 +1,11 @@
 export { bestEffort } from "./best-effort.js";
+export {
+  clientSetupCorrelationHeaders,
+  clientSetupDebug,
+  clientSetupStage,
+  type SetupFields,
+  type SetupStage,
+} from "./client-setup-debug.js";
 export { createConsoleSink } from "./console-sink.js";
 export {
   enrichLogContext,

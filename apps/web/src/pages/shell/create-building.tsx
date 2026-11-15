@@ -7,6 +7,7 @@ import {
 } from "@rakazo/contracts/hierarchy";
 import { Button, Input } from "@rakazo/ui-web";
 import { useId, useRef, useState } from "react";
+import { clientSetupDebug, clientSetupFetch } from "../../lib/client-setup-debug";
 import { withSpaceHeaders } from "../../lib/rpc";
 
 export function CreateBuilding({
@@ -38,21 +39,36 @@ export function CreateBuilding({
     nickname: string;
   } | null>(null);
   async function post(path: string, data: unknown) {
-    const response = await fetch(`/api/agent-plane/${path}`, {
-      method: "POST",
-      credentials: "include",
-      headers: withSpaceHeaders(
-        {
-          "Content-Type": "application/json",
-          "Idempotency-Key": operationId.current,
-          ...(bindingRevision ? { "x-rakazo-binding-revision": String(bindingRevision) } : {}),
-        },
-        spaceId,
-      ),
-      body: JSON.stringify(data),
-    });
+    const response = await clientSetupFetch(
+      path === "buildings" ? "add_building" : "location",
+      `/api/agent-plane/${path}`,
+      {
+        method: "POST",
+        credentials: "include",
+        headers: withSpaceHeaders(
+          {
+            "Content-Type": "application/json",
+            "Idempotency-Key": operationId.current,
+            ...(bindingRevision ? { "x-rakazo-binding-revision": String(bindingRevision) } : {}),
+          },
+          spaceId,
+        ),
+        body: JSON.stringify(data),
+      },
+    );
     if (!response.ok) throw new Error("Request unavailable");
-    return response.json();
+    const result: unknown = await response.json();
+    if (path === "buildings") {
+      const building = CreatedBuildingSchema.parse(result);
+      clientSetupDebug("add_building", {
+        buildingId: building.id,
+        spaceId,
+        requestId: response.headers.get("x-request-id"),
+        httpStatus: response.status,
+        status: "parsed",
+      });
+    }
+    return result;
   }
   function close() {
     operationId.current = crypto.randomUUID();

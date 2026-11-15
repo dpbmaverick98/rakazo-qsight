@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { CreatedProjectSchema } from "@rakazo/contracts/hierarchy";
 import { Button, Input } from "@rakazo/ui-web";
 import { useId, useRef, useState } from "react";
+import { clientSetupDebug, clientSetupFetch } from "../../lib/client-setup-debug";
 import { withSpaceHeaders } from "../../lib/rpc";
 
 export function CreateProject({
@@ -54,7 +55,7 @@ export function CreateProject({
             setLoading(true);
             setError("");
             try {
-              const response = await fetch("/api/agent-plane/projects", {
+              const response = await clientSetupFetch("add_project", "/api/agent-plane/projects", {
                 method: "POST",
                 credentials: "include",
                 headers: withSpaceHeaders(
@@ -74,7 +75,14 @@ export function CreateProject({
                 return;
               }
               if (!response.ok) throw new Error("Creation failed");
-              CreatedProjectSchema.parse(await response.json());
+              const created = CreatedProjectSchema.parse(await response.json());
+              clientSetupDebug("add_project", {
+                projectId: created.id,
+                spaceId,
+                requestId: response.headers.get("x-request-id"),
+                httpStatus: response.status,
+                status: "parsed",
+              });
               refresh();
               close();
             } catch {

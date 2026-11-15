@@ -7,6 +7,7 @@ import { displayIdentityEvent, displayIdentityResult } from "@rakazo/core";
 import { clientCorrelationHeaders, responseCorrelation } from "@rakazo/logging/monitoring";
 import { authClient } from "./auth";
 import { CLIENT_BUILD } from "./client-build";
+import { clientSetupDebug, clientSetupFetch } from "./client-setup-debug";
 import { i18n } from "./i18n";
 import { identityLabels } from "./identity-display";
 import { reportClientError } from "./monitoring";
@@ -18,6 +19,7 @@ type RpcClientContext = {
   spaceId?: string | null;
   /** Finish the call even if the page is closing. */
   keepalive?: boolean;
+  setupDebug?: { requestId?: string | null; httpStatus?: number };
 };
 
 export function selectedSpaceId(): string | null {
@@ -92,7 +94,11 @@ const link = new RPCLink<RpcClientContext>({
     for (const [key, value] of Object.entries(correlation)) headers.set(key, value);
     let response: Response;
     try {
-      response = await fetch(request, {
+      const send = new URL(request.url).pathname.endsWith("/mcp/servers/provisionProjectManager")
+        ? (input: RequestInfo | URL, init: RequestInit) =>
+            clientSetupFetch("finish_setup", input, init)
+        : fetch;
+      response = await send(request, {
         headers,
         credentials: "include",
         keepalive: options.context.keepalive,
@@ -103,6 +109,11 @@ const link = new RPCLink<RpcClientContext>({
       if (!options.signal?.aborted)
         reportClientError(error, "rpc.transport", responseCorrelation(new Headers(correlation)));
       throw error;
+    }
+    if (options.context.setupDebug) {
+      options.context.setupDebug.requestId =
+        response.headers.get("x-request-id") ?? correlation["x-request-id"];
+      options.context.setupDebug.httpStatus = response.status;
     }
     // Server exceptions are reported by the API; do not report every HTTP failure twice.
     recheckSessionOnUnauthorized(response.status);
@@ -161,7 +172,25 @@ export type RpcClient = ContractRouterClient<AppContract, RpcClientContext>;
 const displayLink = {
   call: async (...args: Parameters<typeof link.call>) => {
     const [path, input, options] = args;
-    const result = await link.call(path, input, options);
+    const setupDebug = path.join("/") === "mcp/servers/provisionProjectManager" ? {} : undefined;
+    const result = await link.call(
+      path,
+      input,
+      setupDebug ? { ...options, context: { ...options.context, setupDebug } } : options,
+    );
+    if (
+      path.join("/") === "mcp/servers/provisionProjectManager" &&
+      result &&
+      typeof result === "object"
+    ) {
+      const value = result as { bot?: { id?: string }; server?: { id?: string } };
+      clientSetupDebug("finish_setup", {
+        ...setupDebug,
+        botId: value.bot?.id,
+        serverId: value.server?.id,
+        status: "parsed",
+      });
+    }
     if (path.join("/") === "threads/subscribe") {
       return (async function* () {
         for await (const event of result as AsyncIterable<ProductEvent>) {
