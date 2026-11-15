@@ -196,10 +196,14 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       });
       if (!response.ok) throw new Error("Building creation unavailable");
       cache.clear();
-      const building = CreatedBuildingSchema.extend({ id: Id }).parse(
+      const building = CreatedBuildingSchema.extend({ id: Id, client_id: Id }).parse(
         await readBoundedJsonResponse(response, 32_000, signal),
       );
-      if (building.address !== input.address || building.name !== input.nickname)
+      if (
+        building.client_id !== client_id ||
+        building.address !== input.address ||
+        building.name !== input.nickname
+      )
         throw new Error("Building creation mismatch");
       building.url = new URL(`/buildings/${encodeURIComponent(building.id)}`, origin).href;
       return building;

@@ -385,6 +385,7 @@ it("searches, proves the selected candidate, and replays the exact confirmed bui
   };
   const building = {
     id: 8,
+    client_id: "7",
     name: "Site",
     address: candidate.address,
     url: "https://untrusted.example.test",
@@ -421,7 +422,7 @@ it("searches, proves the selected candidate, and replays the exact confirmed bui
     fetch.mock.calls[3]![1].headers["Idempotency-Key"],
   );
   expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({ client_id: "7", ...input });
-  await source.createBuilding("other", input);
+  await expect(source.createBuilding("other", input)).rejects.toThrow("Building creation mismatch");
   expect(fetch.mock.calls[4]![1].headers["Idempotency-Key"]).not.toBe(
     fetch.mock.calls[3]![1].headers["Idempotency-Key"],
   );
