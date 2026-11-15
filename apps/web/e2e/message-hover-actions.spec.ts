@@ -366,7 +366,7 @@ test("a message with an attachment centers hover actions on its text bubble", as
   await completeOnboarding(page);
   const composer = page.getByRole("combobox", { name: /^Message/ });
   await expect(composer).toBeVisible();
-  await page.locator('input[type="file"]').setInputFiles({
+  await page.locator('input[type="file"]:not([webkitdirectory])').setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("meeting notes"),

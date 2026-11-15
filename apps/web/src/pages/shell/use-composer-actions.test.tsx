@@ -552,3 +552,47 @@ it("clears a quoted reply re-picked as a fresh object after a thread refresh", a
   expect(latest.replyTarget).toBeNull();
   expect(latest.replyQuote).toBeNull();
 });
+
+it("uploads a folder DOCX and mixed files with their relative names", async () => {
+  const doc = new File(["document bytes"], "proposal.docx", { type: "" });
+  Object.defineProperty(doc, "webkitRelativePath", { value: "claims/proposal.docx" });
+  const files = [
+    doc,
+    new File(["pdf"], "invoice.pdf", { type: "application/pdf" }),
+    new File(["notes"], "notes.txt", { type: "text/plain" }),
+  ];
+  rpc.artifacts.create.mockResolvedValue({ id: "artifact-1" });
+  act(() => void latest.onAttachmentPick(files));
+  expect(latest.activePendingAttachments).toHaveLength(3);
+  await act(async () => void (await latest.sendMessage("Review", [], "folder-send")));
+  expect(rpc.artifacts.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: "claims/proposal.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }),
+  );
+  expect(rpc.threads.send).toHaveBeenCalledWith(
+    expect.objectContaining({ artifactIds: ["artifact-1", "artifact-1", "artifact-1"] }),
+  );
+});
+
+it("keeps attachments after upload failure without sending a partial message", async () => {
+  rpc.artifacts.create.mockRejectedValue(new Error("Upload unavailable"));
+  act(() => void latest.onAttachmentPick([new File(["doc"], "invoice.docx")]));
+  await act(async () =>
+    expect(await latest.sendMessage("Review", [], "failed-upload")).toBe(false),
+  );
+  expect(latest.activePendingAttachments).toHaveLength(1);
+  expect(rpc.threads.send).not.toHaveBeenCalled();
+});
+
+it("rejects oversized documents and unsafe relative paths", () => {
+  me = { maxUploadSizeBytes: 2 } as Me;
+  act(() => root.render(<Harness />));
+  const unsafe = new File(["a"], "safe.docx");
+  Object.defineProperty(unsafe, "webkitRelativePath", { value: "../safe.docx" });
+  act(() => void latest.onAttachmentPick([new File(["large"], "big.docx"), unsafe]));
+  expect(latest.activePendingAttachments).toHaveLength(0);
+  expect(latest.attachmentNotice).toContain("over");
+  expect(latest.attachmentNotice).toContain("invalid path");
+});

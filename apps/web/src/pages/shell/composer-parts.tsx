@@ -7,6 +7,7 @@ import { ArrowUp, Box, Paperclip, Settings, Square, X } from "lucide-react";
 import type { CSSProperties, RefObject } from "react";
 import type { useHoldToTalk } from "../../components/composer/HoldToTalk";
 import { HoldToTalkControls } from "../../components/composer/HoldToTalk";
+import { attachmentFileName } from "../../lib/pending-attachments";
 import type { PendingAttachment } from "./chat-shared";
 import { MentionOptionIcon, slashActionLabel } from "./composer-mentions";
 
@@ -30,18 +31,22 @@ export function PendingAttachmentChips({
           {attachment.previewUrl ? (
             <img
               src={attachment.previewUrl}
-              alt={attachment.file.name}
+              alt={attachmentFileName(attachment.file)}
               className="h-8 w-8 rounded object-cover"
             />
           ) : (
             <Paperclip size={14} strokeWidth={1.8} />
           )}
-          <span className="max-w-[180px] truncate" dir="auto">
-            {attachment.file.name}
+          <span
+            className="max-w-[180px] truncate"
+            dir="auto"
+            title={attachmentFileName(attachment.file)}
+          >
+            {attachmentFileName(attachment.file)}
           </span>
           <button
             type="button"
-            aria-label={t`Remove ${attachment.file.name}`}
+            aria-label={t`Remove ${attachmentFileName(attachment.file)}`}
             onClick={() => onRemove(attachment)}
             className="text-muted-foreground hover:text-foreground"
           >

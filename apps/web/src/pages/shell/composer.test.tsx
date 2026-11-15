@@ -2515,7 +2515,7 @@ it("shows an image confirmation as a warning with file and model actions", () =>
   ).toBe(false);
 });
 
-it("accepts file drops in transparent padding only during file drags", () => {
+it("accepts file drops in transparent padding only during file drags", async () => {
   const onAttachmentPick = vi.fn(() => true);
   renderComposer(async () => true, { onAttachmentPick });
   const fieldset = container!.querySelector("fieldset")!;
@@ -2532,7 +2532,7 @@ it("accepts file drops in transparent padding only during file drags", () => {
   expect(fieldset.classList.contains("pointer-events-auto")).toBe(true);
   dispatchDrag(fieldset, "dragover", dataTransfer);
   expect(fieldset.dataset.dragging).toBe("files");
-  dispatchDrag(fieldset, "drop", dataTransfer);
+  await act(async () => dispatchDrag(fieldset, "drop", dataTransfer));
   expect(onAttachmentPick).toHaveBeenCalledExactlyOnceWith(files);
   expect(fieldset.classList.contains("pointer-events-none")).toBe(true);
   expect(fieldset.dataset.dragging).toBeUndefined();
@@ -2827,4 +2827,17 @@ it("preserves mixed file and text paste without offering to attach the text agai
   expect(onAttachmentPick).toHaveBeenCalledWith([file]);
   expect(textarea.value).toBe(text);
   expect(container!.querySelector('[aria-label="Large paste"]')).toBeNull();
+});
+
+it("offers a recursive folder picker and preserves selected paths", () => {
+  const onAttachmentPick = vi.fn(() => true);
+  renderComposer(async () => true, { onAttachmentPick });
+  const picker = container!.querySelector<HTMLInputElement>("input[webkitdirectory]")!;
+  expect(picker.multiple).toBe(true);
+  const file = new File(["doc"], "proposal.docx");
+  Object.defineProperty(file, "webkitRelativePath", { value: "claims/proposal.docx" });
+  Object.defineProperty(picker, "files", { value: [file] });
+  act(() => picker.dispatchEvent(new Event("change", { bubbles: true })));
+  expect(onAttachmentPick).toHaveBeenCalledWith([file]);
+  expect(file.webkitRelativePath).toBe("claims/proposal.docx");
 });

@@ -1,5 +1,9 @@
 import { Trans, useLingui } from "@lingui/react/macro";
-import type { LocationCandidates, LocationProof } from "@rakazo/contracts/hierarchy";
+import type {
+  CreatedBuilding,
+  LocationCandidates,
+  LocationProof,
+} from "@rakazo/contracts/hierarchy";
 import {
   CreatedBuildingSchema,
   LocationCandidatesSchema,
@@ -14,17 +18,23 @@ export function CreateBuilding({
   spaceId,
   refresh,
   bindingRevision,
+  initiallyOpen = false,
+  onCreated,
+  onBusyChange,
 }: {
   spaceId: string | null;
   refresh: () => void;
   bindingRevision?: number;
+  initiallyOpen?: boolean;
+  onBusyChange?: (busy: boolean) => void;
+  onCreated?: (building: CreatedBuilding) => void;
 }) {
   const { t } = useLingui();
   const id = useId();
   const operationId = useRef(crypto.randomUUID());
   const trigger = useRef<HTMLButtonElement>(null);
   const busy = useRef(false);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen);
   const [query, setQuery] = useState("");
   const [nickname, setNickname] = useState("");
   const [candidates, setCandidates] = useState<LocationCandidates | null>(null);
@@ -84,16 +94,18 @@ export function CreateBuilding({
   }
   return (
     <>
-      <Button
-        ref={trigger}
-        variant="ghost"
-        size="sm"
-        disabled={!spaceId}
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-      >
-        <Trans>Add building</Trans>
-      </Button>
+      {!initiallyOpen ? (
+        <Button
+          ref={trigger}
+          variant="ghost"
+          size="sm"
+          disabled={!spaceId}
+          aria-expanded={open}
+          onClick={() => setOpen(true)}
+        >
+          <Trans>Add building</Trans>
+        </Button>
+      ) : null}
       {open ? (
         <form
           className="flex min-w-0 flex-col gap-2 py-2"
@@ -104,6 +116,7 @@ export function CreateBuilding({
             if (busy.current || !spaceId) return;
             busy.current = true;
             setPending(true);
+            onBusyChange?.(true);
             setError("");
             try {
               if (proof) {
@@ -112,9 +125,12 @@ export function CreateBuilding({
                   verification_token: proof.verification_token,
                   nickname: nickname.trim(),
                 };
-                CreatedBuildingSchema.parse(await post("buildings", confirmed.current));
+                const building = CreatedBuildingSchema.parse(
+                  await post("buildings", confirmed.current),
+                );
                 refresh();
                 close();
+                onCreated?.(building);
               } else if (candidates && choice !== null) {
                 const candidate = candidates.items[choice];
                 if (!candidate?.selectable) return;
@@ -138,6 +154,7 @@ export function CreateBuilding({
             } finally {
               busy.current = false;
               setPending(false);
+              onBusyChange?.(false);
             }
           }}
         >
@@ -229,12 +246,14 @@ export function CreateBuilding({
                 : proof
                   ? t`Confirm building`
                   : candidates
-                    ? t`Confirm location`
+                    ? t`Use location`
                     : t`Search`}
             </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={close}>
-              <Trans>Cancel</Trans>
-            </Button>
+            {!initiallyOpen ? (
+              <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={close}>
+                <Trans>Cancel</Trans>
+              </Button>
+            ) : null}
           </div>
         </form>
       ) : null}

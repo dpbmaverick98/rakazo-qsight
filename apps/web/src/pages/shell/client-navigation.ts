@@ -2,7 +2,7 @@ import { t } from "@lingui/core/macro";
 import type { Space } from "@rakazo/contracts";
 import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
 import { ClientNavigationSchema } from "@rakazo/contracts/hierarchy";
-import { useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { withSpaceHeaders } from "../../lib/rpc";
 import type { sidebarGroupsForSpaces } from "./space-sidebar";
 
@@ -16,29 +16,31 @@ export type NavigationGroup = Groups[number] & {
   forceOpen?: boolean;
 };
 
-export function useClientNavigation(userId: string | null, spaceId: string | null) {
-  return useQuery({
-    queryKey: ["client-navigation", userId, spaceId],
-    enabled: !!userId && !!spaceId,
-    retry: false,
-    refetchOnWindowFocus: true,
-    queryFn: async ({ signal }) => {
-      const response = await fetch("/api/agent-plane/navigation", {
-        headers: withSpaceHeaders(undefined, spaceId),
-        credentials: "include",
-        signal,
-      });
-      if (response.status === 204) return null;
-      if (!response.ok) {
-        const body = await response.json();
-        if (response.status === 409 && ["personal", "binding_missing"].includes(body.status))
-          return null;
-        throw new Error("Navigation unavailable");
-      }
-      const navigation = ClientNavigationSchema.parse(await response.json());
-      if (navigation.spaceId !== spaceId) throw new Error("Navigation scope changed");
-      return navigation;
-    },
+export function useClientNavigations(userId: string | null, spaceIds: string[]) {
+  return useQueries({
+    queries: spaceIds.map((spaceId) => ({
+      queryKey: ["client-navigation", userId, spaceId],
+      enabled: !!userId && !!spaceId,
+      retry: false,
+      refetchOnWindowFocus: true,
+      queryFn: async ({ signal }) => {
+        const response = await fetch("/api/agent-plane/navigation", {
+          headers: withSpaceHeaders(undefined, spaceId),
+          credentials: "include",
+          signal,
+        });
+        if (response.status === 204) return null;
+        if (!response.ok) {
+          const body = await response.json();
+          if (response.status === 409 && ["personal", "binding_missing"].includes(body.status))
+            return null;
+          throw new Error("Navigation unavailable");
+        }
+        const navigation = ClientNavigationSchema.parse(await response.json());
+        if (navigation.spaceId !== spaceId) throw new Error("Navigation scope changed");
+        return navigation;
+      },
+    })),
   });
 }
 
@@ -98,31 +100,46 @@ export function clientNavigationGroups(
   for (const building of navigation.buildings) {
     const key = `${prefix}:building:${building.id}`;
     const buildingMatch = rootMatch || matches(building.name);
-    const children = building.projects
-      .map((project) =>
-        make(
-          `${prefix}:project:${project.id}`,
-          project.name,
-          [root, key],
-          selected(project.botIds, buildingMatch || matches(project.name)),
+    const visibleIds = new Set(
+      building.projects.flatMap((project) =>
+        selected(project.botIds, buildingMatch || matches(project.name)).map(
+          (item) => item.chat.id,
         ),
-      )
-      .filter(
-        (group) => !needle || buildingMatch || matches(group.title ?? "") || group.bots.length > 0,
-      );
-    if (!needle || buildingMatch || children.length)
-      result.push(make(key, building.name, [root], []), ...children);
+      ),
+    );
+    const bots = items.filter((item) => item.kind === "bot" && visibleIds.has(item.chat.id));
+    if (
+      !needle ||
+      buildingMatch ||
+      bots.length ||
+      building.projects.some((project) => matches(project.name))
+    )
+      result.push(make(key, building.name, [root], bots));
   }
   const unassigned = items
     .filter((item) => item.kind !== "bot" || !assigned.has(item.chat.id))
     .filter(
       (item) => !needle || rootMatch || matches(item.chat.name) || matches(item.chat.preview ?? ""),
     );
-  if (unassigned.length)
+  const remaining = new Set(unassigned.map((item) => `${item.kind}:${item.chat.id}`));
+  for (const group of own) {
+    const bots = group.bots.filter((item) => remaining.has(`${item.kind}:${item.chat.id}`));
+    if (!bots.length && !group.sectionId) continue;
     result.push({
-      ...make(`${prefix}:unassigned`, t`Unassigned`, [root], unassigned),
-      defaultCollapsed: true,
+      ...make(
+        `${prefix}:unassigned:${group.key}`,
+        group.sectionId
+          ? (group.subtitle ?? group.title ?? t`Unassigned`)
+          : group.key.endsWith("pinned")
+            ? t`Pinned`
+            : t`Unassigned`,
+        [root],
+        bots,
+      ),
+      sectionId: group.sectionId,
+      defaultCollapsed: !group.sectionId,
     });
+  }
   if (needle && result.length === 1 && !result[0]?.bots.length && !rootMatch)
     return groups.filter((group) => group.spaceId !== navigation.spaceId);
   const index = groups.findIndex((group) => group.spaceId === navigation.spaceId);
