@@ -77,6 +77,7 @@ export function ShellSidebar({
   setCreateBotOpen,
   chatMenu,
   roster,
+  hierarchySearch = false,
   archived,
   footerLogos,
   user,
@@ -108,6 +109,7 @@ export function ShellSidebar({
   setCreateBotOpen: (open: boolean) => void;
   chatMenu: ChatMenuState;
   roster: ReactNode;
+  hierarchySearch?: boolean;
   archived: ReactNode;
   footerLogos: Array<{ name: string; logo?: string | null }>;
   user: User | undefined;
@@ -260,14 +262,17 @@ export function ShellSidebar({
           className="rk-scroll scroll-fade-y scroll-fade-12 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 pb-2.5"
         >
           {showSpaceSearch && !mini ? (
-            <SpaceSearchResults
-              hits={searchHits}
-              loading={searchLoading}
-              error={searchError}
-              onRetry={retrySearch}
-              onSelect={(hit) => jumpToSearchHit(hit)}
-              chatMenu={chatMenu}
-            />
+            <>
+              {hierarchySearch ? roster : null}
+              <SpaceSearchResults
+                hits={searchHits}
+                loading={searchLoading}
+                error={searchError}
+                onRetry={retrySearch}
+                onSelect={(hit) => jumpToSearchHit(hit)}
+                chatMenu={chatMenu}
+              />
+            </>
           ) : activityMode && !mini ? (
             <ActivityList
               bots={bots}

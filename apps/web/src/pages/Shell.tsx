@@ -74,6 +74,7 @@ import { ChatContextMenu } from "./shell/chat-context-menu";
 import { ChatFindBar } from "./shell/chat-find-bar";
 import { ChatHeader } from "./shell/chat-header";
 import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
+import { clientNavigationGroups, useClientNavigation } from "./shell/client-navigation";
 import { Composer } from "./shell/composer";
 import { ComputerOverlay } from "./shell/computer-overlay";
 import { ComputerPanel } from "./shell/computer-panel";
@@ -462,6 +463,7 @@ function SpaceShell() {
       roster: {
         changed: () => {
           rosterSignals.changed();
+          void queryClient.invalidateQueries({ queryKey: ["client-navigation", userId] });
           void queryClient.invalidateQueries({
             queryKey: ["hierarchy", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
           });
@@ -584,15 +586,37 @@ function SpaceShell() {
           : [],
     [bootstrapMe, botSections, bots, groups, spaces],
   );
+  const clientNavigation = useClientNavigation(
+    userId ?? null,
+    shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+  );
   const sidebarGroups = useMemo(
     () =>
-      sidebarGroupsForSpaces(
-        sidebarSpaces,
+      clientNavigationGroups(
+        sidebarGroupsForSpaces(
+          sidebarSpaces,
+          miniSidebar ? "" : search.query,
+          { pinned: t`Pinned`, unassigned: t`Unassigned` },
+          snoozeNow,
+        ),
+        clientNavigation.isError ? null : clientNavigation.data,
         miniSidebar ? "" : search.query,
-        { pinned: t`Pinned`, unassigned: t`Unassigned` },
-        snoozeNow,
+        sidebarGroupsForSpaces(
+          sidebarSpaces,
+          "",
+          { pinned: t`Pinned`, unassigned: t`Unassigned` },
+          search.query ? Number.POSITIVE_INFINITY : snoozeNow,
+        ),
       ),
-    [sidebarSpaces, search.query, miniSidebar, t, snoozeNow],
+    [
+      sidebarSpaces,
+      search.query,
+      miniSidebar,
+      t,
+      snoozeNow,
+      clientNavigation.data,
+      clientNavigation.isError,
+    ],
   );
   // The Dock badge ignores the roster search box: a filter must not hide unread chats.
   const unreadChatCount = useMemo(
@@ -980,6 +1004,7 @@ function SpaceShell() {
         createMenuOpen={createMenuOpen}
         setCreateMenuOpen={setCreateMenuOpen}
         search={search}
+        hierarchySearch={!!clientNavigation.data && !clientNavigation.isError}
         bots={bots}
         groups={groups}
         collapsedSidebarSections={collapsedSidebarSections}

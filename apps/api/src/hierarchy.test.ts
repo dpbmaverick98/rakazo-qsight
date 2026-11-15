@@ -25,6 +25,13 @@ function setup() {
   const deps = {
     sessionActor: vi.fn(async () => actor as typeof actor | null),
     resolveBinding: vi.fn(async (_actor: typeof actor, _revision?: number) => binding),
+    navigationBots: vi.fn(async () => [
+      { id: "manager", spawnKey: "pm:roof" },
+      { id: "setup", spawnKey: "setup:client" },
+      { id: "foreign", spawnKey: "pm:other-project" },
+      { id: "foreign-setup", spawnKey: "setup:other-client" },
+      { id: "legacy", spawnKey: null },
+    ]),
     canCreateProject: vi.fn(async () => true),
     source: {
       read: vi.fn(async () => data),
@@ -47,7 +54,11 @@ function setup() {
   mountHierarchyRoute(app, deps);
   return { app, deps };
 }
-const paths = ["/api/agent-plane/hierarchy", "/api/agent-plane/projects/roof/commercial"];
+const paths = [
+  "/api/agent-plane/hierarchy",
+  "/api/agent-plane/projects/roof/commercial",
+  "/api/agent-plane/navigation",
+];
 it("requires a session before reading any external data", async () => {
   const { app, deps } = setup();
   deps.sessionActor.mockResolvedValue(null);
@@ -305,4 +316,53 @@ it("allows the upstream receipt to replay a project already visible in the hiera
     ).status,
   ).toBe(201);
   expect(deps.source.createProject).toHaveBeenCalledWith("building", "Roof", undefined);
+});
+
+it("projects only exact canonical assignments and setup for the bound client", async () => {
+  const { app, deps } = setup();
+  const response = await app.request("/api/agent-plane/navigation");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual({
+    spaceId: actor.spaceId,
+    bindingRevision: 1,
+    client: data.client,
+    setupBotIds: ["setup"],
+    buildings: [
+      {
+        id: "building",
+        name: "Building",
+        projects: [{ id: "roof", name: "Roof", botIds: ["manager"] }],
+      },
+    ],
+  });
+  expect(deps.navigationBots).toHaveBeenCalledWith(actor);
+  expect(deps.resolveBinding).toHaveBeenLastCalledWith(actor, 1);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+});
+it("rechecks membership and revision after navigation bots load", async () => {
+  const { app, deps } = setup();
+  deps.resolveBinding
+    .mockResolvedValueOnce(binding)
+    .mockResolvedValueOnce(binding)
+    .mockRejectedValueOnce(new ORPCError("FORBIDDEN", { message: "forbidden" }));
+  expect((await app.request("/api/agent-plane/navigation")).status).toBe(403);
+});
+it("navigation never provisions a replacement for an archived manager", async () => {
+  const { app, deps } = setup();
+  deps.navigationBots.mockResolvedValue([]);
+  const response = await app.request("/api/agent-plane/navigation");
+  expect((await response.json()).buildings[0].projects[0].botIds).toEqual([]);
+  deps.navigationBots.mockResolvedValue([{ id: "manager", spawnKey: "pm:roof" }]);
+  const restored = await app.request("/api/agent-plane/navigation");
+  expect((await restored.json()).buildings[0].projects[0].botIds).toEqual(["manager"]);
+});
+
+it("rejects ambiguous project ancestry instead of duplicating a PM", async () => {
+  const { app, deps } = setup();
+  deps.source.read.mockResolvedValue({
+    ...data,
+    buildings: [...data.buildings, { ...data.buildings[0]!, id: "second-building" }],
+  });
+  expect((await app.request("/api/agent-plane/navigation")).status).toBe(502);
+  expect(deps.navigationBots).not.toHaveBeenCalled();
 });

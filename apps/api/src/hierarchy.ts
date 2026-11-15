@@ -29,6 +29,7 @@ export function mountHierarchyRoute(
     trustedOrigin?: (origin: string) => boolean;
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
+    navigationBots?: (actor: Actor) => Promise<{ id: string; spawnKey: string | null }[]>;
     resolveBinding: (actor: Actor, revision?: number) => Promise<ClientBinding>;
     setupClient?: (actor: Actor, name: string) => Promise<ClientSetup>;
     bindingCommands?: {
@@ -263,6 +264,58 @@ export function mountHierarchyRoute(
       const commercial = await source.readCommercial(id);
       await deps.resolveBinding(actor, binding.revision);
       return c.json(commercial);
+    } catch (error) {
+      const result = failure(error);
+      return c.json(result.body, result.status);
+    }
+  });
+  app.get("/api/agent-plane/navigation", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.json({ status: "unauthorized" }, 401);
+    if (!deps.source || !deps.navigationBots) return c.body(null, 204);
+    try {
+      const revision = c.req.header("x-rakazo-binding-revision");
+      if (revision !== undefined && !/^[1-9][0-9]*$/.test(revision))
+        return c.json({ status: "invalid_request" }, 400);
+      const { hierarchy, binding } = await read(
+        actor,
+        revision === undefined ? undefined : Number(revision),
+      );
+      const buildingIds = new Set<string>();
+      const projectIds = new Set<string>();
+      for (const building of hierarchy.buildings) {
+        if (buildingIds.has(building.id))
+          throw new ORPCError("BAD_GATEWAY", { message: "invalid_hierarchy" });
+        buildingIds.add(building.id);
+        for (const project of building.projects) {
+          if (projectIds.has(project.id))
+            throw new ORPCError("BAD_GATEWAY", { message: "invalid_hierarchy" });
+          projectIds.add(project.id);
+        }
+      }
+      const bots = await deps.navigationBots(actor);
+      const bySpawnKey = new Map(bots.map((bot) => [bot.spawnKey, bot.id]));
+      const assigned = (key: string) => {
+        const id = bySpawnKey.get(key);
+        return id ? [id] : [];
+      };
+      await deps.resolveBinding(actor, binding.revision);
+      return c.json({
+        spaceId: actor.spaceId,
+        bindingRevision: binding.revision,
+        client: hierarchy.client,
+        setupBotIds: assigned(`setup:${binding.externalClientId}`),
+        buildings: hierarchy.buildings.map((building) => ({
+          id: building.id,
+          name: building.name,
+          projects: building.projects.map((project) => ({
+            id: project.id,
+            name: project.name,
+            botIds: assigned(`pm:${project.id}`),
+          })),
+        })),
+      });
     } catch (error) {
       const result = failure(error);
       return c.json(result.body, result.status);
