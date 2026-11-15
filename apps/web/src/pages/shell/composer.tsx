@@ -14,7 +14,7 @@ import {
   updateComposerMentionBindings,
 } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
-import { Box, Plus } from "lucide-react";
+import { Box } from "lucide-react";
 import type { ClipboardEvent, ComponentProps, RefObject } from "react";
 import {
   memo,
@@ -29,7 +29,6 @@ import { createPortal } from "react-dom";
 import { HoldToTalkStrip, useHoldToTalk } from "../../components/composer/HoldToTalk";
 import { recordMessageSent } from "../../components/GitHubStarPrompt";
 import type { ArtifactTarget } from "../../lib/artifact-open";
-import { attachmentPickerAccept } from "../../lib/attachment-picker-accept";
 import { useCallSession } from "../../lib/call-session";
 import {
   appendComposerDraftText,
@@ -52,6 +51,7 @@ import { isFilePaste } from "../../lib/pending-attachments";
 import { ComposerReplyPreview } from "./chat-context";
 import type { PendingAttachment } from "./chat-shared";
 import { previewMessageText } from "./chat-shared";
+import { ComposerAttachmentPicker } from "./composer-attachment-picker";
 import { ComposerError } from "./composer-error";
 import { ComposerChip, ComposerMentionHighlights } from "./composer-mentions";
 import {
@@ -67,7 +67,6 @@ import { useComposerTriggers } from "./use-composer-triggers";
 
 export const LARGE_PASTE_THRESHOLD = 4_000;
 
-const ATTACHMENT_ACCEPT = attachmentPickerAccept(navigator.userAgent);
 const COMPOSER_TEXT = "rk-scroll whitespace-pre-wrap break-words px-0.5 py-0.5 text-body-lg";
 const ComposerBody = memo(function Composer({
   artifactTarget,
@@ -402,7 +401,7 @@ const ComposerBody = memo(function Composer({
   // "reply" text, while an explicit cancel must keep "Reply cancelled".
   const replyAnnouncementKind = useRef<"reply" | "cancelled" | null>(null);
   const prevReplyTarget = useRef<ThreadMessage | null>(null);
-  const { draggingFiles, fileDragActive, dropHandlers } = useComposerFileDrop({
+  const { dropError, draggingFiles, fileDragActive, dropHandlers } = useComposerFileDrop({
     disabled,
     onDropFiles: pickAttachments,
   });
@@ -664,6 +663,9 @@ const ComposerBody = memo(function Composer({
           }}
         />
       ) : null}
+      {dropError ? (
+        <p role="alert">{t`Could not read dropped files. Try selecting them again.`}</p>
+      ) : null}
       {attachmentNotice ? (
         <div className="mb-3 rounded-[14px] border border-warning/40 bg-warning/10 px-4 py-2 text-body-sm text-warning">
           {attachmentNotice}
@@ -730,27 +732,13 @@ const ComposerBody = memo(function Composer({
               : "gap-x-3.5 py-[9px]"
         }`}
       >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ATTACHMENT_ACCEPT}
-          className="hidden"
-          onChange={(event) => pickAttachments(event.target.files)}
-        />
-        <Button
-          ref={attachButtonRef}
-          variant="ghost"
-          size="icon"
-          aria-label={t`Attach file`}
+        <ComposerAttachmentPicker
+          fileInputRef={fileInputRef}
+          attachButtonRef={attachButtonRef}
           disabled={disabled}
-          onClick={() => fileInputRef.current?.click()}
-          className={`col-start-1 size-8 shrink-0 rounded-full border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${
-            expanded ? "row-start-2" : ""
-          }`}
-        >
-          <Plus size={16} strokeWidth={2} />
-        </Button>
+          expanded={expanded}
+          onPick={pickAttachments}
+        />
         <div
           ref={composerFieldRef}
           data-testid="composer-field"

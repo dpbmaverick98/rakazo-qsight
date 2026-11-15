@@ -8,7 +8,12 @@ import type {
   ThreadMessage,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import { attachmentMaxBytes, attachmentMaxCount, attachmentSizeLabel } from "@rakazo/contracts";
+import {
+  attachmentMaxBytes,
+  attachmentMaxCount,
+  attachmentSizeLabel,
+  isAttachmentPath,
+} from "@rakazo/contracts";
 import type { ComposerMention } from "@rakazo/core";
 import {
   applyThreadSendReceipt,
@@ -25,6 +30,7 @@ import { setComposerUnsavedWork } from "../../lib/composer-draft";
 import { scheduleFocusPrompt } from "../../lib/focus-prompt";
 import type { PageSession } from "../../lib/pages";
 import {
+  attachmentFileName,
   readFileAsBase64,
   revokePendingAttachmentPreviews,
   usePendingAttachmentPreviewCleanup,
@@ -283,20 +289,24 @@ export function useComposerActions({
       const next: PendingAttachment[] = [];
       const skipped: string[] = [];
       for (const file of Array.from(files)) {
+        if (!isAttachmentPath(attachmentFileName(file))) {
+          skipped.push(t`${attachmentFileName(file)} (invalid path or over 255 characters)`);
+          continue;
+        }
         if (existing.length + next.length >= ATTACHMENT_MAX_COUNT) {
-          skipped.push(t`${file.name} (max ${ATTACHMENT_MAX_COUNT} attachments)`);
+          skipped.push(t`${attachmentFileName(file)} (max ${ATTACHMENT_MAX_COUNT} attachments)`);
           continue;
         }
         // Raster photos get a chance to shrink before server-side size validation.
         if (file.size > attachmentMaxBytes(bootstrapMe) && !canPrepareImage(file)) {
           skipped.push(
-            t`${file.name} (over ${attachmentSizeLabel(attachmentMaxBytes(bootstrapMe))})`,
+            t`${attachmentFileName(file)} (over ${attachmentSizeLabel(attachmentMaxBytes(bootstrapMe))})`,
           );
           continue;
         }
         const mimeType = inferAttachmentMimeType(file.name, file.type);
         if (!mimeType) {
-          skipped.push(file.name);
+          skipped.push(t`${attachmentFileName(file)} (unsupported file type)`);
           continue;
         }
         next.push({
@@ -439,14 +449,14 @@ export function useComposerActions({
             groupTarget
               ? {
                   groupId: groupTarget,
-                  name: pending.file.name,
+                  name: attachmentFileName(pending.file),
                   mimeType,
                   contentBase64,
                   clientNonce: uploadNonce,
                 }
               : {
                   botId: botTarget!,
-                  name: pending.file.name,
+                  name: attachmentFileName(pending.file),
                   mimeType,
                   contentBase64,
                   clientNonce: uploadNonce,
