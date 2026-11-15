@@ -32,13 +32,10 @@ test("a new space chooses what it can use, and a skill can be limited to some sp
   await chooser.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(chooser).toHaveCount(0);
 
-  // Wait for the client lead to land before opening Skills.
-  const lead = page
-    .locator("aside")
-    .first()
-    .getByRole("button", { name: /^Clients Lead/ });
+  // Wait for the client PM to land before opening Skills.
+  const lead = page.locator("aside").first().getByRole("button", { name: /^PM/ });
   await expect(lead).toHaveAttribute("aria-current", "page");
-  await expect(page.getByPlaceholder("Message Clients Lead")).toBeVisible();
+  await expect(page.getByPlaceholder("Message PM")).toBeVisible();
   await page.getByTestId("user-menu-trigger").click();
   await page.getByRole("button", { name: "Skills", exact: true }).click();
   const skills = page.getByRole("dialog", { name: "Skills", exact: true });

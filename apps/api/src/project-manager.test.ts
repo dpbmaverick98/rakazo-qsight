@@ -78,7 +78,10 @@ function setup() {
             (server) =>
               server.spaceId === where.spaceId &&
               server.userId === where.userId &&
-              ((where.id && where.id === server.id) ||
+              (where.OR?.some((condition: Row) =>
+                server.name.startsWith(condition.name.startsWith),
+              ) ||
+                (where.id && where.id === server.id) ||
                 (where.slug && where.slug === server.slug) ||
                 (where.name &&
                   (typeof where.name === "string"
@@ -194,7 +197,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   const test = setup();
   test.state.servers.push({
     id: "owner",
-    name: "QSight Pilot",
+    name: "Vendor One Pilot",
     allBots: false,
     spaceId: "space",
     userId: "user",
@@ -203,7 +206,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   const result = await provisionProjectManager(test.ctx, actor, input);
   expect(result).toMatchObject({
     bot: { id: "pm", spawnKey: "pm:roof" },
-    server: { name: "QSight PM — Roof survey", allBots: false },
+    server: { name: "Vendor One PM — Roof survey", allBots: false },
     created: true,
   });
   expect(test.state.bots[0]).toMatchObject({
@@ -214,6 +217,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   });
   expect(test.state.bots[0]!.instructions).toContain('"client":"Example Client"');
   expect(test.state.bots[0]!.instructions).not.toContain("Untrusted");
+  expect(test.state.bots[0]!.instructions).toContain("Use Vendor One tools");
   expect(test.state.assignments).toEqual([
     {
       botId: "pm",
@@ -384,21 +388,24 @@ it("validates the MCP endpoint before persisting product records", async () => {
   expect(test.state.bots).toHaveLength(0);
   expect(test.state.secrets).toHaveLength(0);
 });
-it("refuses provisioning while an owner server is shared with all bots", async () => {
-  const test = setup();
-  test.state.servers.push({
-    id: "owner",
-    name: "QSight Pilot",
-    allBots: true,
-    endpoint: "https://hierarchy.example.test/mcp",
-    spaceId: "space",
-    userId: "user",
-    slug: "owner",
-  });
-  await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow(/All bots/);
-  expect(test.state.bots).toHaveLength(0);
-  expect(test.state.assignments).toHaveLength(0);
-});
+it.each(["QSight Pilot", "Vendor One Pilot"])(
+  "refuses provisioning while %s is shared with all bots",
+  async (name) => {
+    const test = setup();
+    test.state.servers.push({
+      id: "owner",
+      name,
+      allBots: true,
+      endpoint: "https://hierarchy.example.test/mcp",
+      spaceId: "space",
+      userId: "user",
+      slug: "owner",
+    });
+    await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow(/All bots/);
+    expect(test.state.bots).toHaveLength(0);
+    expect(test.state.assignments).toHaveLength(0);
+  },
+);
 
 it("PM provisioning follows the immutable ID after a Space rename and ignores input names", async () => {
   const test = setup();

@@ -30,11 +30,11 @@ test("a new space auto-completes onboarding, is renamed in its settings, and is 
   }
   await name.press("Enter");
 
-  // Model is already connected, so onboarding skips the form and lands in the client lead.
+  // Model is already connected, so onboarding skips the form and lands in the client PM.
   await completeOnboarding(page);
   await expect(page).toHaveURL(/\/app\//);
   await expect(sidebar.getByText("Typo space", { exact: true })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: /^Typo space Lead/ })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: /^PM/ })).toBeVisible();
   await expect(sidebar.getByRole("button", { name: /^Chief/ })).toHaveCount(0);
   await expect(sidebar.getByText("Archive (Personal)", { exact: true })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "new-space-after-onboarding");

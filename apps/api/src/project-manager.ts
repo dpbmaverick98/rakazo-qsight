@@ -1,6 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import { itemSecretIn, lockSpaceDeletion } from "@rakazo/db";
 import { lockOwner } from "./availability.js";
@@ -42,14 +43,17 @@ export async function provisionProjectManager(
       spaceId: actor.spaceId,
       userId: actor.userId,
       allBots: true,
-      name: { startsWith: source.ownerServerPrefix },
+      OR: [
+        { name: { startsWith: source.ownerServerPrefix } },
+        { name: { startsWith: PROJECT_MANAGER_TOOLS.legacyServerPrefix } },
+      ],
     },
     select: { id: true },
   });
   if (shared)
     throw new ORPCError("CONFLICT", {
       message:
-        "Disable All bots on the owner-level project connection before creating a project manager",
+        "Disable All bots on the owner-level Vendor One server before creating a project manager",
     });
   const stored = await prepareMcpServer(actor, config);
   if (!stored) throw new ORPCError("INTERNAL_SERVER_ERROR");
