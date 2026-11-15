@@ -24,6 +24,8 @@ it("stays disabled without all settings and rejects unsafe base URLs", () => {
   expect(qsightHierarchyFromEnv({})).toBeNull();
   expect(qsightHierarchyFromEnv({ ...config, QSIGHT_SPACE_ID: "" })).toBeNull();
   expect(() => qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "file:///tmp" })).toThrow();
+  expect(() => qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://example.test" })).toThrow();
+  expect(qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://127.0.0.1:8002" })).not.toBeNull();
 });
 it("authenticates server-side, sanitizes data, encodes links and caches briefly", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(raw));

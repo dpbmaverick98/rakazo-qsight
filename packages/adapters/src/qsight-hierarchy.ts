@@ -47,6 +47,10 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   ) {
     throw new Error("Hierarchy base URL must be an HTTP(S) origin");
   }
+  const localHttp = new Set(["127.0.0.1", "localhost", "[::1]", "host.docker.internal"]);
+  if (origin.protocol === "http:" && !localHttp.has(origin.hostname)) {
+    throw new Error("Hierarchy HTTP is allowed only for loopback/local Docker; use HTTPS");
+  }
   let cached: { data: Hierarchy; expires: number } | undefined;
   return {
     spaceId,
