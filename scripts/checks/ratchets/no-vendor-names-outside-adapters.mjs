@@ -89,6 +89,7 @@ function topLevelKeys(source, opening) {
 // address to refuse and as a kind of model credential.
 const VENDORS = [
   // Connectors
+  "qsight",
   "composio",
   "pipedream",
   // Memory

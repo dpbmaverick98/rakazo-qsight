@@ -78,6 +78,7 @@ import {
   withHostComputerScreen,
   withSecretPersistence,
 } from "@rakazo/adapters";
+import { qsightHierarchyFromEnv } from "@rakazo/adapters/qsight-hierarchy";
 import type { DirectoryAccountChange } from "@rakazo/auth";
 import {
   buildTrustedOrigins,
@@ -112,6 +113,7 @@ import {
   requireMembership,
   rowSecurityWarning,
   runAsSystem,
+  runAsTenant,
   verifyContentKeys,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
@@ -151,6 +153,7 @@ import type { AppEnv } from "./env.js";
 import { loadEnv } from "./env.js";
 import { createExperiments } from "./experiments.js";
 import { healthRoutes } from "./health.js";
+import { mountHierarchyRoute } from "./hierarchy.js";
 import { homeRetentionSweep } from "./home-retention.js";
 import { startHourlySweep } from "./hourly-sweep.js";
 import { trackInFlightRequests } from "./in-flight-requests.js";
@@ -996,6 +999,16 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     return actor && { actor, sessionId: session.session.id };
   };
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
+  mountHierarchyRoute(app, {
+    sessionActor,
+    source: qsightHierarchyFromEnv(),
+    isPersonalSpace: async (actor) => {
+      const space = await runAsTenant(actor, () =>
+        prisma.space.findUnique({ where: { id: actor.spaceId }, select: { isDefault: true } }),
+      );
+      return !space || space.isDefault;
+    },
+  });
   if (userDeviceHub && userDevices) {
     mountUserDeviceRoutes(app, {
       prisma,
