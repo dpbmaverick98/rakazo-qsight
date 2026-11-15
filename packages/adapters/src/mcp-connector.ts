@@ -28,7 +28,7 @@ import {
 } from "@rakazo/contracts";
 import type { McpServer, PrismaClient, ThreadEvents } from "@rakazo/db";
 import { availableInSpace, itemSecretIn } from "@rakazo/db";
-import { getLogger } from "@rakazo/logging";
+import { clientSetupDebug, getLogger } from "@rakazo/logging";
 import { sanitizedError } from "@rakazo/logging/monitoring";
 import { catalogToolPrefix } from "./approval-effect.js";
 import {
@@ -691,22 +691,33 @@ export class McpConnector implements ConnectorProvider {
       yield { type: "error", message: "MCP tools require a bot context" };
       return;
     }
+    const assigned = await this.prisma.botMcpServer.findFirst({
+      where: {
+        botId: context.botId,
+        serverId: call.route.resourceId,
+        spaceId: context.spaceId,
+        userId: context.userId,
+        server: usable,
+      },
+      include: { server: true },
+    });
     const assignment =
-      (await this.prisma.botMcpServer.findFirst({
-        where: {
-          botId: context.botId,
-          serverId: call.route.resourceId,
-          spaceId: context.spaceId,
-          userId: context.userId,
-          server: usable,
-        },
-        include: { server: true },
-      })) ??
+      assigned ??
       (bot.inheritMcpServers
         ? await this.prisma.mcpServer
             .findFirst({ where: { ...usable, id: call.route.resourceId, allBots: true } })
             .then((server) => (server ? sharedAssignment(server) : null))
         : null);
+    clientSetupDebug("mcp.selected", {
+      actorId: context.userId,
+      spaceId: context.spaceId,
+      botId: context.botId,
+      serverId: assignment?.server.id,
+      serverName: assignment?.server.name,
+      toolName: call.route.toolName,
+      operation: assigned ? "assigned" : "inherited",
+      status: assignment ? "selected" : "denied",
+    });
     if (assignment && call.route.toolName === UNAVAILABLE_TOOL) {
       const reason =
         this.unavailable.get(this.sessionKey(assignment.server, context)) ??

@@ -2,6 +2,13 @@ import { createRouterClient } from "@orpc/server";
 import { EncryptedSecretStore } from "@rakazo/adapters";
 import { qsightHierarchyFromEnv } from "@rakazo/adapters/qsight-hierarchy";
 import type { Actor } from "@rakazo/contracts";
+import {
+  createLogger,
+  createTestSink,
+  getLogger,
+  installLogger,
+  runWithLogContext,
+} from "@rakazo/logging";
 import { afterEach, expect, it, vi } from "vitest";
 import { createMcpServers } from "./mcp-servers.js";
 import { provisionProjectManager } from "./project-manager.js";
@@ -569,4 +576,42 @@ it("keeps the committed credential if post-commit notification fails", async () 
   );
   expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
   expect(revoke).not.toHaveBeenCalled();
+});
+
+it("logs correlated promotion and unused-token revocation without credentials", async () => {
+  vi.stubEnv("CLIENT_SETUP_DEBUG", "1");
+  const previous = getLogger();
+  const sink = createTestSink();
+  installLogger(createLogger({ service: "test", sinks: [sink] }));
+  const test = setup();
+  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  try {
+    await runWithLogContext({ "request.id": "finish-request" }, async () => {
+      await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+      await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+    });
+    expect(sink.events).toContainEqual(
+      expect.objectContaining({
+        message: "client_setup.promotion",
+        status: "committed",
+        botId: "setup",
+        clientId: "client",
+        actorId: "user",
+        "request.id": "finish-request",
+      }),
+    );
+    expect(sink.events).toContainEqual(
+      expect.objectContaining({
+        message: "client_setup.token.revoke",
+        status: "ok",
+        durationMs: expect.any(Number),
+      }),
+    );
+    const serialized = JSON.stringify(sink.events);
+    for (const secret of ["test-token-id", "Untrusted name", "Untrusted client", "Authorization"])
+      expect(serialized).not.toContain(secret);
+  } finally {
+    installLogger(previous);
+    vi.unstubAllEnvs();
+  }
 });

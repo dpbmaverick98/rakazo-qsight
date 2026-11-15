@@ -8,6 +8,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { CallToolResult, ListToolsResult } from "@modelcontextprotocol/sdk/types.js";
 import { isLocalhostOrLoopbackIp, MCP_APP_READ_TIMEOUT_MS } from "@rakazo/contracts";
 import { cancelResponseBody } from "@rakazo/core";
+import { clientSetupCorrelationHeaders, clientSetupStage } from "@rakazo/logging";
 import { combineSignals } from "./connector-safety.js";
 import { MCP_APP_CLIENT_CAPABILITIES } from "./mcp-app.js";
 import { closeMcpResource } from "./mcp-close.js";
@@ -225,6 +226,8 @@ export function secureFetch(
     if (!localHttp && url.origin === resourceUrl.origin) {
       for (const [name, value] of configured) headers.set(name, value);
     }
+    const correlation = url.origin === resourceUrl.origin ? clientSetupCorrelationHeaders() : {};
+    for (const [name, value] of Object.entries(correlation)) headers.set(name, value);
     // Buffer the body: a re-wrapped Request body is a stream without a replayable
     // source, and undici fails the whole request when a server answers 401 early
     // (the OAuth challenge) instead of draining it.
@@ -244,9 +247,22 @@ export function secureFetch(
             ? input.signal
             : undefined,
     } satisfies RequestInit;
-    const response = localHttp
-      ? await (network.fetch ?? globalThis.fetch)(url, requestInit)
-      : await safeRemoteFetch(url, requestInit);
+    const fields = {
+      operation: "mcp.request",
+      requestId: correlation["x-request-id"],
+      httpStatus: undefined as number | undefined,
+      status: "ok",
+      errorCode: undefined as string | undefined,
+    };
+    const response = await clientSetupStage("upstream", fields, async () => {
+      const result = localHttp
+        ? await (network.fetch ?? globalThis.fetch)(url, requestInit)
+        : await safeRemoteFetch(url, requestInit);
+      fields.httpStatus = result.status;
+      fields.status = result.ok ? "ok" : "error";
+      if (!result.ok) fields.errorCode = "upstream_http_error";
+      return result;
+    });
     if (response.status >= 300 && response.status < 400) {
       cancelResponseBody(response);
       throw new Error("MCP redirects are not permitted; configure the final HTTPS URL explicitly");

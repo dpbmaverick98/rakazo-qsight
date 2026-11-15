@@ -1,4 +1,11 @@
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
+import {
+  createLogger,
+  createTestSink,
+  getLogger,
+  installLogger,
+  runWithLogContext,
+} from "@rakazo/logging";
 import { afterEach, expect, it, vi } from "vitest";
 import { qsightHierarchyFromEnv } from "./qsight-hierarchy.js";
 
@@ -202,7 +209,10 @@ it("mints a project-scoped bearer server-side and uses the configured MCP endpoi
     new URL("https://hierarchy.example.test/api/v2/agent/projects/roof%2Fsurvey/manager-token"),
     expect.objectContaining({
       method: "POST",
-      headers: { Authorization: "Bearer fake-token", Accept: "application/json" },
+      headers: expect.objectContaining({
+        Authorization: "Bearer fake-token",
+        Accept: "application/json",
+      }),
       redirect: "error",
       signal: expect.any(AbortSignal),
     }),
@@ -443,7 +453,42 @@ it("revokes tokens with owner authorization and sanitizes malformed scoped crede
     new URL("https://hierarchy.example.test/api/v2/agent/tokens/minted"),
     expect.objectContaining({
       method: "DELETE",
-      headers: { Authorization: "Bearer fake-token", Accept: "application/json" },
+      headers: expect.objectContaining({
+        Authorization: "Bearer fake-token",
+        Accept: "application/json",
+      }),
     }),
   ]);
+});
+
+it("forwards safe request correlation and emits only opt-in upstream metadata", async () => {
+  const previous = getLogger();
+  const sink = createTestSink();
+  installLogger(createLogger({ service: "test", sinks: [sink] }));
+  const fetch = vi.fn().mockImplementation(async () => Response.json({ items: [client] }));
+  vi.stubGlobal("fetch", fetch);
+  vi.stubEnv("CLIENT_SETUP_DEBUG", "1");
+  try {
+    await runWithLogContext({ "request.id": "setup-request", "trace.id": "a".repeat(32) }, () =>
+      qsightHierarchyFromEnv(config)!.findClient(client.name),
+    );
+    const headers = new Headers(fetch.mock.calls[0]![1].headers);
+    expect(headers.get("x-request-id")).toBe("setup-request");
+    expect(headers.get("traceparent")).toContain("a".repeat(32));
+    expect(sink.events[0]).toMatchObject({
+      message: "client_setup.upstream",
+      operation: "client.lookup",
+      requestId: "setup-request",
+      httpStatus: 200,
+    });
+    expect(JSON.stringify(sink.events)).not.toContain(config.QSIGHT_AGENT_TOKEN);
+    expect(JSON.stringify(sink.events)).not.toContain(client.name);
+    sink.events.length = 0;
+    vi.stubEnv("CLIENT_SETUP_DEBUG", "0");
+    await qsightHierarchyFromEnv(config)!.findClient(client.name);
+    expect(sink.events).toEqual([]);
+  } finally {
+    installLogger(previous);
+    vi.unstubAllEnvs();
+  }
 });

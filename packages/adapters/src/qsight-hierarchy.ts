@@ -13,7 +13,7 @@ import {
 } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
-import { bestEffort } from "@rakazo/logging";
+import { bestEffort, clientSetupCorrelationHeaders, clientSetupStage } from "@rakazo/logging";
 import { z } from "zod";
 
 const Id = z
@@ -67,10 +67,34 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     string,
     { data: ReturnType<typeof ProjectCommercialSchema.parse>; expires: number }
   >();
+  async function upstream(
+    operation: string,
+    url: URL,
+    init: Omit<RequestInit, "headers"> & { headers: Record<string, string> },
+  ) {
+    const headers = { ...init.headers };
+    const correlation = clientSetupCorrelationHeaders();
+    for (const [key, value] of Object.entries(correlation)) headers[key] = value;
+    const fields = {
+      operation,
+      requestId: correlation["x-request-id"],
+      httpStatus: undefined as number | undefined,
+      status: "ok",
+      errorCode: undefined as string | undefined,
+    };
+    return clientSetupStage("upstream", fields, async () => {
+      const response = await fetch(url, { ...init, headers });
+      fields.httpStatus = response.status;
+      fields.status = response.ok ? "ok" : "error";
+      if (!response.ok) fields.errorCode = "upstream_http_error";
+      return response;
+    });
+  }
   async function revokeManagerToken(tokenId: string) {
     const id = Id.parse(tokenId);
     const signal = deadlineSignal(5000);
-    const response = await fetch(
+    const response = await upstream(
+      "token.revoke",
       new URL(`/api/v2/agent/tokens/${encodeURIComponent(id)}`, origin),
       {
         method: "DELETE",
@@ -98,7 +122,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const input = Name.parse(name);
       const signal = deadlineSignal(5000);
       try {
-        const response = await fetch(new URL("/api/v2/agent/clients", origin), {
+        const response = await upstream("client.create", new URL("/api/v2/agent/clients", origin), {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -125,7 +149,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       try {
         const url = new URL("/api/v2/agent/clients", origin);
         url.searchParams.set("name", input);
-        const response = await fetch(url, {
+        const response = await upstream("client.lookup", url, {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
           redirect: "error",
           signal,
@@ -149,7 +173,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const url = new URL("/api/v2/agent/locations/search", origin);
       url.searchParams.set("query", input.query);
       const signal = deadlineSignal(5000);
-      const response = await fetch(url, {
+      const response = await upstream("location.search", url, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         redirect: "error",
         signal,
@@ -162,17 +186,21 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     async proveLocation(verificationToken: string) {
       const input = LocationProofInputSchema.parse({ verification_token: verificationToken });
       const signal = deadlineSignal(5000);
-      const response = await fetch(new URL("/api/v2/agent/locations/proof", origin), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
+      const response = await upstream(
+        "location.proof",
+        new URL("/api/v2/agent/locations/proof", origin),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(input),
+          redirect: "error",
+          signal,
         },
-        body: JSON.stringify(input),
-        redirect: "error",
-        signal,
-      });
+      );
       if (!response.ok) throw new Error("Location confirmation unavailable");
       return LocationProofSchema.parse(await readBoundedJsonResponse(response, 32_000, signal));
     },
@@ -180,20 +208,24 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const client_id = Id.parse(clientId);
       const input = { client_id, ...CreateBuildingSchema.parse(data) };
       const signal = deadlineSignal(5000);
-      const response = await fetch(new URL("/api/v2/agent/buildings", origin), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "Idempotency-Key": createHash("sha256")
-            .update(JSON.stringify(["building", input, operationId ?? null]))
-            .digest("hex"),
+      const response = await upstream(
+        "building.create",
+        new URL("/api/v2/agent/buildings", origin),
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+            "Idempotency-Key": createHash("sha256")
+              .update(JSON.stringify(["building", input, operationId ?? null]))
+              .digest("hex"),
+          },
+          body: JSON.stringify(input),
+          redirect: "error",
+          signal,
         },
-        body: JSON.stringify(input),
-        redirect: "error",
-        signal,
-      });
+      );
       if (!response.ok) throw new Error("Building creation unavailable");
       cache.clear();
       const building = CreatedBuildingSchema.extend({ id: Id, client_id: Id }).parse(
@@ -212,7 +244,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const input = CreateProjectSchema.parse({ buildingId, name });
       const signal = deadlineSignal(5000);
       try {
-        const response = await fetch(
+        const response = await upstream(
+          "project.create",
           new URL(
             `/api/v2/agent/buildings/${encodeURIComponent(input.buildingId)}/projects`,
             origin,
@@ -255,7 +288,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       let mintedId: string | undefined;
       const signal = deadlineSignal(5000);
       try {
-        const response = await fetch(
+        const response = await upstream(
+          "token.create",
           new URL(`/api/v2/agent/projects/${encodeURIComponent(id)}/manager-token`, origin),
           {
             method: "POST",
@@ -303,7 +337,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       if (hit && hit.expires > Date.now()) return hit.data;
       commercialCache.delete(id);
       const signal = deadlineSignal(5000);
-      const response = await fetch(
+      const response = await upstream(
+        "commercial.read",
         new URL(`/api/v2/agent/projects/${encodeURIComponent(id)}/commercial`, origin),
         {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -340,7 +375,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const url = new URL("/api/v2/agent/hierarchy", origin);
       url.searchParams.set("client_id", id);
       const signal = deadlineSignal(5000);
-      const response = await fetch(url, {
+      const response = await upstream("hierarchy.read", url, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         redirect: "error",
         signal,
