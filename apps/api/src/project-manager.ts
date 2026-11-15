@@ -32,6 +32,21 @@ export async function provisionProjectManager(
   const config = await source.managerServer(project.id, project.name).catch(() => {
     throw new ORPCError("BAD_GATEWAY", { message: "Project manager unavailable" });
   });
+  // Old workers ignore inheritMcpServers. Refuse while a shared owner server could
+  // expose every agent's tools to this PM during a rolling deployment.
+  const shared = await deps.prisma.mcpServer.findFirst({
+    where: {
+      spaceId: actor.spaceId,
+      userId: actor.userId,
+      allBots: true,
+      endpoint: "endpoint" in config ? config.endpoint : null,
+    },
+    select: { id: true },
+  });
+  if (shared)
+    throw new ORPCError("CONFLICT", {
+      message: "Disable All bots on the owner-level QSight server before creating a project manager",
+    });
   const stored = await prepareMcpServer(actor, config);
   if (!stored) throw new ORPCError("INTERNAL_SERVER_ERROR");
   return persistPreparedSecret(deps.prisma, deps.secrets, stored, async () => {
@@ -64,6 +79,18 @@ export async function provisionProjectManager(
           existing.transport !== "streamable_http" ||
           existing.availableIn.some((space) => space.spaceId !== actor.spaceId)
         )
+          throw new ORPCError("CONFLICT", {
+            message: "Project manager connection conflicts with an existing server",
+          });
+        const boundToOthers = await tx.botMcpServer.count({
+          where: {
+            spaceId: actor.spaceId,
+            userId: actor.userId,
+            serverId: candidate.id,
+            botId: { not: botId },
+          },
+        });
+        if (boundToOthers)
           throw new ORPCError("CONFLICT", {
             message: "Project manager connection conflicts with an existing server",
           });

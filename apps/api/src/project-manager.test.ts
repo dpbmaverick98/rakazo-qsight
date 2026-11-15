@@ -69,7 +69,9 @@ function setup() {
               server.userId === where.userId &&
               ((where.id && where.id === server.id) ||
                 (where.slug && where.slug === server.slug) ||
-                (where.name && where.name === server.name)),
+                (where.name && where.name === server.name)) &&
+              (where.allBots === undefined || where.allBots === server.allBots) &&
+              (where.endpoint === undefined || where.endpoint === server.endpoint),
           ) ?? null,
       ),
       create: vi.fn(async ({ data }: Row) => {
@@ -114,6 +116,15 @@ function setup() {
     vaultCredential: { count: async () => 0 },
     integrationProviderConfig: { count: async () => 0 },
     botMcpServer: {
+      count: vi.fn(async ({ where }: Row) =>
+        state.assignments.filter(
+          (assignment) =>
+            assignment.spaceId === where.spaceId &&
+            assignment.userId === where.userId &&
+            assignment.serverId === where.serverId &&
+            assignment.botId !== where.botId.not,
+        ).length,
+      ),
       deleteMany: vi.fn(async ({ where }: Row) => {
         state.assignments = state.assignments.filter(
           (assignment) => assignment.botId !== where.botId,
@@ -171,7 +182,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   test.state.servers.push({
     id: "owner",
     name: "QSight Pilot",
-    allBots: true,
+    allBots: false,
     spaceId: "space",
     userId: "user",
     slug: "owner",
@@ -202,7 +213,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   ]);
   expect(test.state.servers.find((server) => server.id === "owner")).toHaveProperty(
     "allBots",
-    true,
+    false,
   );
   expect(JSON.stringify(result)).not.toMatch(
     /fake-project-read-token|fake-owner-write-token|ciphertext/,
@@ -355,4 +366,19 @@ it("validates the MCP endpoint before persisting product records", async () => {
   });
   expect(test.state.bots).toHaveLength(0);
   expect(test.state.secrets).toHaveLength(0);
+});
+it("refuses provisioning while an owner server is shared with all bots", async () => {
+  const test = setup();
+  test.state.servers.push({
+    id: "owner",
+    name: "QSight Pilot",
+    allBots: true,
+    endpoint: "https://hierarchy.example.test/mcp",
+    spaceId: "space",
+    userId: "user",
+    slug: "owner",
+  });
+  await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow(/All bots/);
+  expect(test.state.bots).toHaveLength(0);
+  expect(test.state.assignments).toHaveLength(0);
 });
