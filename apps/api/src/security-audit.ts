@@ -20,6 +20,7 @@ export const AUDITED_PROCEDURES: Record<string, AuditedProcedure> = {
   "models.connect": { type: "credential.created", kind: "model", fields: ["provider"] },
   "models.finishOAuth": { type: "credential.created", kind: "model" },
   "models.disconnect": { type: "credential.deleted", kind: "model", fields: ["provider"] },
+  "mcp.servers.provisionProjectManager": { type: "credential.created", kind: "mcp" },
   "mcp.servers.create": { type: "credential.created", kind: "mcp" },
   "mcp.servers.update": { type: "credential.changed", kind: "mcp", fields: ["id"] },
   "mcp.servers.remove": { type: "credential.deleted", kind: "mcp", fields: ["id"] },

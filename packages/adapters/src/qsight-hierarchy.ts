@@ -1,7 +1,8 @@
+import { createHash } from "node:crypto";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
-import { deadlineSignal, readBoundedJsonResponse } from "@rakazo/core";
+import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
 import { z } from "zod";
 
 const Id = z
@@ -61,6 +62,43 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   >();
   return {
     spaceId,
+    async managerServer(id: string, name: string) {
+      const signal = deadlineSignal(5000);
+      try {
+        const response = await fetch(
+          new URL(`/api/v2/agent/projects/${encodeURIComponent(id)}/manager-token`, origin),
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+            redirect: "error",
+            signal,
+          },
+        );
+        if (!response.ok) throw new Error("Token unavailable");
+        const minted = z
+          .object({
+            token: z
+              .string()
+              .min(1)
+              .max(16384)
+              .refine((value) => !/[\r\n]/.test(value)),
+          })
+          .parse(await readBoundedJsonResponse(response, 32_000, signal));
+        return {
+          slug: `pm-${createHash("sha256").update(id).digest("hex").slice(0, 60)}`,
+          name: `${PROJECT_MANAGER_TOOLS.managerServerPrefix}${name}`.slice(0, 120),
+          description: "",
+          enabled: true,
+          verbatimResults: false,
+          transport: "streamable_http" as const,
+          endpoint: env.QSIGHT_MCP_ENDPOINT || new URL("/mcp", origin).href,
+          headers: { Authorization: `Bearer ${minted.token}` },
+        };
+      } catch {
+        // Parsing and network errors can contain credentials; never forward them.
+        throw new Error("Project manager credentials unavailable");
+      }
+    },
     async readCommercial(id: string) {
       // The API verifies membership in this client hierarchy before every read.
       const hit = commercialCache.get(id);

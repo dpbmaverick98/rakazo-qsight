@@ -130,6 +130,7 @@ describe("MCP connector managed stdio launch", () => {
       server,
     });
     const prisma = {
+      bot: { findFirst: async () => ({ inheritMcpServers: true }) },
       botMcpServer: {
         findMany: vi.fn(async ({ where }: { where: { botId: string } }) => [
           assignment(where.botId),

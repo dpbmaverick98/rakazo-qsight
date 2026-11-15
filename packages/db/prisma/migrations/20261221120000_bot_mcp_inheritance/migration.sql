@@ -1,0 +1,1 @@
+ALTER TABLE "bots" ADD COLUMN "inheritMcpServers" BOOLEAN NOT NULL DEFAULT true;

@@ -749,6 +749,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   );
 
   const router = createRouter({
+    projectManagers: qsightHierarchyFromEnv(),
     speechSummary:
       env.voiceSummaryMinChars === undefined
         ? undefined

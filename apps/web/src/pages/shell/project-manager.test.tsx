@@ -1,30 +1,15 @@
 // @vitest-environment jsdom
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
-import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProjectManagerAction } from "./project-manager";
 
-const mocks = vi.hoisted(() => ({
-  navigate: vi.fn(),
-  rpc: {
-    bots: { list: vi.fn(), create: vi.fn() },
-    mcp: {
-      servers: { list: vi.fn() },
-      assignments: { list: vi.fn(), replace: vi.fn() },
-    },
-  },
-  rpcForSpace: vi.fn(),
-}));
+const mocks = vi.hoisted(() => ({ navigate: vi.fn(), provision: vi.fn(), rpcForSpace: vi.fn() }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
 vi.mock("../../lib/rpc", () => ({ rpcForSpace: mocks.rpcForSpace }));
 vi.mock("@lingui/react/macro", () => ({
-  useLingui: () => ({
-    t: (parts: TemplateStringsArray, ...values: unknown[]) =>
-      parts.reduce((text, part, i) => text + part + (values[i] ?? ""), ""),
-  }),
-  Trans: ({ children }: { children: ReactNode }) => children,
+  useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
 }));
 let close: () => Promise<void>;
 beforeEach(() => {
@@ -33,24 +18,20 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(() => {
-      throw new Error("No external writes allowed");
+      throw new Error("Browser must not mint tokens");
     }),
   );
-  mocks.rpcForSpace.mockReturnValue(mocks.rpc);
-  mocks.rpc.bots.list.mockResolvedValue([]);
-  mocks.rpc.bots.create.mockResolvedValue({ id: "new-bot" });
-  mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "tools", name: "QSight PM Pilot", enabled: true },
-  ]);
-  mocks.rpc.mcp.assignments.list.mockResolvedValue([]);
-  mocks.rpc.mcp.assignments.replace.mockResolvedValue([]);
+  mocks.rpcForSpace.mockReturnValue({
+    mcp: { servers: { provisionProjectManager: mocks.provision } },
+  });
+  mocks.provision.mockResolvedValue({ bot: { id: "pm" }, server: { id: "scoped" }, created: true });
 });
 afterEach(async () => {
   await close?.();
   expect(fetch).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
-async function mount() {
+async function mount(onOpenBot?: () => void) {
   const container = document.createElement("div");
   const root = createRoot(container);
   await act(async () =>
@@ -59,6 +40,7 @@ async function mount() {
         project={commercialFixture.project}
         client="Example Client"
         spaceId="space"
+        onOpenBot={onOpenBot}
       />,
     ),
   );
@@ -67,158 +49,65 @@ async function mount() {
   };
   return {
     container,
-    button: () => container.querySelector("button")!,
     click: async () => {
       await act(async () => container.querySelector("button")!.click());
     },
   };
 }
-it("opens an exact existing active bot without creating or assigning", async () => {
-  mocks.rpc.bots.list.mockResolvedValue([
-    { id: "wrong", name: "PM — Roof survey extra" },
-    { id: "archived", name: "PM — Roof survey", archivedAt: "yesterday" },
-    { id: "existing", name: "PM — Roof survey" },
-  ]);
+it.each([true, false])("opens the server-provisioned PM (created=%s)", async (created) => {
+  mocks.provision.mockResolvedValue({ bot: { id: "pm" }, server: { id: "scoped" }, created });
   const view = await mount();
   await view.click();
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/existing");
-  expect(mocks.rpc.bots.create).not.toHaveBeenCalled();
-  expect(mocks.rpc.mcp.servers.list).not.toHaveBeenCalled();
   expect(mocks.rpcForSpace).toHaveBeenCalledWith("space");
+  expect(mocks.provision).toHaveBeenCalledExactlyOnceWith({
+    projectId: "roof",
+    projectName: "Roof survey",
+    clientName: "Example Client",
+  });
+  expect(mocks.navigate).toHaveBeenCalledWith("/app/pm");
 });
-it("creates a persistent bot and appends without changing assignments for other bots", async () => {
-  mocks.rpc.mcp.assignments.list.mockResolvedValue([
-    { serverId: "other", allowAllTools: false, allowedTools: ["read"], id: "assignment" },
-  ]);
+it("shows a minimal error and retries the same atomic RPC", async () => {
+  mocks.provision.mockRejectedValueOnce(new Error("private upstream detail"));
   const view = await mount();
   await view.click();
-  expect(mocks.rpc.bots.create).toHaveBeenCalledExactlyOnceWith({
-    name: "PM — Roof survey",
-    spawnKey: "pm:roof",
-    instructions: expect.any(String),
-    dailyCheckIns: false,
-    fleetManagement: false,
-  });
-  expect(mocks.rpc.mcp.assignments.list).toHaveBeenCalledWith({ botId: "new-bot" });
-  expect(mocks.rpc.mcp.assignments.replace).toHaveBeenCalledExactlyOnceWith({
-    botId: "new-bot",
-    assignments: [
-      { serverId: "other", allowAllTools: false, allowedTools: ["read"] },
-      { serverId: "tools", allowAllTools: true, allowedTools: [] },
-    ],
-  });
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/new-bot");
-});
-it("reports attachment failure and retries on the retained bot", async () => {
-  mocks.rpc.mcp.assignments.replace.mockRejectedValueOnce(new Error("Denied"));
-  const view = await mount();
-  await view.click();
-  expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("created, but");
-  expect(view.container.textContent).toContain("Open project manager");
+  expect(view.container.querySelector('[role="alert"]')?.textContent).toBe(
+    "Could not create project manager. Try again.",
+  );
   expect(mocks.navigate).not.toHaveBeenCalled();
-  expect(view.button().textContent).toBe("Retry connection");
   await view.click();
-  expect(mocks.rpc.bots.create).toHaveBeenCalledTimes(1);
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/new-bot");
+  expect(mocks.provision).toHaveBeenCalledTimes(2);
+  expect(view.container.querySelector('[role="alert"]')).toBeNull();
+  expect(mocks.navigate).toHaveBeenCalledWith("/app/pm");
 });
-it("disables the action while provisioning and ignores repeated clicks", async () => {
-  let finish!: (bots: never[]) => void;
-  mocks.rpc.bots.list.mockReturnValue(
+it("disables repeated clicks while waiting", async () => {
+  let finish!: (value: unknown) => void;
+  mocks.provision.mockReturnValue(
     new Promise((resolve) => {
       finish = resolve;
     }),
   );
   const view = await mount();
   await view.click();
-  expect(view.button().disabled).toBe(true);
-  expect(view.button().getAttribute("aria-busy")).toBe("true");
-  expect(view.button().textContent).toBe("Creating…");
   await view.click();
-  expect(mocks.rpc.bots.list).toHaveBeenCalledTimes(1);
-  await act(async () => finish([]));
-  expect(view.button().disabled).toBe(false);
+  expect(view.container.querySelector("button")!.disabled).toBe(true);
+  expect(mocks.provision).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ bot: { id: "pm" } }));
+  expect(view.container.querySelector("button")!.disabled).toBe(false);
 });
-it("retains the bot when the named server is unavailable", async () => {
-  mocks.rpc.mcp.servers.list.mockResolvedValue([]);
-  const view = await mount();
+it("opens through the panel callback and ignores late results after unmount", async () => {
+  const onOpenBot = vi.fn();
+  const view = await mount(onOpenBot);
   await view.click();
-  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
-  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
-  await act(async () =>
-    [...view.container.querySelectorAll("button")]
-      .find((b) => b.textContent === "Open project manager")!
-      .click(),
-  );
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/new-bot");
-});
-it("fails closed if reading current assignments fails", async () => {
-  mocks.rpc.mcp.assignments.list.mockRejectedValue(new Error("Denied"));
-  const view = await mount();
-  await view.click();
-  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
-  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
-});
-it("does not navigate after the project action is unmounted", async () => {
-  let finish!: (bots: { id: string; name: string }[]) => void;
-  mocks.rpc.bots.list.mockReturnValue(
+  expect(onOpenBot).toHaveBeenCalledWith({ id: "pm" });
+  expect(mocks.navigate).not.toHaveBeenCalled();
+  let finish!: (value: unknown) => void;
+  mocks.provision.mockReturnValue(
     new Promise((resolve) => {
       finish = resolve;
     }),
   );
-  const view = await mount();
   await view.click();
   await close();
-  close = async () => {};
-  await act(async () => finish([{ id: "existing", name: "PM — Roof survey" }]));
-  expect(mocks.navigate).not.toHaveBeenCalled();
-});
-it("skips replacement when the server is already attached", async () => {
-  mocks.rpc.mcp.assignments.list.mockResolvedValue([
-    { serverId: "tools", allowAllTools: false, allowedTools: ["read"] },
-  ]);
-  const view = await mount();
-  await view.click();
-  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/new-bot");
-});
-it("reports creation failure and checks the roster again on retry", async () => {
-  mocks.rpc.bots.create.mockRejectedValueOnce(new Error("Response lost"));
-  const view = await mount();
-  await view.click();
-  expect(view.container.querySelector('[role="alert"]')?.textContent).toContain("Could not create");
-  expect(mocks.rpc.mcp.servers.list).not.toHaveBeenCalled();
-  mocks.rpc.bots.list.mockResolvedValue([{ id: "recovered", name: "PM — Roof survey" }]);
-  await view.click();
-  expect(mocks.rpc.bots.create).toHaveBeenCalledTimes(1);
-  expect(mocks.navigate).toHaveBeenCalledWith("/app/recovered");
-});
-it("never falls back to the owner-level server", async () => {
-  mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "owner", name: "QSight Pilot", enabled: true },
-  ]);
-  const view = await mount();
-  await view.click();
-  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
-  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
-});
-it("selects the scoped server when owner and scoped both exist", async () => {
-  mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "owner", name: "QSight Pilot", enabled: true },
-    { id: "scoped", name: "QSight PM Pilot", enabled: true },
-  ]);
-  const view = await mount();
-  await view.click();
-  expect(mocks.rpc.mcp.assignments.replace).toHaveBeenCalledExactlyOnceWith({
-    botId: "new-bot",
-    assignments: [{ serverId: "scoped", allowAllTools: true, allowedTools: [] }],
-  });
-});
-it("fails when the scoped server is disabled", async () => {
-  mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "scoped", name: "QSight PM Pilot", enabled: false },
-  ]);
-  const view = await mount();
-  await view.click();
-  expect(mocks.rpc.mcp.assignments.replace).not.toHaveBeenCalled();
-  expect(view.container.querySelector('[role="alert"]')).not.toBeNull();
+  await act(async () => finish({ bot: { id: "late" } }));
+  expect(onOpenBot).toHaveBeenCalledTimes(1);
 });

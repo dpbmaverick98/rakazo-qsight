@@ -37,6 +37,7 @@ import {
   mcpAssignmentDto,
   mcpServerDto,
 } from "../mcp-servers.js";
+import { provisionProjectManager } from "../project-manager.js";
 import type { RouterContext } from "./context.js";
 import { computerContext } from "./shared.js";
 
@@ -57,6 +58,9 @@ export function mcpRoutes(ctx: RouterContext) {
   return {
     mcp: {
       servers: {
+        provisionProjectManager: authed.mcp.servers.provisionProjectManager.handler(
+          ({ context, input }) => provisionProjectManager(ctx, context.actor, input),
+        ),
         list: authed.mcp.servers.list.handler(async ({ context }) => {
           const rows = await deps.prisma.mcpServer.findMany({
             where: availableInSpace(context.actor),
