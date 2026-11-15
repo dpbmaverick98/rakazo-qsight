@@ -12,6 +12,7 @@ type SidebarChat = {
 type SidebarSpace<TBot extends SidebarChat, TGroup extends SidebarChat> = {
   id: string;
   name: string;
+  isDefault?: boolean;
   canRename?: boolean;
   canDelete?: boolean;
   shared?: boolean;
@@ -46,13 +47,16 @@ export function sidebarGroupsForSpaces<TBot extends SidebarChat, TGroup extends 
   now = Date.now(),
 ) {
   const needle = query.toLowerCase();
-  const showSpaceNames = spaces.length > 1;
+  const visibleSpaces = spaces.some((space) => !space.isDefault)
+    ? spaces.filter((space) => !space.isDefault)
+    : spaces;
+  const showSpaceNames = visibleSpaces.length > 1;
   // Search still finds a snoozed chat; the list itself leaves it out until it wakes.
   const listed = (chat: SidebarChat) =>
     needle
       ? `${chat.name} ${chat.preview ?? ""}`.toLowerCase().includes(needle)
       : !chatSnoozed(chat, now);
-  return spaces.flatMap((space) => {
+  return visibleSpaces.flatMap((space) => {
     const visibleBots = space.bots.filter(listed);
     const visibleGroups = space.groups.filter(listed);
     const grouped = groupBotsForSidebar(
@@ -136,7 +140,7 @@ export function sidebarGroupsForSpaces<TBot extends SidebarChat, TGroup extends 
         sectionId: null,
         showLock: showSpaceNames,
         shared: space.shared === true,
-        emptySpaceId: showSpaceNames ? space.id : undefined,
+        emptySpaceId: spaces.length > 1 ? space.id : undefined,
         spaceId: space.id,
         spaceName: space.name,
         ...spaceHeaderMenu(space, true),

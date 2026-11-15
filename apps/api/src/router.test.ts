@@ -6612,6 +6612,23 @@ describe("bot intro run", () => {
     });
   });
 
+  it("passes client context into the intro while Personal keeps the generic prompt", async () => {
+    const { create, deps } = introDeps();
+    vi.mocked(deps.prisma.space.findUnique).mockResolvedValue({
+      name: "Example Client",
+      isDefault: false,
+    } as never);
+    await enqueueBotIntroRun(deps, actor, bot);
+    const [taskCall] = create.mock.calls as Array<[{ data: { prompt?: string } }]>;
+    expect(taskCall?.[0].data.prompt).toBe(
+      botIntroPrompt({
+        userName: "Ada Lovelace",
+        spaceName: "Example Client",
+        disabledBuiltinTools: [],
+      }),
+    );
+  });
+
   it("leaves a placeholder account name out of the intro", async () => {
     const { create, deps } = introDeps();
     vi.mocked(deps.prisma.user.findUnique).mockResolvedValue({
