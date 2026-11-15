@@ -22,6 +22,6 @@ Existing archive/restore controls continue to cover setup PMs, project PMs, lega
 
 Focused offline tests cover native creation, canonical assignments, target/session isolation, continuation/retry, archive access through hierarchy failures, existing archive/restore flows, and concurrent archived-key preservation. The PostgreSQL setup regression checks archive/retry/restore and rejects restarting an archived promoted PM; it requires an explicitly configured test database.
 
-The narrow-web E2E spec covers loading, errors/retry, empty-client setup, dismissal, focus restoration, composer typing and screenshots. Run it in the existing CI web suite. The existing native Compose screenshot flow now captures Add client and Continue setup; its seeded generic workspace can show the unavailable/recovery state, not an invented external-client fixture.
+The narrow-web E2E spec covers loading, errors/retry, empty-client setup, dismissal, focus restoration, composer typing and screenshots. Run it in the existing CI web suite. The existing native Compose and Android screenshot flows now capture Add client and Continue setup; its seeded generic workspace can show the unavailable/recovery state, not an invented external-client fixture.
 
 Native screenshots cannot be captured in the implementation environment because the simulator tooling is unavailable. Do not treat source review or DOM tests as native visual verification. Native building/project navigation and native visual verification remain explicit follow-up work.
