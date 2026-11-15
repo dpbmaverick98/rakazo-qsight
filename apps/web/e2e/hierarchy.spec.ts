@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
 import { captureScreenshot, completeOnboarding, openBotPanelTab, rpc, signup } from "./helpers";
 
 test("client hierarchy shares the right region with chat details", async ({ page }, testInfo) => {
@@ -30,6 +31,9 @@ test("client hierarchy shares the right region with chat details", async ({ page
       },
     });
   });
+  await page.route("**/api/agent-plane/projects/roof/commercial", (route) =>
+    route.fulfill({ json: commercialFixture }),
+  );
   await page.evaluate((id) => localStorage.setItem("rakazo:space-id", id), space.id);
   const botResponse = await page.request.post("/rpc/bots/create", {
     headers: { "x-rakazo-space-id": space.id },
@@ -55,6 +59,16 @@ test("client hierarchy shares the right region with chat details", async ({ page
     "true",
   );
   await expect(rail.getByRole("link", { name: "Roof survey (opens in new tab)" })).toBeVisible();
+  await rail.getByRole("button", { name: "North Building" }).click();
+  await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
+  const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
+  await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
+  await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
+  await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
+  await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "project-commercial");
+  await commercial.getByRole("button", { name: "Back to hierarchy" }).click();
+
   await captureScreenshot(page, testInfo, "client-hierarchy-expanded");
   await openBotPanelTab(page, "Computer");
   await expect(rail).toBeVisible();
@@ -69,5 +83,9 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await page.reload();
   await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
   await expect(rail).toBeVisible();
-  await captureScreenshot(page, testInfo, "client-hierarchy-narrow");
+  await rail.getByRole("button", { name: "North Building", exact: true }).click();
+  await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
+  await rail.getByRole("button", { name: "Finishes", exact: true }).click();
+  await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();
+  await captureScreenshot(page, testInfo, "project-commercial-narrow");
 });

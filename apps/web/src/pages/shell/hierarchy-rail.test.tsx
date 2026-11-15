@@ -58,7 +58,7 @@ async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}) 
     },
   };
 }
-it("expands buildings, links projects safely and collapses the rail", async () => {
+it("expands buildings, offers project selection and collapses the rail", async () => {
   const view = await mount();
   try {
     const button = [...view.container.querySelectorAll("button")].find((button) =>
@@ -67,10 +67,11 @@ it("expands buildings, links projects safely and collapses the rail", async () =
     expect(button.getAttribute("aria-expanded")).toBe("false");
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    const link = view.container.querySelector("a")!;
-    expect(link.textContent).toBe("Roof survey");
-    expect(link.target).toBe("_blank");
-    expect(link.rel).toBe("noopener noreferrer");
+    expect(
+      [...view.container.querySelectorAll("button")].some(
+        (item) => item.textContent === "Roof survey",
+      ),
+    ).toBe(true);
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("false");
     await act(async () =>

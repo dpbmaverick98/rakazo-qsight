@@ -465,6 +465,9 @@ function SpaceShell() {
           void queryClient.invalidateQueries({
             queryKey: ["hierarchy", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
           });
+          void queryClient.invalidateQueries({
+            queryKey: ["project-commercial", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
+          });
         },
       },
     },

@@ -1,3 +1,4 @@
+import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { qsightHierarchyFromEnv } from "./qsight-hierarchy.js";
 
@@ -93,3 +94,42 @@ it.each([
     expect(result.buildings[0]).not.toHaveProperty("address");
   },
 );
+it("reads bounded commercial projections with bearer auth, canonical links and a short cache", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+    Response.json({ ...commercialFixture, secret: "omit" }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  const result = await source.readCommercial("roof");
+  expect(result).toEqual(commercialFixture);
+  await source.readCommercial("roof");
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(String(fetch.mock.calls[0][0])).toBe(
+    "https://hierarchy.example.test/api/v2/agent/projects/roof/commercial",
+  );
+  expect(fetch.mock.calls[0][1]).toMatchObject({
+    redirect: "error",
+    headers: { Authorization: "Bearer fake-token" },
+    signal: expect.any(AbortSignal),
+  });
+});
+it("rejects upstream errors, wrong project, malformed and oversized commercial data without caching", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("private", { status: 403 }))
+    .mockResolvedValueOnce(
+      Response.json({
+        ...commercialFixture,
+        project: { ...commercialFixture.project, id: "other" },
+      }),
+    )
+    .mockResolvedValueOnce(Response.json({ project: {} }))
+    .mockResolvedValueOnce(Response.json({ padding: "x".repeat(256_001) }))
+    .mockRejectedValueOnce(new DOMException("Deadline", "TimeoutError"))
+    .mockResolvedValueOnce(Response.json(commercialFixture));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  for (let i = 0; i < 5; i++) await expect(source.readCommercial("roof")).rejects.toThrow();
+  await expect(source.readCommercial("roof")).resolves.toEqual(commercialFixture);
+});
+
