@@ -40,7 +40,7 @@ beforeEach(() => {
   mocks.rpc.bots.list.mockResolvedValue([]);
   mocks.rpc.bots.create.mockResolvedValue({ id: "new-bot" });
   mocks.rpc.mcp.servers.list.mockResolvedValue([
-    { id: "tools", name: "QSight Pilot", enabled: true },
+    { id: "tools", name: "QSight PM Pilot", enabled: true },
   ]);
   mocks.rpc.mcp.assignments.list.mockResolvedValue([]);
   mocks.rpc.mcp.assignments.replace.mockResolvedValue([]);

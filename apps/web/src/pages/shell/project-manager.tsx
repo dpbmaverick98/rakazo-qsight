@@ -1,7 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Bot } from "@rakazo/contracts";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
-import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
 import { Button } from "@rakazo/ui-web";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,6 +8,7 @@ import { rpcForSpace } from "../../lib/rpc";
 import { projectManagerInstructions } from "./project-manager.prompt";
 
 /** Creation commits before attachment. Keep the bot on failure; retry never recreates it. */
+const PROJECT_MANAGER_SERVER = "QSight PM Pilot";
 export function ProjectManagerAction({
   project,
   client,
@@ -73,7 +73,7 @@ export function ProjectManagerAction({
         if (mounted.current) setCreatedBot(bot);
       }
       const servers = await rpc.mcp.servers.list();
-      const server = servers.find((item) => item.name === PROJECT_MANAGER_TOOLS.serverName);
+      const server = servers.find((item) => item.name === PROJECT_MANAGER_SERVER);
       if (!server?.enabled) throw new Error("Server unavailable");
       const assignments = await rpc.mcp.assignments.list({ botId: bot.id });
       if (!assignments.some((item) => item.serverId === server.id)) {
@@ -95,7 +95,7 @@ export function ProjectManagerAction({
       if (mounted.current)
         setError(
           bot
-            ? t`Project manager created, but the tool connection is unconfigured. Check the ${PROJECT_MANAGER_TOOLS.serverName} MCP server and retry.`
+            ? t`Project manager created, but the tool connection is unconfigured. Check the ${PROJECT_MANAGER_SERVER} MCP server and retry.`
             : t`Could not create project manager. Retry to check whether it was created.`,
         );
     } finally {
