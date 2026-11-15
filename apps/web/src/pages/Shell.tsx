@@ -459,7 +459,14 @@ function SpaceShell() {
       },
       meId: userId,
       groupsRef,
-      roster: rosterSignals,
+      roster: {
+        changed: () => {
+          rosterSignals.changed();
+          void queryClient.invalidateQueries({
+            queryKey: ["hierarchy", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
+          });
+        },
+      },
     },
   );
   const { speakingMessageId, speakMessage, callHoldsSpeaker } = useReadAloud({
@@ -1238,6 +1245,15 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
+        hierarchyScope={{
+          userId: userId ?? null,
+          spaceId: shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+          enabled: Boolean(
+            spaces.find(
+              (space) => space.id === (shellSpaceId ?? bootstrapMe?.spaceId) && !space.isDefault,
+            ),
+          ),
+        }}
         rpc={rpc}
         panel={panel}
         setPanel={setPanel}
