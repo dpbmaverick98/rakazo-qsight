@@ -110,7 +110,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await buildingForm.getByRole("textbox", { name: "Address or site" }).fill("Example Street");
   await buildingForm.getByRole("button", { name: "Search", exact: true }).click();
   await buildingForm.getByRole("radio", { name: candidate.address }).check();
-  await buildingForm.getByRole("button", { name: "Confirm location", exact: true }).click();
+  await buildingForm.getByRole("button", { name: "Use location", exact: true }).click();
   await expect(buildingForm.getByText(candidate.address, { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "add-building-confirmation");
   await buildingForm.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -137,7 +137,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   });
   expect(managersResponse.ok()).toBeTruthy();
   const { json: managers } = (await managersResponse.json()) as { json: { name: string }[] };
-  expect(managers.filter((item) => item.name === "PM — Roof survey")).toHaveLength(0);
+  expect(managers.filter((item) => item.name === "Proj. Manager - Sam")).toHaveLength(0);
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();

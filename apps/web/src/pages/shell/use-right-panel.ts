@@ -1,4 +1,5 @@
-import type { Routine } from "@rakazo/contracts";
+import type { ArtifactStageState, Routine } from "@rakazo/contracts";
+import { ArtifactStageStateSchema } from "@rakazo/contracts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SetURLSearchParams } from "react-router-dom";
 import type { Panel, RightPanelState } from "../../lib/right-panel-state";
@@ -16,6 +17,10 @@ export function useRightPanel({
   searchParams: URLSearchParams;
   setSearchParams: SetURLSearchParams;
 }) {
+  const [artifactStage, setArtifactStage] = useState<ArtifactStageState>({
+    activeId: null,
+    artifacts: [],
+  });
   const [modelFocusRequest, setModelFocusRequest] = useState(0);
   const [panel, setPanelState] = useState<Panel>(null);
   const [restoredPanelKey, setRestoredPanelKey] = useState<string | null>(null);
@@ -52,6 +57,18 @@ export function useRightPanel({
   }
 
   return {
+    artifactStage,
+    publishStage: (state: ArtifactStageState) => {
+      setArtifactStage(ArtifactStageStateSchema.parse(state));
+      setPanel("artifact-stage");
+    },
+    clearStage: () => setArtifactStage({ activeId: null, artifacts: [] }),
+    selectArtifact: (id: string) =>
+      setArtifactStage((current) =>
+        current.artifacts.some((artifact) => artifact.id === id)
+          ? { ...current, activeId: id }
+          : current,
+      ),
     panel,
     setPanel,
     setPanelState,
@@ -125,6 +142,7 @@ export function useRightPanelRestore({
     if (!panelStorageKey) return;
     if (observedPanelKey.current !== panelStorageKey) {
       observedPanelKey.current = panelStorageKey;
+      rightPanel.clearStage();
       if (pendingExplicitPanel.current || explicitPanelTarget.current === panelStorageKey) {
         pendingExplicitPanel.current = false;
         explicitPanelTarget.current = null;

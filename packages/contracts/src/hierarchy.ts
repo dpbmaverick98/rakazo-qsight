@@ -5,6 +5,7 @@ const Id = z.string().min(1).max(200);
 
 /** Navigation supplied by an optional external hierarchy service. */
 export const HierarchySchema = z.object({
+  canManage: z.boolean().optional(),
   bindingRevision: z.number().int().positive().optional(),
   client: z.object({ id: Id, name: Name }),
   buildings: z

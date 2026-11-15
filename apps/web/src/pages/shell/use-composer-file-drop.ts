@@ -1,5 +1,6 @@
 import type { DragEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { droppedAttachmentFiles } from "../../lib/folder-drop";
 import { isFileDrag } from "../../lib/pending-attachments";
 
 /**
@@ -11,8 +12,9 @@ export function useComposerFileDrop({
   onDropFiles,
 }: {
   disabled?: boolean;
-  onDropFiles: (files: FileList) => void;
+  onDropFiles: (files: readonly File[]) => void;
 }) {
+  const [dropError, setDropError] = useState(false);
   const dragDepth = useRef(0);
   const [draggingFiles, setDraggingFiles] = useState(false);
   const [fileDragActive, setFileDragActive] = useState(false);
@@ -89,10 +91,14 @@ export function useComposerFileDrop({
     event.preventDefault();
     dragDepth.current = 0;
     setDraggingFiles(false);
-    if (!disabled) onDropFiles(dataTransfer.files);
+    if (!disabled) {
+      setDropError(false);
+      void droppedAttachmentFiles(dataTransfer).then(onDropFiles, () => setDropError(true));
+    }
   }
 
   return {
+    dropError,
     draggingFiles,
     fileDragActive,
     dropHandlers: { onDragEnter, onDragOver, onDragLeave, onDrop },

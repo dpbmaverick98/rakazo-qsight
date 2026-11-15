@@ -263,7 +263,7 @@ it("submits in the rail, retains errors and refreshes after success without a ch
     });
     for (const message of [
       "Project already exists",
-      "Could not create project. Try again.",
+      "Could not complete project setup. Try again.",
       null,
     ]) {
       await act(async () =>
@@ -343,12 +343,11 @@ it("requires a selectable candidate and canonical confirmation, and retains the 
     const radios = form.querySelectorAll<HTMLInputElement>('input[type="radio"]');
     expect(radios[0]!.disabled).toBe(true);
     expect(
-      [...form.querySelectorAll("button")].find(
-        (button) => button.textContent === "Confirm location",
-      )!.disabled,
+      [...form.querySelectorAll("button")].find((button) => button.textContent === "Use location")!
+        .disabled,
     ).toBe(true);
     await act(async () => radios[1]!.click());
-    await click("Confirm location");
+    await click("Use location");
     expect(fetch.mock.calls[1]![1].body).toBe(
       JSON.stringify({ verification_token: "fake-candidate" }),
     );
@@ -423,3 +422,33 @@ it("recovers from temporary session/proxy errors and empty responses, then stops
     vi.useRealTimers();
   }
 });
+
+it.each(["personal", "binding_missing"])(
+  "treats a %s Space as empty without losing HTTP errors for other failures",
+  async (status) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status }, { status: 409 })));
+    const client = new QueryClient();
+    const root = createRoot(document.createElement("div"));
+    function Probe() {
+      useHierarchy("user", "space", true);
+      return null;
+    }
+    try {
+      await act(async () => {
+        root.render(
+          <QueryClientProvider client={client}>
+            <Probe />
+          </QueryClientProvider>,
+        );
+      });
+      await vi.waitFor(() =>
+        expect(client.getQueryState(["hierarchy", "user", "space"])?.status).toBe("success"),
+      );
+      expect(client.getQueryData(["hierarchy", "user", "space"])).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+      client.clear();
+    }
+  },
+);

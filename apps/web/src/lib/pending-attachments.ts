@@ -50,3 +50,8 @@ export function usePendingAttachmentPreviewCleanup(
   latest.current = attachments;
   useEffect(() => () => revokePendingAttachmentPreviews(latest.current), []);
 }
+
+/** Folder paths remain display metadata; workspace files use artifact IDs. */
+export function attachmentFileName(file: File): string {
+  return file.webkitRelativePath || file.name;
+}
