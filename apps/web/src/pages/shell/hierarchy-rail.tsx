@@ -4,15 +4,16 @@ import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
+import { lazyComponent } from "../../lib/preload-recovery";
 import { withSpaceHeaders } from "../../lib/rpc";
-import { CreateBuilding } from "./create-building";
 import { CreateProject } from "./create-project";
 import { hierarchyRetry } from "./hierarchy-refresh";
 import { CommercialSelection, ProjectActivity } from "./project-commercial";
 import { ProjectManagerAction } from "./project-manager";
 
-const BuildingMap = lazy(() => import("./building-map"));
+const BuildingMap = lazyComponent(() => import("./building-map").then((module) => module.default));
 
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery<Hierarchy | null>({
@@ -20,27 +21,15 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
     enabled: enabled && !!userId && !!spaceId,
     retry: hierarchyRetry,
     refetchOnWindowFocus: true,
-    // Recovery fallback only until real data arrives; React Query owns timer cleanup.
-    refetchInterval: (query) =>
-      (
-        query.state.error
-          ? hierarchyRetry(0, query.state.error)
-          : !query.state.data?.buildings.length
-      )
-        ? 5_000
-        : false,
     queryFn: async ({ signal }) => {
       const response = await fetch("/api/agent-plane/hierarchy", {
         headers: withSpaceHeaders(undefined, spaceId),
         credentials: "include",
         signal,
       });
-      if (response.status === 204) return null;
+      // Binding transitions and unconfigured Spaces have no authorized hierarchy yet.
+      if (response.status === 204 || response.status === 409) return null;
       if (!response.ok) {
-        if (response.status === 409) {
-          const body = await response.json();
-          if (["personal", "binding_missing"].includes(body.status)) return null;
-        }
         throw Object.assign(new Error("Hierarchy unavailable"), { status: response.status });
       }
       return HierarchySchema.parse(await response.json());
@@ -51,7 +40,6 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
 export function HierarchyRail({
   data,
   loading,
-  error,
   retry,
   scope,
   onOpenBot,
@@ -100,25 +88,10 @@ export function HierarchyRail({
           <Trans>Quick access to building and project details</Trans>
         </p>
       ) : null}
-      {data ? (
-        <CreateBuilding
-          key={`${scope?.userId}:${scope?.spaceId}:${data.bindingRevision}`}
-          spaceId={scope?.spaceId ?? null}
-          bindingRevision={data.bindingRevision}
-          refresh={retry}
-        />
-      ) : null}
       {loading && !data?.buildings.length ? (
         <p role="status" className="text-body text-muted-foreground">
           <Trans>Loading hierarchy…</Trans>
         </p>
-      ) : null}
-      {error || (!loading && !data) ? (
-        <div role="status" className="space-y-2">
-          <p className="text-body-sm text-muted-foreground">
-            <Trans>Quick access to building and project details</Trans>
-          </p>
-        </div>
       ) : null}
       {data &&
       scope?.spaceId &&
@@ -142,11 +115,13 @@ export function HierarchyRail({
           {data.buildings.some(
             (building) => building.latitude != null && building.longitude != null,
           ) ? (
-            <div className="mb-3 h-40 overflow-hidden rounded-md border border-border @min-[300px]:h-48">
+            <ErrorBoundary fallback={null}>
               <Suspense fallback={null}>
-                <BuildingMap buildings={data.buildings} onSelect={selectBuilding} />
+                <div className="mb-3 h-40 overflow-hidden rounded-md border border-border @min-[300px]:h-48">
+                  <BuildingMap buildings={data.buildings} onSelect={selectBuilding} />
+                </div>
               </Suspense>
-            </div>
+            </ErrorBoundary>
           ) : null}
           {data.buildings.length > 0 ? (
             <ul className="flex flex-col gap-2">

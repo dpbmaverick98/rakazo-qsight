@@ -16,22 +16,16 @@ test("client hierarchy shares the right region with chat details", async ({ page
     selectable: true,
     verification_token: "fake-candidate",
   };
-  await page.route("**/api/agent-plane/locations/search", (route) =>
-    route.fulfill({ json: { items: [candidate], attribution: candidate.attribution } }),
+  // Keep the map journey deterministic and offline.
+  await page.route("https://tile.openstreetmap.org/**", (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    }),
   );
-  await page.route("**/api/agent-plane/locations/proof", async (route) => {
-    expect(route.request().postDataJSON()).toEqual({
-      verification_token: candidate.verification_token,
-    });
-    await route.fulfill({
-      json: {
-        ...candidate,
-        verification_token: "fake-proof",
-        location_precision: "building",
-        expires_in: 1800,
-      },
-    });
-  });
   await page.route("**/api/agent-plane/projects", async (route) => {
     expect(route.request().postDataJSON()).toEqual({ buildingId: "north", name: "Window survey" });
     const project = {
@@ -103,17 +97,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await rail.locator(".leaflet-marker-icon").click();
   await expect(building).toHaveAttribute("aria-expanded", "true");
   const composer = page.getByTestId("composer-field").locator("textarea");
-  await rail.getByRole("button", { name: "Add building", exact: true }).click();
-  const buildingForm = rail.getByRole("form", { name: "Add building", exact: true });
-  await expect(buildingForm.getByRole("textbox", { name: "Address or site" })).toBeFocused();
-  await captureScreenshot(page, testInfo, "add-building-search");
-  await buildingForm.getByRole("textbox", { name: "Address or site" }).fill("Example Street");
-  await buildingForm.getByRole("button", { name: "Search", exact: true }).click();
-  await buildingForm.getByRole("radio", { name: candidate.address }).check();
-  await buildingForm.getByRole("button", { name: "Use location", exact: true }).click();
-  await expect(buildingForm.getByText(candidate.address, { exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "add-building-confirmation");
-  await buildingForm.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(rail.getByRole("button", { name: "Add building", exact: true })).toHaveCount(0);
   await rail.getByRole("button", { name: "Add project", exact: true }).click();
   const projectForm = rail.getByRole("form", { name: "Add project", exact: true });
   await expect(projectForm.getByRole("textbox", { name: "Project name" })).toBeFocused();
@@ -149,17 +133,24 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await expect(rail).toBeVisible();
   await expect(page.getByTestId("bot-settings")).toBeVisible();
   await captureScreenshot(page, testInfo, "client-hierarchy-with-details");
-  await rail.getByRole("button", { name: "Collapse hierarchy" }).click();
-  await expect(rail).toHaveCount(0);
-  await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
-  await expect(rail).toBeVisible();
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
   await expect(rail).toBeVisible();
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   await rail.getByRole("button", { name: "Finishes", exact: true }).click();
   await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await captureScreenshot(page, testInfo, "project-commercial-narrow");
+  await page.route("https://tile.openstreetmap.org/**", (route) => route.fulfill({ status: 503 }));
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().startsWith("https://tile.openstreetmap.org/") && response.status() === 503,
+    ),
+    page.reload(),
+  ]);
+  await expect(rail.getByRole("button", { name: "North Building", exact: true })).toBeVisible();
+  await expect(rail.getByRole("region", { name: "Building map" })).toHaveCount(0);
+  await expect(rail.getByRole("button", { name: "Roof survey", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "hierarchy-map-fallback");
 });

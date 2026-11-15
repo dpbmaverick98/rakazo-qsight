@@ -7,6 +7,7 @@ import type {
 } from "@rakazo/contracts";
 import { cloudAgentBlockFromPayload } from "./cloud-agent.js";
 import { preserveIdentitySource } from "./identity-source.js";
+import { friendlyMcpToolLabel } from "./mcp.js";
 import { payloadAuthor } from "./message-replies.js";
 import { modelFallbackFailure, parseModelFallbackFailure } from "./run-error.js";
 
@@ -490,7 +491,9 @@ export function withToolHistory(
 }
 
 export function appendToolStep(steps: readonly ToolStep[], toolName: string): ToolStep[] {
-  const label = humanizeToolName(toolName);
+  const label = toolName.startsWith("mcp__")
+    ? friendlyMcpToolLabel(toolName)
+    : humanizeToolName(toolName);
   const last = steps.at(-1);
   if (last && last.label === label) {
     return [...steps.slice(0, -1), { ...last, count: last.count + 1 }];

@@ -19,18 +19,46 @@ export function customMcpServerInput(name: string, endpoint: string) {
   };
 }
 
+/** Business labels depend on the protocol action, never a provider id. */
+const mcpActions: Record<string, string> = {
+  create_client: "Create client",
+  create_building: "Create building",
+  create_project: "Create project",
+  create_work_package: "Create work package",
+  search_locations: "Check address",
+  get_location_proof: "Confirm address",
+  search_documents: "Search documents",
+  get_document_evidence: "Read document evidence",
+  search_clients: "Search clients",
+  list_documents: "Look up documents",
+  get_work_package: "Read work package",
+  list_clients: "Look up clients",
+  list_buildings: "Look up buildings",
+  list_projects: "Look up projects",
+  list_work_packages: "Look up work packages",
+  get_client: "Read client",
+  get_building: "Read building",
+  get_project: "Read project",
+  get_hierarchy: "Read client hierarchy",
+  get_document: "Read document",
+  publish_documents: "Publish documents",
+  approve_documents: "Approve documents",
+  delete_document: "Delete document",
+};
+
+export function friendlyMcpToolLabel(tool: string): string {
+  const legacy = tool.match(/^mcp\s+\S+\s+(.+)$/i);
+  const action = tool.startsWith("mcp__")
+    ? tool.split("__").slice(2).join("__")
+    : legacy
+      ? legacy[1]!.replace(/ /g, "_")
+      : tool.split(" ").at(-1)!;
+  return mcpActions[action] ?? (tool.startsWith("mcp__") || legacy ? "Use connected tool" : tool);
+}
+
 /** Stable business labels shared by new approvals and legacy card rendering. */
 export function mcpApprovalTitle(tool: string): string | undefined {
   if (!tool.startsWith("mcp__")) return undefined;
-  const action = tool.split("__").slice(2).join("__");
-  const titles: Record<string, string> = {
-    create_client: "Create client?",
-    create_building: "Create building?",
-    create_project: "Create project?",
-    create_work_package: "Create work package?",
-    publish_documents: "Publish documents?",
-    approve_documents: "Approve documents?",
-    delete_document: "Delete document?",
-  };
-  return titles[action] ?? "Allow action?";
+  const label = friendlyMcpToolLabel(tool);
+  return label === "Use connected tool" ? "Allow action?" : `${label}?`;
 }

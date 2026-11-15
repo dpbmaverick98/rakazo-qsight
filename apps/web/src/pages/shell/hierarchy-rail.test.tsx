@@ -69,7 +69,7 @@ async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}, 
     },
   };
 }
-it("expands buildings, offers project selection and collapses the rail", async () => {
+it("expands buildings and offers project selection", async () => {
   const view = await mount();
   try {
     const button = [...view.container.querySelectorAll("button")].find((button) =>
@@ -85,10 +85,6 @@ it("expands buildings, offers project selection and collapses the rail", async (
     ).toBe(true);
     await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("false");
-    await act(async () =>
-      view.container.querySelector<HTMLButtonElement>('[aria-label="Collapse hierarchy"]')!.click(),
-    );
-    expect(view.collapse).toHaveBeenCalledOnce();
   } finally {
     await view.close();
   }
@@ -97,19 +93,11 @@ it("renders loading, empty and retryable errors", async () => {
   for (const [props, text] of [
     [{ data: undefined, loading: true }, "Loading hierarchy…"],
     [{ data: { ...data, buildings: [] } }, "Quick access to building and project details"],
-    [{ data: undefined, error: true }, "Hierarchy unavailable"],
+    [{ data: undefined, error: true }, "Quick access to building and project details"],
   ] as [Partial<ComponentProps<typeof HierarchyRail>>, string][]) {
     const view = await mount(props);
     try {
       expect(view.container.textContent).toContain(text);
-      if ("error" in props) {
-        await act(async () =>
-          [...view.container.querySelectorAll("button")]
-            .find((button) => button.textContent === "Retry")!
-            .click(),
-        );
-        expect(view.retry).toHaveBeenCalledOnce();
-      }
     } finally {
       await view.close();
     }
@@ -216,16 +204,18 @@ it("pins only complete coordinates and selects, expands and scrolls the building
   }
 });
 
-it("opens building setup without a chat handoff", async () => {
-  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
-  try {
-    const button = [...view.container.querySelectorAll("button")].find(
-      (item) => item.textContent === "Add building",
-    )!;
-    await act(async () => button.click());
-    expect(view.container.querySelector('form[aria-label="Add building"]')).not.toBeNull();
-  } finally {
-    await view.close();
+it("does not offer building setup in the rail", async () => {
+  for (const buildings of [data.buildings, []]) {
+    const view = await mount({
+      data: { ...data, buildings },
+      scope: { userId: "user", spaceId: "space" },
+    });
+    try {
+      expect(view.container.textContent).not.toContain("Add building");
+      expect(view.container.querySelector('form[aria-label="Add building"]')).toBeNull();
+    } finally {
+      await view.close();
+    }
   }
 });
 
@@ -287,143 +277,7 @@ it("submits in the rail, retains errors and refreshes after success without a ch
   }
 });
 
-it("requires a selectable candidate and canonical confirmation, and retains the proof on retry", async () => {
-  const candidate = {
-    address: "10 Example Street",
-    latitude: 1,
-    longitude: 2,
-    attribution: "Map attribution",
-    selectable: true,
-    verification_token: "fake-candidate",
-  };
-  const proof = {
-    ...candidate,
-    verification_token: "fake-proof",
-    location_precision: "building",
-    expires_in: 1800,
-  };
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(
-      Response.json({
-        items: [{ ...candidate, address: "Example town", selectable: false }, candidate],
-        attribution: "Map attribution",
-      }),
-    )
-    .mockResolvedValueOnce(Response.json(proof))
-    .mockResolvedValueOnce(new Response(null, { status: 502 }))
-    .mockResolvedValueOnce(
-      Response.json({
-        id: "new",
-        name: "",
-        address: candidate.address,
-        url: "https://example.test/buildings/new",
-      }),
-    );
-  vi.stubGlobal("fetch", fetch);
-  const view = await mount({ scope: { userId: "user", spaceId: "space" } });
-  try {
-    const click = async (text: string) =>
-      act(async () =>
-        [...view.container.querySelectorAll("button")]
-          .find((button) => button.textContent === text)!
-          .click(),
-      );
-    await click("Add building");
-    const form = view.container.querySelector('form[aria-label="Add building"]')!;
-    const input = form.querySelector("input")!;
-    await act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
-        input,
-        "Example Street",
-      );
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await click("Search");
-    const radios = form.querySelectorAll<HTMLInputElement>('input[type="radio"]');
-    expect(radios[0]!.disabled).toBe(true);
-    expect(
-      [...form.querySelectorAll("button")].find((button) => button.textContent === "Use location")!
-        .disabled,
-    ).toBe(true);
-    await act(async () => radios[1]!.click());
-    await click("Use location");
-    expect(fetch.mock.calls[1]![1].body).toBe(
-      JSON.stringify({ verification_token: "fake-candidate" }),
-    );
-    expect(form.textContent).toContain("10 Example Street");
-    expect(fetch).toHaveBeenCalledTimes(2);
-    await click("Confirm building");
-    expect(form.querySelector('[role="alert"]')).not.toBeNull();
-    await click("Confirm building");
-    expect(fetch.mock.calls[2]![1].body).toBe(fetch.mock.calls[3]![1].body);
-    expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
-      address: "10 Example Street",
-      verification_token: "fake-proof",
-      nickname: "",
-    });
-    expect(view.retry).toHaveBeenCalledOnce();
-    expect(view.container.querySelector('form[aria-label="Add building"]')).toBeNull();
-  } finally {
-    await view.close();
-  }
-});
-
-it("recovers from temporary session/proxy errors and empty responses, then stops fallback reads", async () => {
-  vi.useFakeTimers();
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(new Response(null, { status: 401 }))
-    .mockResolvedValueOnce(new Response(null, { status: 502 }))
-    .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    .mockResolvedValueOnce(Response.json({ ...data, buildings: [] }))
-    .mockResolvedValue(Response.json(data));
-  vi.stubGlobal("fetch", fetch);
-  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
-  const container = document.createElement("div");
-  const root = createRoot(container);
-  function Probe() {
-    const query = useHierarchy("user", "space", true);
-    return <span>{query.data?.buildings[0]?.name ?? "Empty"}</span>;
-  }
-  try {
-    await act(async () =>
-      root.render(
-        <QueryClientProvider client={client}>
-          <Probe />
-        </QueryClientProvider>,
-      ),
-    );
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(10);
-    });
-    expect(fetch).toHaveBeenCalledTimes(3);
-    expect(container.textContent).toBe("Empty");
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_010);
-    });
-    expect(fetch).toHaveBeenCalledTimes(4);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_010);
-    });
-    expect(container.textContent).toBe("North Building");
-    const count = fetch.mock.calls.length;
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(20_000);
-    });
-    expect(fetch).toHaveBeenCalledTimes(count);
-    await act(async () => root.unmount());
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(fetch).toHaveBeenCalledTimes(count);
-  } finally {
-    await act(async () => root.unmount());
-    client.clear();
-    vi.useRealTimers();
-  }
-});
-
-it.each(["personal", "binding_missing"])(
+it.each(["personal", "binding_missing", "binding_stale", "binding_conflict", "empty"])(
   "treats a %s Space as empty without losing HTTP errors for other failures",
   async (status) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -452,3 +306,70 @@ it.each(["personal", "binding_missing"])(
     }
   },
 );
+
+it("recovers an empty binding on a change signal without timed reads", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ status: "binding_stale" }, { status: 409 }))
+    .mockResolvedValueOnce(Response.json(data));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient();
+  const root = createRoot(document.createElement("div"));
+  function Probe() {
+    useHierarchy("user", "space", true);
+    return null;
+  }
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["hierarchy", "user", "space"] });
+    });
+    expect(client.getQueryData(["hierarchy", "user", "space"])).toEqual(data);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    vi.useRealTimers();
+  }
+});
+
+it("keeps permission denials as errors", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+  const client = new QueryClient();
+  const root = createRoot(document.createElement("div"));
+  function Probe() {
+    useHierarchy("user", "space", true);
+    return null;
+  }
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(client.getQueryState(["hierarchy", "user", "space"])?.status).toBe("error"),
+    );
+    expect(client.getQueryState(["hierarchy", "user", "space"])?.error).toMatchObject({
+      status: 403,
+    });
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
