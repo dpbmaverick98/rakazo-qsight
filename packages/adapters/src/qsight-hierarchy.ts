@@ -10,6 +10,8 @@ import {
   LocationProofInputSchema,
   LocationProofSchema,
   LocationQuerySchema,
+  ProjectMutationSchema,
+  RenameProjectSchema,
 } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
@@ -106,6 +108,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     ).catch(() => {
       throw new Error("Token revocation unavailable");
     });
+    // An already absent token is revoked; cleanup must survive an interrupted retry.
+    if (response.status === 404 || response.status === 410) return;
     if (!response.ok) throw new Error("Token revocation unavailable");
     try {
       z.object({ revoked: z.boolean() }).parse(
@@ -165,14 +169,13 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         const matches = items.filter((client) => client.name === input);
         if (matches.length > 1) throw new Error("Client lookup unavailable");
         const client = matches[0] ?? null;
-        if (
-          client &&
-          new URL(client.url).pathname !== `/clients/${encodeURIComponent(client.id)}`
-        )
+        if (client && new URL(client.url).pathname !== `/clients/${encodeURIComponent(client.id)}`)
           throw new Error("Client lookup unavailable");
         return client;
       } catch (error) {
-        throw new Error(`Client lookup unavailable: ${error instanceof Error ? error.message : "unknown"}`);
+        throw new Error(
+          `Client lookup unavailable: ${error instanceof Error ? error.message : "unknown"}`,
+        );
       }
     },
     async searchLocations(query: string) {
@@ -288,6 +291,69 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       } catch (error) {
         if (error instanceof Error && error.message === "Project already exists") throw error;
         throw new Error("Project creation unavailable");
+      }
+    },
+    async renameProject(projectId: string, name: string, buildingId: string) {
+      const input = RenameProjectSchema.parse({ projectId, name });
+      const expectedBuilding = Id.parse(buildingId);
+      const signal = deadlineSignal(5000);
+      try {
+        const response = await upstream(
+          "project.rename",
+          new URL(`/api/v2/projects/${encodeURIComponent(input.projectId)}`, origin),
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: input.name }),
+            redirect: "error",
+            signal,
+          },
+        );
+        if (!response.ok) throw new Error();
+        cache.clear();
+        commercialCache.delete(input.projectId);
+        const project = z
+          .object({ id: Id, name: Name, building_id: Id })
+          .parse(await readBoundedJsonResponse(response, 32_000, signal));
+        if (
+          project.id !== input.projectId ||
+          project.name !== input.name ||
+          project.building_id !== expectedBuilding
+        )
+          throw new Error();
+        return project;
+      } catch {
+        throw new Error("Project rename unavailable");
+      }
+    },
+    async deleteProject(projectId: string, name: string) {
+      const input = ProjectMutationSchema.parse({ projectId, name });
+      const signal = deadlineSignal(5000);
+      try {
+        const response = await upstream(
+          "project.delete",
+          new URL(`/api/v2/projects/${encodeURIComponent(input.projectId)}`, origin),
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ name: input.name }),
+            redirect: "error",
+            signal,
+          },
+        );
+        if (response.status !== 204) throw new Error();
+        cache.clear();
+        commercialCache.delete(input.projectId);
+      } catch {
+        throw new Error("Project deletion unavailable");
       }
     },
     revokeManagerToken,

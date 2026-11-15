@@ -443,3 +443,53 @@ it("returns the building default agent and retains the operation key for safe re
   );
   expect(manager).toHaveBeenLastCalledWith(actor, building, 1);
 });
+
+it("authorizes project mutations through the current binding and exact confirmation", async () => {
+  const { deps } = setup();
+  const renameProject = vi.fn(async () => ({}));
+  const deleteProject = vi.fn(async () => {});
+  const retireProject = vi.fn(async () => {});
+  const auditProject = vi.fn(async () => {});
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    ...deps,
+    source: { ...deps.source, renameProject, deleteProject },
+    retireProject,
+    auditProject,
+  });
+  const request = (method: string, name: string, id = "roof", origin = "http://localhost") =>
+    app.request(`/api/agent-plane/projects/${id}`, {
+      method,
+      headers: { "content-type": "application/json", origin, "x-rakazo-binding-revision": "1" },
+      body: JSON.stringify({ name }),
+    });
+  deps.sessionActor.mockResolvedValueOnce(null);
+  expect((await request("PATCH", "New roof")).status).toBe(401);
+  expect((await request("DELETE", "Roof", "roof", "https://foreign.example.test")).status).toBe(
+    403,
+  );
+  deps.canCreateProject.mockResolvedValueOnce(false);
+  expect((await request("PATCH", "New roof")).status).toBe(403);
+  expect((await request("PATCH", "New roof", "foreign")).status).toBe(404);
+  expect((await request("DELETE", "roof")).status).toBe(400);
+  expect((await request("DELETE", "Roof ")).status).toBe(400);
+  expect(retireProject).not.toHaveBeenCalled();
+  expect((await request("PATCH", " New roof ")).status).toBe(204);
+  expect(renameProject).toHaveBeenCalledWith("roof", "New roof", "building");
+  expect((await request("DELETE", "Roof")).status).toBe(204);
+  expect(retireProject).toHaveBeenCalledWith(actor, "roof", 1);
+  expect(deleteProject).toHaveBeenCalledWith("roof", "Roof");
+  expect(retireProject.mock.invocationCallOrder[0]).toBeLessThan(
+    deleteProject.mock.invocationCallOrder[0]!,
+  );
+  expect(auditProject).toHaveBeenCalledWith(actor, "roof", "delete");
+  expect(deps.changed).toHaveBeenCalledTimes(2);
+  deps.resolveBinding.mockRejectedValueOnce(
+    new ORPCError("CONFLICT", { message: "binding_stale" }),
+  );
+  expect((await request("DELETE", "Roof")).status).toBe(409);
+  expect(deleteProject).toHaveBeenCalledTimes(1);
+  retireProject.mockRejectedValueOnce(new Error("revocation unavailable"));
+  expect((await request("DELETE", "Roof")).status).toBe(502);
+  expect(deleteProject).toHaveBeenCalledTimes(1);
+});

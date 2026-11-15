@@ -124,5 +124,5 @@ body,
 
 /* Soften only the basemap: pins, labels and attribution keep their contrast. */
 .building-map-pastel .leaflet-tile-pane {
-  filter: saturate(0.3) brightness(1.08) contrast(0.88);
+  filter: saturate(0.12) brightness(1.16) contrast(0.72);
 }

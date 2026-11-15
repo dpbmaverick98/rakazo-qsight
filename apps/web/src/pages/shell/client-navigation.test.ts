@@ -34,15 +34,21 @@ const groups = () => sidebarGroupsForSpaces([space], "");
 describe("canonical client navigation", () => {
   it("groups pinned PMs once, retains empty nodes and collapses legacy bots", () => {
     const result = clientNavigationGroups(groups(), navigation, "");
-    expect(result.map((group) => group.title)).toEqual(["Client", "North", "Pinned"]);
-    expect(result.map((group) => group.depth)).toEqual([0, 1, 1]);
+    expect(result.map((group) => group.title)).toEqual([
+      "Client",
+      "North",
+      "Roof",
+      "Empty",
+      "Pinned",
+    ]);
+    expect(result.map((group) => group.depth)).toEqual([0, 1, 2, 2, 1]);
     expect(result.flatMap((group) => group.bots.map((item) => item.chat.id))).toEqual([
       "setup",
       "manager",
       "legacy",
     ]);
     expect(result.at(-1)?.defaultCollapsed).toBe(true);
-    expect(result.find((group) => group.title === "North")?.bots[0]?.chat.unread).toBe(true);
+    expect(result.find((group) => group.title === "Roof")?.bots[0]?.chat.unread).toBe(true);
   });
   it("shows ancestor context for bot, project and building searches", () => {
     for (const query of ["manager", "Roof", "North"]) {
@@ -50,9 +56,9 @@ describe("canonical client navigation", () => {
       const result = clientNavigationGroups(filtered, navigation, query, groups());
       expect(result.map((group) => group.title)).toContain("Client");
       expect(result.map((group) => group.title)).toContain("North");
-      expect(result.map((group) => group.title)).not.toContain("Roof");
+      expect(result.map((group) => group.title)).toContain("Roof");
       expect(result.every((group) => group.forceOpen)).toBe(true);
-      expect(result.find((group) => group.title === "North")?.bots[0]?.chat.id).toBe("manager");
+      expect(result.find((group) => group.title === "Roof")?.bots[0]?.chat.id).toBe("manager");
     }
   });
   it("keys expansion by Space and binding revision rather than labels", () => {
@@ -82,8 +88,10 @@ describe("canonical client navigation", () => {
       "",
     );
     expect(
-      result.find((group) => group.title === "North")?.bots.map((item) => item.chat.id),
-    ).toEqual(["manager", "legacy"]);
+      result
+        .filter((group) => group.project)
+        .flatMap((group) => group.bots.map((item) => item.chat.id)),
+    ).toEqual(["legacy", "manager"]);
   });
   it("keeps buildings without projects and preserves custom sections", () => {
     const custom = {
@@ -144,10 +152,13 @@ it("places a building manager once while setup stays at the client, then moves t
     buildingId: "building",
     canOpenSpaceSettings: true,
   });
-  for (const result of [before, clientNavigationGroups(groups(), navigation, "")]) {
-    expect(
-      result.find((group) => group.title === "North")?.bots.map((item) => item.chat.id),
-    ).toEqual(["manager"]);
+  for (const [result, title] of [
+    [before, "North"],
+    [clientNavigationGroups(groups(), navigation, ""), "Roof"],
+  ] as const) {
+    expect(result.find((group) => group.title === title)?.bots.map((item) => item.chat.id)).toEqual(
+      ["manager"],
+    );
     expect(
       result.flatMap((group) => group.bots).filter((item) => item.chat.id === "manager"),
     ).toHaveLength(1);

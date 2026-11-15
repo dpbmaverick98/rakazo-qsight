@@ -504,3 +504,50 @@ it("bypasses the commercial cache for live reads after external writes", async (
   expect((await source.readCommercial("roof", true)).claims).toEqual([]);
   expect(fetch).toHaveBeenCalledTimes(2);
 });
+
+it("renames and deletes canonical projects with bounded input and sanitized errors", async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(
+      Response.json({ id: "roof/survey", name: "Roof works", building_id: "1" }),
+    )
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json({ id: "other", name: "Roof works", building_id: "1" }))
+    .mockRejectedValueOnce(new Error("private upstream response"));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.renameProject("roof/survey", " Roof works ", "1")).resolves.toMatchObject({
+    name: "Roof works",
+  });
+  expect(fetch.mock.calls[0]).toEqual([
+    new URL("https://hierarchy.example.test/api/v2/projects/roof%2Fsurvey"),
+    expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ name: "Roof works" }),
+      redirect: "error",
+      signal: expect.any(AbortSignal),
+      headers: expect.objectContaining({ Authorization: "Bearer fake-token" }),
+    }),
+  ]);
+  await source.deleteProject("roof/survey", " Roof works ");
+  expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+    method: "DELETE",
+    body: JSON.stringify({ name: " Roof works " }),
+  });
+  await expect(source.renameProject("roof/survey", "Roof works", "1")).rejects.toThrow(
+    "Project rename unavailable",
+  );
+  await expect(source.deleteProject("roof/survey", "Roof works")).rejects.toThrow(
+    "Project deletion unavailable",
+  );
+  for (const [id, name] of [
+    ["..", "Roof"],
+    ["", "Roof"],
+    ["roof", ""],
+    ["roof", "x".repeat(501)],
+  ]) {
+    await expect(source.deleteProject(id!, name!)).rejects.toThrow();
+  }
+  await expect(source.renameProject("roof", "x".repeat(201), "1")).rejects.toThrow();
+  expect(fetch).toHaveBeenCalledTimes(4);
+});

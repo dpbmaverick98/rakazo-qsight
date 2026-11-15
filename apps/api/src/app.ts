@@ -26,6 +26,7 @@ import type {
   UserDeviceGateway,
 } from "@rakazo/adapters";
 import {
+  archiveBot,
   BillingEmulator,
   ChatSdkMessagingSurface,
   CodexCatalogCache,
@@ -170,6 +171,7 @@ import { monitoringRoutes } from "./monitoring.js";
 import { pluginSubmissionRoutes } from "./plugin-submissions.js";
 import { sendReferralEmails } from "./referral-email.js";
 import { mountApiRequestBodyLimits, rpcBodyLimit } from "./request-body-limit.js";
+import { auditProjectMutation, retireProject } from "./retire-project.js";
 import { createRouter } from "./router.js";
 import {
   DATABASE_RETRY_AFTER_SECONDS,
@@ -1014,6 +1016,28 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountHierarchyRoute(app, {
     sessionActor,
     source: hierarchySource,
+    retireProject: hierarchySource
+      ? (actor, projectId, revision) =>
+          runAsTenant(actor, () =>
+            retireProject(
+              {
+                prisma,
+                sandbox,
+                home,
+                jobs,
+                events,
+                artifacts,
+                archive: archiveBot,
+                revokeManagerToken: hierarchySource.revokeManagerToken,
+              },
+              actor,
+              projectId,
+              revision,
+            ),
+          )
+      : undefined,
+    auditProject: (actor, projectId, action) =>
+      runAsTenant(actor, () => auditProjectMutation(prisma, actor, projectId, action)),
     buildingManager: hierarchySource
       ? (actor, building, revision) =>
           runAsTenant(actor, () =>
