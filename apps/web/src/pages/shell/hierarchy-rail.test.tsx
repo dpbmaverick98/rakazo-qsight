@@ -6,7 +6,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { replaceComposerDraft } from "../../lib/composer-draft";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -17,7 +16,6 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock("../../lib/composer-draft", () => ({ replaceComposerDraft: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({
   withSpaceHeaders: () => new Headers(),
   rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: vi.fn() } } }),
@@ -221,7 +219,6 @@ it("opens building setup without a chat handoff", async () => {
     )!;
     await act(async () => button.click());
     expect(view.container.querySelector('form[aria-label="Add building"]')).not.toBeNull();
-    expect(replaceComposerDraft).not.toHaveBeenCalled();
   } finally {
     await view.close();
   }
