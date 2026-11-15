@@ -51,6 +51,7 @@ import { reviewWithBackups } from "./auto-review-backups.js";
 import { RAKAZO_DOCS_URLS } from "./builtin-skills.js";
 import type { ExecutorDeps } from "./executor-deps.js";
 import { CATALOG_LOAD, CATALOG_SEARCH } from "./lazy-tool-catalog.js";
+import { mcpToolAllowed, mcpToolTrusted } from "./mcp-tool-permissions.js";
 import { findConnectedModelCredential } from "./model-selection.js";
 import { paidRequestEffect } from "./paid-request.js";
 import type { PurchaseApproval } from "./purchase-gate.js";
@@ -162,6 +163,24 @@ export async function gateToolCall(
   // flag). Install config is immutable per route resource, so it cannot drift before
   // execute; a catalog call uses the tool it was just resolved to.
   const connectorTool = viaConnector ? (resolvedTool ?? ctx.tools.connector.get(name)) : undefined;
+  const route = connectorCall.route;
+  const mcpAssignment =
+    route?.connectorId === "mcp" && route.resourceId
+      ? await deps.prisma.botMcpServer.findFirst({
+          where: {
+            botId: run.botId,
+            serverId: route.resourceId,
+            spaceId: run.spaceId,
+            userId: run.userId,
+          },
+        })
+      : null;
+  if (mcpAssignment && route && !mcpToolAllowed(mcpAssignment, route.toolName))
+    return { result: refusal("mcp_tool_not_assigned", "This action is not assigned to this bot.") };
+  const mcpTrusted = Boolean(
+    mcpAssignment && route && mcpToolTrusted(mcpAssignment, route.toolName),
+  );
+  const scopedMcp = route?.connectorId === "mcp" && Boolean(route.resourceId);
   const declaredReadOnly = connectorTool?.readOnly;
   // A batch tool names the actions it runs in its arguments, so rules and the read/write
   // check look at each action, never the batch tool. An entry naming no action asks.
@@ -355,7 +374,7 @@ export async function gateToolCall(
             ),
           )
         : false));
-  const plan = USER_COMPUTER_TOOLS.has(name)
+  let plan = USER_COMPUTER_TOOLS.has(name)
     ? await userComputerGate(ctx, approvalResolved.decision === "deny", name, args)
     : planActionGate({
         resolved: approvalResolved,
@@ -371,6 +390,9 @@ export async function gateToolCall(
         newDestination: siteGate === "new",
         purchase: paying,
       });
+  if (scopedMcp && approvalResolved.decision !== "deny") {
+    plan = mcpTrusted && !mandatoryInAnyRun ? "allow" : "ask";
+  }
   // Nobody is there to approve a purchase, or a sign-in that asks first, a webhook run reaches.
   if (paying && run.trigger === "webhook" && plan !== "deny") {
     await auditToolCall(ctx, name, "denied", {

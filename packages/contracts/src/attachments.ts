@@ -54,6 +54,11 @@ export const ATTACHMENT_FILE_MIME_TYPES = [
   ...ATTACHMENT_AUDIO_MIME_TYPES,
   "video/mp4",
   "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
   "text/plain",
   "text/markdown",
   "text/csv",
@@ -128,4 +133,17 @@ export function attachmentSizeLabel(maxBytes: number): string {
 /** Effective per-message limit, including the fallback for older servers. */
 export function attachmentMaxCount(config?: { maxAttachmentsPerMessage?: number } | null): number {
   return config?.maxAttachmentsPerMessage ?? ATTACHMENT_MAX_COUNT;
+}
+
+/** Relative display path, never a filesystem destination. Bound by the artifact name limit. */
+export function isAttachmentPath(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= ARTIFACT_NAME_MAX_LENGTH &&
+    Array.from(value).every(
+      (char) =>
+        char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127 && char !== "\\" && char !== ":",
+    ) &&
+    value.split("/").every((part) => part.length > 0 && part !== "." && part !== "..")
+  );
 }

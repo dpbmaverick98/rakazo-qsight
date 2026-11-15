@@ -17,7 +17,10 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 
-vi.mock("../../lib/rpc", () => ({ withSpaceHeaders: () => new Headers() }));
+vi.mock("../../lib/rpc", () => ({
+  withSpaceHeaders: () => new Headers(),
+  rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: vi.fn() } } }),
+}));
 afterEach(() => vi.unstubAllGlobals());
 async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}, route = "/app") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -114,7 +117,7 @@ it("isolates late responses across project and space changes and clears data on 
           finish = resolve;
         }),
     )
-    .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    .mockResolvedValueOnce(new Response(null, { status: 403 }));
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient();
   const container = document.createElement("div");
@@ -141,6 +144,50 @@ it("isolates late responses across project and space changes and clears data on 
     expect(container.textContent).not.toContain("Roof survey");
     expect(container.querySelectorAll("a")).toHaveLength(0);
     expect(container.textContent).toContain("Commercial view unavailable");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
+
+it("shows package activity live and shares one request with the project detail", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const fetch = vi.fn().mockImplementation(async () => Response.json(commercialFixture));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const { ProjectActivity } = await import("./project-commercial");
+  const { refreshHierarchy } = await import("./hierarchy-refresh");
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <ProjectActivity userId="user" spaceId="space" projectId="roof" />
+            <CommercialSelection
+              userId="user"
+              spaceId="space"
+              projectId="roof"
+              client="Example"
+              back={() => {}}
+            />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(container.textContent).toContain("Drywall");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fetch.mockImplementation(async () => Response.json({ ...commercialFixture, claims: [] }));
+    await act(async () => {
+      await refreshHierarchy(client, "user", "space");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(container.textContent).not.toContain("Drywall");
     expect(fetch).toHaveBeenCalledTimes(2);
   } finally {
     await act(async () => root.unmount());

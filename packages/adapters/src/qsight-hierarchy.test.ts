@@ -96,7 +96,7 @@ it("authenticates server-side, sanitizes data, encodes links and caches briefly"
   const source = qsightHierarchyFromEnv(config)!;
   const result = await source.read("7");
   expect(result.client).toEqual({ id: "7", name: "Example Client" });
-  expect(result.buildings[0]).not.toHaveProperty("address");
+  expect(result.buildings[0]).toHaveProperty("address", "Example address");
   expect(result.buildings[0]!.projects[0]!.url).toBe(
     "https://hierarchy.example.test/projects/roof%2Fsurvey",
   );
@@ -149,7 +149,7 @@ it.each([
     );
     const result = await qsightHierarchyFromEnv(config)!.read("7");
     expect(result.buildings[0]).toMatchObject({ ...expected, id: "1" });
-    expect(result.buildings[0]).not.toHaveProperty("address");
+    expect(result.buildings[0]).toHaveProperty("address", "Example address");
   },
 );
 it("reads bounded commercial projections with bearer auth, canonical links and a short cache", async () => {
@@ -491,4 +491,16 @@ it("forwards safe request correlation and emits only opt-in upstream metadata", 
     installLogger(previous);
     vi.unstubAllEnvs();
   }
+});
+
+it("bypasses the commercial cache for live reads after external writes", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json(commercialFixture))
+    .mockResolvedValueOnce(Response.json({ ...commercialFixture, claims: [] }));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await source.readCommercial("roof");
+  expect((await source.readCommercial("roof", true)).claims).toEqual([]);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

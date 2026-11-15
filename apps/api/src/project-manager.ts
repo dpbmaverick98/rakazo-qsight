@@ -1,7 +1,7 @@
 import { ORPCError } from "@orpc/server";
 import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
-import { PROJECT_MANAGER_TOOLS, retry } from "@rakazo/core";
+import { PROJECT_MANAGER_TOOLS, projectManagerToolPolicy, retry } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
 import { lockSpaceDeletion } from "@rakazo/db";
 import { bestEffort, clientSetupDebug, clientSetupStage } from "@rakazo/logging";
@@ -93,6 +93,7 @@ async function provision(
       async () => {
         let server: Awaited<ReturnType<typeof insertMcpServer>> | undefined;
         let seededBotId: string | undefined;
+        let promoteSetup = false;
         const write = async (tx: Prisma.TransactionClient, botId: string) => {
           await lockSpaceDeletion(tx, actor.spaceId);
           await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${actor.spaceId} FOR UPDATE`;
@@ -165,14 +166,17 @@ async function provision(
             data: {
               inheritMcpServers: false,
               crossSpaceCommunication: false,
-              ...(input.finishSetup
+              ...(promoteSetup
                 ? {
                     spawnKey: `pm:${project.id}`,
-                    name: `PM — ${project.name}`.slice(0, 80),
+                    name: "Proj. Manager - Sam",
                     instructions: projectManagerInstructions(project, hierarchy.client.name),
                   }
                 : {}),
             },
+          });
+          const previousAssignment = await tx.botMcpServer.findFirst({
+            where: { botId, serverId: server.id, spaceId: actor.spaceId, userId: actor.userId },
           });
           await tx.botMcpServer.deleteMany({ where: { botId, spaceId: actor.spaceId } });
           await tx.botMcpServer.create({
@@ -181,8 +185,7 @@ async function provision(
               serverId: server.id,
               spaceId: actor.spaceId,
               userId: actor.userId,
-              allowAllTools: true,
-              allowedTools: [],
+              ...projectManagerToolPolicy(previousAssignment?.trustedTools),
             },
           });
           seededBotId = botId;
@@ -190,23 +193,18 @@ async function provision(
         const spawnKey = `pm:${project.id}`;
         const bots = await repos.listBots(actor);
         // Any current Space owner/admin can finish/kill the setup PM, not only its creator.
-        const setup = await deps.prisma.bot.findFirst({
-          where: {
-            spaceId: actor.spaceId,
-            spawnKey: `setup:${binding.externalClientId}`,
-            archivedAt: null,
-          },
-        });
+        const setup = bots.find((bot) => bot.spawnKey === `setup:${binding.externalClientId}`);
         if (setup && !input.finishSetup)
           throw new ORPCError("CONFLICT", {
             message: "Finish setup before creating project managers",
           });
         const existing =
           bots.find((bot) => bot.spawnKey === spawnKey) ?? (input.finishSetup ? setup : undefined);
+        promoteSetup = !!setup && existing?.id === setup.id;
         const bot =
           existing ??
           (await repos.createBot(actor, {
-            name: `PM — ${project.name}`.slice(0, 80),
+            name: "Proj. Manager - Sam",
             spawnKey,
             description: "",
             instructions: projectManagerInstructions(project, hierarchy.client.name),
@@ -221,11 +219,11 @@ async function provision(
         if (!server) throw new ORPCError("INTERNAL_SERVER_ERROR");
         persistedToken = server.secretId === stored.id;
         return {
-          bot: input.finishSetup
+          bot: promoteSetup
             ? {
                 ...bot,
                 spawnKey,
-                name: `PM — ${project.name}`.slice(0, 80),
+                name: "Proj. Manager - Sam",
                 instructions: projectManagerInstructions(project, hierarchy.client.name),
                 inheritMcpServers: false,
                 crossSpaceCommunication: false,

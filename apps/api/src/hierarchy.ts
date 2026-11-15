@@ -53,7 +53,7 @@ export function mountHierarchyRoute(
         name: string,
         operationId?: string,
       ) => Promise<CreatedProject>;
-      readCommercial?: (id: string) => Promise<ProjectCommercial>;
+      readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     } | null;
   },
 ) {
@@ -262,7 +262,7 @@ export function mountHierarchyRoute(
         )
       )
         return c.json({ error: "Project unavailable" }, 404);
-      const commercial = await source.readCommercial(id);
+      const commercial = await source.readCommercial(id, true);
       await deps.resolveBinding(actor, binding.revision);
       return c.json(commercial);
     } catch (error) {
@@ -336,7 +336,11 @@ export function mountHierarchyRoute(
         revision === undefined ? undefined : Number(revision),
       );
       c.header("x-rakazo-binding-revision", String(binding.revision));
-      return c.json({ ...hierarchy, bindingRevision: binding.revision });
+      return c.json({
+        ...hierarchy,
+        bindingRevision: binding.revision,
+        canManage: (await deps.canCreateProject?.(actor)) === true,
+      });
     } catch (error) {
       const result = failure(error);
       return c.json(result.body, result.status);

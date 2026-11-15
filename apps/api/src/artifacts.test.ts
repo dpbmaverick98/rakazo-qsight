@@ -794,3 +794,22 @@ describe("a reply's kept screenshot", () => {
       });
   });
 });
+
+describe("Office upload validation before storage", () => {
+  it("rejects a DOCX MIME claim on non-document bytes", async () => {
+    const put = vi.fn();
+    await expect(
+      createOwnedArtifact(
+        { prisma: {} as PrismaClient, artifacts: { put } as unknown as ArtifactStore },
+        actor,
+        {
+          botId: "bot-1",
+          name: "claims/proposal.docx",
+          mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          contentBase64: Buffer.from("not a document").toString("base64"),
+        },
+      ),
+    ).rejects.toThrow("must match");
+    expect(put).not.toHaveBeenCalled();
+  });
+});

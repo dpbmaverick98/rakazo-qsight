@@ -35,6 +35,7 @@ const ResponseSchema = z.object({
       z.object({
         id: Id,
         name: Name,
+        address: z.string().trim().min(1).max(2000).nullable().optional(),
         latitude: z.number().min(-90).max(90).nullable().catch(null),
         longitude: z.number().min(-180).max(180).nullable().catch(null),
         projects: z.array(z.object({ id: Id, name: Name })).max(5000),
@@ -337,10 +338,10 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         throw new Error("Project manager credentials unavailable");
       }
     },
-    async readCommercial(id: string) {
+    async readCommercial(id: string, fresh = false) {
       // The API verifies membership in this client hierarchy before every read.
       const hit = commercialCache.get(id);
-      if (hit && hit.expires > Date.now()) return hit.data;
+      if (!fresh && hit && hit.expires > Date.now()) return hit.data;
       commercialCache.delete(id);
       const signal = deadlineSignal(5000);
       const response = await upstream(

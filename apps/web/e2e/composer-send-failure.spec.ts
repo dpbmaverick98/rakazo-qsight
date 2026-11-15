@@ -154,7 +154,7 @@ test("separate picks with matching file metadata upload their own bytes", {
   const metadata: Array<{ name: string; size: number; lastModified: number }> = [];
   for (const content of ["first", "other"]) {
     metadata.push(
-      await page.locator('input[type="file"]').evaluate((element, text) => {
+      await page.locator('input[type="file"]:not([webkitdirectory])').evaluate((element, text) => {
         const input = element as HTMLInputElement;
         const file = new File([text], "same.txt", {
           type: "text/plain",
@@ -190,7 +190,7 @@ test("a retried send after an edit reuses the attachment's uploaded artifact", {
     uploadNonces.push(route.request().postDataJSON().json.clientNonce);
     await route.continue();
   });
-  await page.locator('input[type="file"]').evaluate((element) => {
+  await page.locator('input[type="file"]:not([webkitdirectory])').evaluate((element) => {
     const input = element as HTMLInputElement;
     const file = new File(["retry-me"], "notes.txt", { type: "text/plain" });
     const transfer = new DataTransfer();

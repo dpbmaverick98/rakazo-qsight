@@ -8,3 +8,15 @@ export function mcpToolAllowed(
     (Array.isArray(assignment.allowedTools) && assignment.allowedTools.includes(tool))
   );
 }
+
+/** Approval trust never expands the tools an assignment can execute. */
+export function mcpToolTrusted(
+  assignment: { allowAllTools: boolean; allowedTools: unknown; trustedTools?: unknown },
+  tool: string,
+): boolean {
+  return (
+    mcpToolAllowed(assignment, tool) &&
+    Array.isArray(assignment.trustedTools) &&
+    assignment.trustedTools.includes(tool)
+  );
+}

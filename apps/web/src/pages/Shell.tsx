@@ -74,11 +74,12 @@ import { ChatContextMenu } from "./shell/chat-context-menu";
 import { ChatFindBar } from "./shell/chat-find-bar";
 import { ChatHeader } from "./shell/chat-header";
 import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
-import { clientNavigationGroups, useClientNavigation } from "./shell/client-navigation";
+import { clientNavigationGroups, useClientNavigations } from "./shell/client-navigation";
 import { Composer } from "./shell/composer";
 import { ComputerOverlay } from "./shell/computer-overlay";
 import { ComputerPanel } from "./shell/computer-panel";
 import type { CreateBotDialogInput } from "./shell/create-bot-dialog";
+import { refreshHierarchy } from "./shell/hierarchy-refresh";
 import type { ImportSetupTarget } from "./shell/import-setup-card";
 import { KeyboardShortcutsDialog } from "./shell/keyboard-shortcuts-dialog";
 import { ShellDialogs, useShellDialogs } from "./shell/shell-dialogs";
@@ -464,13 +465,11 @@ function SpaceShell() {
       roster: {
         changed: () => {
           rosterSignals.changed();
-          void queryClient.invalidateQueries({ queryKey: ["client-navigation", userId] });
-          void queryClient.invalidateQueries({
-            queryKey: ["hierarchy", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["project-commercial", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
-          });
+          void refreshHierarchy(
+            queryClient,
+            userId ?? null,
+            shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+          );
         },
       },
     },
@@ -587,37 +586,37 @@ function SpaceShell() {
           : [],
     [bootstrapMe, botSections, bots, groups, spaces],
   );
-  const clientNavigation = useClientNavigation(
+  const clientNavigations = useClientNavigations(
     userId ?? null,
-    shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+    sidebarSpaces.map((space) => space.id),
+  );
+  const clientNavigation = clientNavigations.find(
+    (entry) => entry.data?.spaceId === (shellSpaceId ?? bootstrapMe?.spaceId),
   );
   const sidebarGroups = useMemo(
     () =>
-      clientNavigationGroups(
+      clientNavigations.reduce(
+        (result, navigation) =>
+          clientNavigationGroups(
+            result,
+            navigation.isError ? null : navigation.data,
+            miniSidebar ? "" : search.query,
+            sidebarGroupsForSpaces(
+              sidebarSpaces,
+              "",
+              { pinned: t`Pinned`, unassigned: t`Unassigned` },
+              search.query ? Number.POSITIVE_INFINITY : snoozeNow,
+            ),
+          ),
         sidebarGroupsForSpaces(
           sidebarSpaces,
           miniSidebar ? "" : search.query,
           { pinned: t`Pinned`, unassigned: t`Unassigned` },
           snoozeNow,
         ),
-        clientNavigation.isError ? null : clientNavigation.data,
-        miniSidebar ? "" : search.query,
-        sidebarGroupsForSpaces(
-          sidebarSpaces,
-          "",
-          { pinned: t`Pinned`, unassigned: t`Unassigned` },
-          search.query ? Number.POSITIVE_INFINITY : snoozeNow,
-        ),
       ),
-    [
-      sidebarSpaces,
-      search.query,
-      miniSidebar,
-      t,
-      snoozeNow,
-      clientNavigation.data,
-      clientNavigation.isError,
-    ],
+
+    [sidebarSpaces, search.query, miniSidebar, t, snoozeNow, clientNavigations],
   );
   // The Dock badge ignores the roster search box: a filter must not hide unread chats.
   const unreadChatCount = useMemo(
@@ -1005,7 +1004,7 @@ function SpaceShell() {
         createMenuOpen={createMenuOpen}
         setCreateMenuOpen={setCreateMenuOpen}
         search={search}
-        hierarchySearch={!!clientNavigation.data && !clientNavigation.isError}
+        hierarchySearch={!!clientNavigation?.data && !clientNavigation?.isError}
         bots={bots}
         groups={groups}
         collapsedSidebarSections={collapsedSidebarSections}
@@ -1275,6 +1274,8 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
+        artifactStage={rightPanel.artifactStage}
+        onSelectArtifact={rightPanel.selectArtifact}
         hierarchyScope={{
           userId: userId ?? null,
           spaceId: shellSpaceId ?? bootstrapMe?.spaceId ?? null,

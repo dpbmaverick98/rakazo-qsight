@@ -177,6 +177,7 @@ export function mcpAssignmentDto(row: {
   serverId: string;
   allowAllTools: boolean;
   allowedTools: unknown;
+  trustedTools?: unknown;
   createdAt: Date;
   updatedAt: Date;
 }) {
@@ -185,6 +186,9 @@ export function mcpAssignmentDto(row: {
     botId: row.botId,
     serverId: row.serverId,
     allowAllTools: row.allowAllTools,
+    trustedTools: Array.isArray(row.trustedTools)
+      ? row.trustedTools.filter((item): item is string => typeof item === "string")
+      : [],
     allowedTools: Array.isArray(row.allowedTools)
       ? row.allowedTools.filter((item): item is string => typeof item === "string")
       : [],

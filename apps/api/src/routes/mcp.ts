@@ -543,7 +543,7 @@ export function mcpRoutes(ctx: RouterContext) {
                 spaceId: context.actor.spaceId,
                 userId: context.actor.userId,
               },
-              select: { serverId: true },
+              select: { serverId: true, trustedTools: true },
             });
             const nextIds = new Set(input.assignments.map((assignment) => assignment.serverId));
             const removed = previous
@@ -565,6 +565,9 @@ export function mcpRoutes(ctx: RouterContext) {
                   serverId: assignment.serverId,
                   allowAllTools: assignment.allowAllTools,
                   allowedTools: assignment.allowedTools as Prisma.InputJsonValue,
+                  trustedTools: (assignment.trustedTools ??
+                    previous.find((row) => row.serverId === assignment.serverId)?.trustedTools ??
+                    []) as Prisma.InputJsonValue,
                 })),
               });
             const seqs = (

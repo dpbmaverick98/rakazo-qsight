@@ -17,6 +17,7 @@ import {
   ARTIFACT_DESCRIPTION_MAX_LENGTH,
   ARTIFACT_NAME_MAX_LENGTH,
   ATTACHMENT_COUNT_CEILING,
+  isAttachmentPath,
 } from "./attachments.js";
 import { AuditEventListInputSchema, AuditEventPageSchema } from "./audit-events.js";
 import {
@@ -1236,6 +1237,7 @@ export const appContract = {
                 serverId: Id,
                 allowAllTools: z.boolean().default(true),
                 allowedTools: z.array(z.string().min(1).max(200)).max(500).default([]),
+                trustedTools: z.array(z.string().min(1).max(200)).max(500).optional(),
               }),
             ),
           }),
@@ -1445,7 +1447,11 @@ export const appContract = {
       .input(
         threadTarget.and(
           z.object({
-            name: z.string().min(1).max(ARTIFACT_NAME_MAX_LENGTH),
+            name: z
+              .string()
+              .min(1)
+              .max(ARTIFACT_NAME_MAX_LENGTH)
+              .refine(isAttachmentPath, "Invalid attachment path"),
             description: z.string().max(ARTIFACT_DESCRIPTION_MAX_LENGTH).optional(),
             mimeType: z.string().min(1),
             contentBase64: z.string().min(1),

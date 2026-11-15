@@ -319,6 +319,11 @@ const EXTENSION_MIME_TYPES: Record<string, AttachmentMimeType> = {
   ".webp": "image/webp",
   ".gif": "image/gif",
   ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".ppt": "application/vnd.ms-powerpoint",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
   ".txt": "text/plain",
   ".md": "text/markdown",
   ".markdown": "text/markdown",
@@ -342,6 +347,11 @@ const MIME_TYPE_EXTENSIONS: Record<AttachmentMimeType, string> = {
   "image/webp": ".webp",
   "image/gif": ".gif",
   "application/pdf": ".pdf",
+  "application/msword": ".doc",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+  "application/vnd.ms-powerpoint": ".ppt",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+
   "text/plain": ".txt",
   "text/markdown": ".md",
   "text/csv": ".csv",

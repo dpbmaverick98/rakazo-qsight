@@ -390,10 +390,21 @@ describe("QSight business approvals", () => {
       "Add building “ESB”",
       ["Building: ESB", "Address: 1 Main St"],
     ],
-    ["create_project", { name: "Fit-out", building_id: "secret-building" }, "Create project “Fit-out”", ["Project: Fit-out"]],
+    [
+      "create_project",
+      { name: "Fit-out", building_id: "secret-building" },
+      "Create project “Fit-out”",
+      ["Project: Fit-out"],
+    ],
     [
       "create_work_package",
-      { project_id: "secret-project", claim: "Claim A", subcontractor: "Drywall Co", title: "Lobby", idempotency_key: "secret-key" },
+      {
+        project_id: "secret-project",
+        claim: "Claim A",
+        subcontractor: "Drywall Co",
+        title: "Lobby",
+        idempotency_key: "secret-key",
+      },
       "Create work package “Lobby”",
       ["Work package: Lobby", "Claim: Claim A", "Sub vendor: Drywall Co"],
     ],
@@ -416,8 +427,8 @@ describe("prefixed QSight tool names", () => {
       ["token-secret"],
     );
     if (block.kind !== "ask") throw new Error("expected ask block");
-    expect(block.text).toBe("Create project “Lobby [redacted]”");
-    expect(block.detail).toBe("Project: Lobby [redacted]");
+    expect(block.text).toBe("Create project?");
+    expect(block.detail).toBe("Lobby [redacted]");
     expect(JSON.stringify(block)).not.toContain("secret-building");
     expect(JSON.stringify(block)).not.toContain("create_project");
   });
@@ -432,4 +443,54 @@ it("does not relabel another server's create_project as QSight", () => {
   if (block.kind !== "ask") throw new Error("expected ask block");
   expect(block.text).toBe("Review before other__create_project");
   expect(block.detail).toContain("building_id: secret-building");
+});
+
+describe("MCP business approval payloads", () => {
+  it.each([
+    ["create_building", "Create building?"],
+    ["create_project", "Create project?"],
+    ["publish_documents", "Publish documents?"],
+  ])("shows %s without internal arguments or document content", (action, title) => {
+    const block = buildApprovalAskBlock(
+      "effect",
+      `mcp__vendor-one-pilot__${action}`,
+      {
+        name: "Lobby",
+        client_name: "Example Client",
+        building_name: "North Tower",
+        client_id: "private-client",
+        verification_token: "private-token",
+        document: { text: "private-document" },
+        body: "private-body",
+        project_name: "12345678-1234-1234-1234-123456789abc",
+      },
+      [],
+    );
+    expect(block).toMatchObject({
+      kind: "ask",
+      text: title,
+      detail: "Example Client · North Tower · Lobby",
+      actions: [
+        { id: "allow", label: "Allow once" },
+        { id: "always", label: "Always allow this action" },
+        { id: "deny", label: "Deny" },
+      ],
+    });
+    expect(JSON.stringify(block)).not.toMatch(
+      /private-|12345678|mcp__|verification_token|client_id/,
+    );
+  });
+
+  it("redacts credentials even when repeated inside a display name", () => {
+    const block = buildApprovalAskBlock(
+      "effect",
+      "mcp__demo__create_project",
+      {
+        name: "Lobby secret-token",
+        verification_token: "secret-token",
+      },
+      [],
+    );
+    expect(JSON.stringify(block)).not.toContain("secret-token");
+  });
 });

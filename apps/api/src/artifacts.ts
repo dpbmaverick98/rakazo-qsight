@@ -18,6 +18,7 @@ import {
   messageBlockForArtifact,
   promptTextForAttachments,
   validateAttachmentMimeType,
+  validateOfficeAttachment,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
@@ -54,6 +55,7 @@ export async function createOwnedArtifact(
       : input.mimeType;
   validateAttachmentMimeType(mimeType);
   const bytes = decodeAttachmentBase64(input.contentBase64, deps.maxUploadSizeBytes);
+  validateOfficeAttachment(input.name, mimeType, bytes);
   return storeOwnedArtifact(deps, actor, { ...input, mimeType, bytes });
 }
 

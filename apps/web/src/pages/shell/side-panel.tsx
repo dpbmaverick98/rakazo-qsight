@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type {
   AgentSkillCatalogEntry,
+  ArtifactStageState,
   Bot,
   ComputerStatus,
   Group,
@@ -19,13 +20,17 @@ import { ResizableSidePanel } from "../ResizableSidePanel";
 import { RoutineEditor } from "../RoutineEditor";
 import type { SettingsSection } from "../shell-overlay";
 import { AgentImportForm } from "./agent-import";
+import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
+import { hierarchyRetry } from "./hierarchy-refresh";
 import { firstThreadRoute } from "./use-shell-navigation";
 
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
 export function ShellSidePanel({
+  artifactStage,
+  onSelectArtifact,
   hierarchyScope,
   rpc,
   panel,
@@ -54,6 +59,8 @@ export function ShellSidePanel({
   onClearBot,
   discardChatAttachments,
 }: {
+  artifactStage: ArtifactStageState;
+  onSelectArtifact: (id: string) => void;
   hierarchyScope: { userId: string | null; spaceId: string | null; enabled: boolean };
   rpc: ReturnType<typeof createSpaceRpc>;
   panel: Panel;
@@ -90,9 +97,7 @@ export function ShellSidePanel({
     hierarchyScope.enabled,
   );
   const [hierarchyOpen, setHierarchyOpen] = useState(true);
-  const hierarchyAvailable =
-    hierarchyScope.enabled &&
-    (hierarchy.isFetching || hierarchy.data !== null || hierarchy.isError);
+  const hierarchyAvailable = hierarchyScope.enabled;
   const showHierarchy = hierarchyAvailable && hierarchyOpen;
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
   const botTab =
@@ -142,7 +147,11 @@ export function ShellSidePanel({
               key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
               scope={hierarchyScope}
               onOpenBot={openCreatedBot}
-              data={hierarchy.isError ? undefined : hierarchy.data}
+              data={
+                hierarchy.isError && !hierarchyRetry(0, hierarchy.error)
+                  ? undefined
+                  : hierarchy.data
+              }
               loading={hierarchy.isFetching}
               error={hierarchy.isError}
               retry={() => {
@@ -154,7 +163,15 @@ export function ShellSidePanel({
         ) : null}
         {open ? (
           <div className="rk-scroll min-h-0 flex-1 w-full overflow-y-auto px-5 py-[17px]">
-            {panel !== "routine" &&
+            {panel === "artifact-stage" ? (
+              <ArtifactStage
+                state={artifactStage}
+                onSelect={onSelectArtifact}
+                onClose={() => setPanel(null)}
+              />
+            ) : null}
+            {panel !== "artifact-stage" &&
+            panel !== "routine" &&
             panel !== "create-group" &&
             panel !== "group-settings" &&
             panel !== "import-agent" ? (
