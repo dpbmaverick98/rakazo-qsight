@@ -55,9 +55,10 @@ async function provision(
   const projects = hierarchy.buildings.flatMap((building) => building.projects);
   if (input.finishSetup && (projects.length !== 1 || projects[0]?.id !== input.projectId))
     throw new ORPCError("CONFLICT", { message: "Choose the only project to finish setup" });
-  const project = hierarchy.buildings
-    .flatMap((building) => building.projects)
-    .find((item) => item.id === input.projectId);
+  const building = hierarchy.buildings.find((item) =>
+    item.projects.some((project) => project.id === input.projectId),
+  );
+  const project = building?.projects.find((item) => item.id === input.projectId);
   if (!project) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   // Old workers ignore inheritMcpServers. Refuse while a shared owner server could
   // expose every agent's tools to this PM during a rolling deployment.
@@ -104,7 +105,13 @@ async function provision(
             where: { id: botId, spaceId: actor.spaceId, archivedAt: null },
           });
           if (!bot) throw new ORPCError("CONFLICT", { message: "Project manager unavailable" });
-          if (!input.finishSetup && bot.userId !== actor.userId)
+          if (
+            promoteSetup &&
+            bot.spawnKey !== `building:${building!.id}` &&
+            bot.spawnKey !== `setup:${binding.externalClientId}`
+          )
+            throw new ORPCError("CONFLICT", { message: "Project manager scope changed" });
+          if (!promoteSetup && bot.userId !== actor.userId)
             throw new ORPCError("CONFLICT", { message: "Project manager unavailable" });
           const scope = { spaceId: actor.spaceId, userId: actor.userId };
           const bySlug = await tx.mcpServer.findFirst({ where: { ...scope, slug: config.slug } });
@@ -194,19 +201,25 @@ async function provision(
         const bots = await repos.listBots(actor);
         // Any current Space owner/admin can finish/kill the setup PM, not only its creator.
         const setup = bots.find((bot) => bot.spawnKey === `setup:${binding.externalClientId}`);
-        if (setup && !input.finishSetup)
-          throw new ORPCError("CONFLICT", {
-            message: "Finish setup before creating project managers",
-          });
+        const buildingManager = bots.find((bot) => bot.spawnKey === `building:${building!.id}`);
         const existing =
-          bots.find((bot) => bot.spawnKey === spawnKey) ?? (input.finishSetup ? setup : undefined);
-        promoteSetup = !!setup && existing?.id === setup.id;
+          bots.find((bot) => bot.spawnKey === spawnKey) ??
+          buildingManager ??
+          (input.finishSetup ? setup : undefined);
+        promoteSetup =
+          !!existing && (existing.id === buildingManager?.id || existing.id === setup?.id);
         const bot =
           existing ??
           (await repos.createBot(actor, {
             name: "Proj. Manager - Sam",
             spawnKey,
             description: "",
+            initialMessage: {
+              role: "bot",
+              blocks: [
+                { kind: "text", text: "What scope of work should I plan for this project?" },
+              ],
+            },
             instructions: projectManagerInstructions(project, hierarchy.client.name),
             notifyOnFinish: false,
             dailyCheckIns: false,

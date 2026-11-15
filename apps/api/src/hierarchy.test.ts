@@ -338,6 +338,7 @@ it("projects only exact canonical assignments and setup for the bound client", a
       {
         id: "building",
         name: "Building",
+        botIds: [],
         projects: [{ id: "roof", name: "Roof", botIds: ["manager"] }],
       },
     ],
@@ -378,4 +379,67 @@ it("requests a fresh commercial projection for live hierarchy activity", async (
   const { app, deps } = setup();
   expect((await app.request("/api/agent-plane/projects/roof/commercial")).status).toBe(200);
   expect(deps.source.readCommercial).toHaveBeenCalledWith("roof", true);
+});
+
+it("provisions the project manager on the server before signaling roster changes", async () => {
+  const { deps } = setup();
+  const manager = vi.fn(async () => "pm-new");
+  const app = new Hono();
+  mountHierarchyRoute(app, { ...deps, projectManager: manager });
+  const response = await app.request("/api/agent-plane/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Idempotency-Key": "00000000-0000-4000-8000-000000000001",
+    },
+    body: JSON.stringify({ buildingId: "building", name: "New" }),
+  });
+  expect(response.status).toBe(201);
+  expect((await response.json()).botId).toBe("pm-new");
+  expect(manager).toHaveBeenCalledWith(
+    actor,
+    expect.objectContaining({ id: "new", building_id: "building" }),
+    1,
+    false,
+  );
+  expect(manager.mock.invocationCallOrder[0]).toBeLessThan(
+    deps.changed.mock.invocationCallOrder[0]!,
+  );
+});
+it("returns the building default agent and retains the operation key for safe retries", async () => {
+  const { deps } = setup();
+  const building = {
+    id: "south",
+    name: "South",
+    address: "Example Street",
+    url: "https://example.test/south",
+  };
+  const createBuilding = vi.fn(async () => building);
+  const manager = vi.fn(async () => "building-manager");
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    ...deps,
+    source: { ...deps.source, createBuilding },
+    buildingManager: manager,
+  });
+  const key = "00000000-0000-4000-8000-000000000001";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await app.request("/api/agent-plane/buildings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify({
+        address: building.address,
+        verification_token: "fake-proof",
+        nickname: "South",
+      }),
+    });
+    expect(response.status).toBe(201);
+    expect((await response.json()).botId).toBe("building-manager");
+  }
+  expect(createBuilding).toHaveBeenLastCalledWith(
+    "client",
+    expect.objectContaining({ nickname: "South" }),
+    key,
+  );
+  expect(manager).toHaveBeenLastCalledWith(actor, building, 1);
 });

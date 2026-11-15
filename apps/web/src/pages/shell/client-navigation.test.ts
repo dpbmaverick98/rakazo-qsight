@@ -129,3 +129,27 @@ describe("canonical client navigation", () => {
     ).not.toContain("other-manager");
   });
 });
+
+it("places a building manager once while setup stays at the client, then moves the manager on promotion", () => {
+  const building = navigation.buildings[0]!;
+  const before = clientNavigationGroups(
+    groups(),
+    { ...navigation, buildings: [{ ...building, botIds: ["manager"], projects: [] }] },
+    "",
+  );
+  expect(
+    before.find((group) => group.title === "Client")?.bots.map((item) => item.chat.id),
+  ).toEqual(["setup"]);
+  expect(before.find((group) => group.title === "North")).toMatchObject({
+    buildingId: "building",
+    canOpenSpaceSettings: true,
+  });
+  for (const result of [before, clientNavigationGroups(groups(), navigation, "")]) {
+    expect(
+      result.find((group) => group.title === "North")?.bots.map((item) => item.chat.id),
+    ).toEqual(["manager"]);
+    expect(
+      result.flatMap((group) => group.bots).filter((item) => item.chat.id === "manager"),
+    ).toHaveLength(1);
+  }
+});

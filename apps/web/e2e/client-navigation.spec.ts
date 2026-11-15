@@ -45,9 +45,14 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
       },
     });
   });
-  await page.route("**/api/agent-plane/hierarchy", (route) => {
+  let releaseHierarchy = () => {};
+  const hierarchyReady = new Promise<void>((resolve) => {
+    releaseHierarchy = resolve;
+  });
+  await page.route("**/api/agent-plane/hierarchy", async (route) => {
     if (route.request().headers()["x-rakazo-space-id"] !== space.id)
       return route.fulfill({ status: 204 });
+    await hierarchyReady;
     return route.fulfill({
       json: {
         canManage: true,
@@ -82,8 +87,13 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await captureScreenshot(page, testInfo, "client-space-actions");
   await page.getByRole("menuitem", { name: "Add project", exact: true }).click();
   const addProject = page.getByRole("dialog", { name: "Add project", exact: true });
+  await expect(addProject.getByRole("status")).toHaveText("Loading hierarchy…");
+  releaseHierarchy();
   await expect(addProject.getByLabel("Building", { exact: true })).toHaveValue("north");
   await expect(addProject.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+  await expect(
+    addProject.getByRole("textbox", { name: "Project name", exact: true }),
+  ).toBeFocused();
   await captureScreenshot(page, testInfo, "client-space-add-project");
   await addProject.getByRole("button", { name: "Cancel", exact: true }).click();
   await sidebar.getByRole("button", { name: "Actions for Example Client", exact: true }).click();
@@ -94,6 +104,14 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   ).toBeVisible();
   await captureScreenshot(page, testInfo, "client-space-add-building");
   await addBuilding.getByRole("button", { name: "Cancel", exact: true }).click();
+
+  await sidebar.getByRole("button", { name: "Actions for North Building", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Add building", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Delete space", exact: true })).toHaveCount(0);
+  await page.getByRole("menuitem", { name: "Add project", exact: true }).click();
+  await expect(addProject.getByLabel("Building", { exact: true })).toHaveValue("north");
+  await captureScreenshot(page, testInfo, "building-add-project");
+  await addProject.getByRole("button", { name: "Cancel", exact: true }).click();
 
   await building.click();
   await expect(pm).toHaveCount(0);

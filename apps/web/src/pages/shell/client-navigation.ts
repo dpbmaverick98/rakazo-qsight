@@ -10,6 +10,7 @@ type Groups = ReturnType<
   typeof sidebarGroupsForSpaces<Space["bots"][number], Space["groups"][number]>
 >;
 export type NavigationGroup = Groups[number] & {
+  buildingId?: string;
   ancestors?: string[];
   depth?: number;
   defaultCollapsed?: boolean;
@@ -58,9 +59,10 @@ export function clientNavigationGroups(
   const items = own.flatMap((group) => group.bots);
   const assigned = new Set([
     ...navigation.setupBotIds,
-    ...navigation.buildings.flatMap((building) =>
-      building.projects.flatMap((project) => project.botIds),
-    ),
+    ...navigation.buildings.flatMap((building) => [
+      ...(building.botIds ?? []),
+      ...building.projects.flatMap((project) => project.botIds),
+    ]),
   ]);
   const needle = query.trim().toLowerCase();
   const matches = (name: string) => name.toLowerCase().includes(needle);
@@ -100,13 +102,14 @@ export function clientNavigationGroups(
   for (const building of navigation.buildings) {
     const key = `${prefix}:building:${building.id}`;
     const buildingMatch = rootMatch || matches(building.name);
-    const visibleIds = new Set(
-      building.projects.flatMap((project) =>
+    const visibleIds = new Set([
+      ...selected(building.botIds ?? [], buildingMatch).map((item) => item.chat.id),
+      ...building.projects.flatMap((project) =>
         selected(project.botIds, buildingMatch || matches(project.name)).map(
           (item) => item.chat.id,
         ),
       ),
-    );
+    ]);
     const bots = items.filter((item) => item.kind === "bot" && visibleIds.has(item.chat.id));
     if (
       !needle ||
@@ -114,7 +117,11 @@ export function clientNavigationGroups(
       bots.length ||
       building.projects.some((project) => matches(project.name))
     )
-      result.push(make(key, building.name, [root], bots));
+      result.push({
+        ...make(key, building.name, [root], bots),
+        buildingId: building.id,
+        canOpenSpaceSettings: true,
+      });
   }
   const unassigned = items
     .filter((item) => item.kind !== "bot" || !assigned.has(item.chat.id))

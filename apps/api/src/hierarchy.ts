@@ -29,6 +29,17 @@ export function mountHierarchyRoute(
     trustedOrigin?: (origin: string) => boolean;
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
+    buildingManager?: (
+      actor: Actor,
+      building: CreatedBuilding,
+      revision: number,
+    ) => Promise<string>;
+    projectManager?: (
+      actor: Actor,
+      project: CreatedProject,
+      revision: number,
+      finishSetup: boolean,
+    ) => Promise<string>;
     navigationBots?: (actor: Actor) => Promise<{ id: string; spawnKey: string | null }[]>;
     resolveBinding: (actor: Actor, revision?: number) => Promise<ClientBinding>;
     setupClient?: (actor: Actor, name: string) => Promise<ClientSetup>;
@@ -93,7 +104,6 @@ export function mountHierarchyRoute(
       await deps.changed?.({ ...actor, spaceId: result.spaceId });
       return c.json(result);
     } catch (error) {
-      console.log("client-setup-error", error);
       if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
       const result = failure(error);
       return c.json(result.body, result.status);
@@ -182,8 +192,9 @@ export function mountHierarchyRoute(
           operationId,
         );
         await deps.resolveBinding(actor, binding.revision);
+        const botId = await deps.buildingManager?.(actor, result, binding.revision);
         await deps.changed?.(actor);
-        return c.json(result, 201);
+        return c.json({ ...result, ...(botId ? { botId } : {}) }, 201);
       } catch (error) {
         if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
         const result = failure(error);
@@ -231,8 +242,12 @@ export function mountHierarchyRoute(
         operationId,
       );
       await deps.resolveBinding(actor, binding.revision);
+      const projects = hierarchy.buildings.flatMap((item) => item.projects);
+      const finishSetup =
+        projects.length === 0 || (projects.length === 1 && projects[0]?.id === project.id);
+      const botId = await deps.projectManager?.(actor, project, binding.revision, finishSetup);
       await deps.changed?.(actor);
-      return c.json(project, 201);
+      return c.json({ ...project, ...(botId ? { botId } : {}) }, 201);
     } catch (error) {
       if (error instanceof Error && error.message === "Project already exists")
         return c.json({ error: "Project already exists" }, 409);
@@ -310,6 +325,7 @@ export function mountHierarchyRoute(
         buildings: hierarchy.buildings.map((building) => ({
           id: building.id,
           name: building.name,
+          botIds: assigned(`building:${building.id}`),
           projects: building.projects.map((project) => ({
             id: project.id,
             name: project.name,

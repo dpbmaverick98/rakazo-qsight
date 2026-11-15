@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { ORPCError, onError } from "@orpc/server";
+import { createRouterClient, ORPCError, onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import type {
   AgentContextStrategy,
@@ -141,6 +141,7 @@ import { storeInboundAttachment } from "./artifacts.js";
 import { mountAuditExportRoute } from "./audit-export.js";
 import { createBillingService } from "./billing.js";
 import { mountBillingRoutes } from "./billing-webhook.js";
+import { provisionBuildingManager } from "./building-manager.js";
 import { clientBuildMiddleware, readDeployedWebBuild } from "./client-build.js";
 import {
   clientIpMiddleware,
@@ -1013,6 +1014,25 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountHierarchyRoute(app, {
     sessionActor,
     source: hierarchySource,
+    buildingManager: hierarchySource
+      ? (actor, building, revision) =>
+          runAsTenant(actor, () =>
+            provisionBuildingManager(prisma, actor, hierarchySource, building, revision),
+          )
+      : undefined,
+    projectManager: hierarchySource
+      ? async (actor, project, revision, finishSetup) => {
+          const client = createRouterClient(router, { context: { actor } });
+          const { bot } = await client.mcp.servers.provisionProjectManager({
+            projectId: project.id,
+            projectName: project.name,
+            clientName: "",
+            bindingRevision: revision,
+            finishSetup,
+          });
+          return bot.id;
+        }
+      : undefined,
     navigationBots: (actor) =>
       runAsTenant(actor, () =>
         prisma.bot.findMany({

@@ -631,3 +631,38 @@ it("logs correlated promotion and unused-token revocation without credentials", 
     vi.unstubAllEnvs();
   }
 });
+
+it("promotes the building manager once and keeps client setup at the client", async () => {
+  const test = setup();
+  test.state.bots.push(
+    {
+      id: "building-manager",
+      userId: "user",
+      spaceId: "space",
+      spawnKey: "building:building",
+      name: "Proj. Manager - Sam",
+    },
+    { id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" },
+  );
+  const first = await provisionProjectManager(test.ctx, actor, input);
+  const second = await provisionProjectManager(test.ctx, actor, input);
+  expect(first.bot.id).toBe("building-manager");
+  expect(second.bot.id).toBe(first.bot.id);
+  expect(test.repos.createBot).not.toHaveBeenCalled();
+  expect(test.state.bots.map((bot) => bot.spawnKey)).toEqual(["pm:roof", "setup:client"]);
+  expect(test.state.assignments).toHaveLength(1);
+  expect(test.deps.events.publishRosterChange).toHaveBeenCalledTimes(2);
+});
+it("seeds new project managers with a scope question", async () => {
+  const test = setup();
+  await provisionProjectManager(test.ctx, actor, input);
+  expect(test.repos.createBot).toHaveBeenCalledWith(
+    actor,
+    expect.objectContaining({
+      initialMessage: {
+        role: "bot",
+        blocks: [{ kind: "text", text: "What scope of work should I plan for this project?" }],
+      },
+    }),
+  );
+});

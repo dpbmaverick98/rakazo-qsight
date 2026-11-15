@@ -129,7 +129,6 @@ it("isolates late responses across project and space changes and clears data on 
           userId="user"
           spaceId={spaceId}
           projectId={projectId}
-          client="Example Client"
           back={() => {}}
         />
       </QueryClientProvider>,
@@ -166,13 +165,7 @@ it("shows package activity live and shares one request with the project detail",
         <QueryClientProvider client={client}>
           <MemoryRouter>
             <ProjectActivity userId="user" spaceId="space" projectId="roof" />
-            <CommercialSelection
-              userId="user"
-              spaceId="space"
-              projectId="roof"
-              client="Example"
-              back={() => {}}
-            />
+            <CommercialSelection userId="user" spaceId="space" projectId="roof" back={() => {}} />
           </MemoryRouter>
         </QueryClientProvider>,
       ),

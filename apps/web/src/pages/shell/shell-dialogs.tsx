@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@rakazo/ui-web";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { Building2, Plus, Settings, Trash2 } from "lucide-react";
+import { Building2, Plus, Trash2 } from "lucide-react";
 import type { ComponentProps, RefObject } from "react";
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { PAGE_PARAM } from "../../lib/pages";
@@ -42,6 +42,7 @@ export function useShellDialogs() {
   const [deleteSpaceTarget, setDeleteSpaceTarget] = useState<Space | null>(null);
   const [spaceMenu, setSpaceMenu] = useState<{
     id: string;
+    buildingId?: string;
     position: { x: number; y: number };
   } | null>(null);
   const spaceMenuAnchor = useRef<HTMLElement | null>(null);
@@ -104,7 +105,6 @@ export function ShellDialogs({
   setPanel,
   refreshBots,
   removeSpace,
-  openSpaceSettings,
   closeMobileSidebar,
   createBot,
   botAvatarSet,
@@ -124,7 +124,6 @@ export function ShellDialogs({
   setPanel: (panel: Panel) => void;
   refreshBots: (includeArchived?: boolean) => Promise<void>;
   removeSpace: (spaceId: string) => Promise<void>;
-  openSpaceSettings: (spaceId: string) => void;
   closeMobileSidebar: () => void;
   createBot: (input: CreateBotDialogInput) => Promise<void>;
   /** The account's set, which a new bot takes. */
@@ -169,6 +168,7 @@ export function ShellDialogs({
   const [clientAction, setClientAction] = useState<{
     action: "building" | "project";
     spaceId: string;
+    buildingId?: string;
   } | null>(null);
   const hierarchy = useHierarchy(
     useQueryUserId(),
@@ -210,22 +210,30 @@ export function ShellDialogs({
             sideOffset={0}
             className="w-[220px]"
           >
-            {spaceMenuTarget && hierarchy.data ? (
+            {spaceMenuTarget ? (
               <>
+                {!spaceMenu.buildingId ? (
+                  <DropdownMenuItem
+                    disabled={hierarchy.data?.canManage === false}
+                    onClick={() => {
+                      dialogs.spaceMenuAnchor.current = null;
+                      setClientAction({ action: "building", spaceId: spaceMenuTarget.id });
+                      setSpaceMenu(null);
+                    }}
+                  >
+                    <Building2 />
+                    {t`Add building`}
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem
-                  disabled={!hierarchy.data.canManage}
+                  disabled={hierarchy.data?.canManage === false}
                   onClick={() => {
-                    setClientAction({ action: "building", spaceId: spaceMenuTarget.id });
-                    setSpaceMenu(null);
-                  }}
-                >
-                  <Building2 />
-                  {t`Add building`}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={!hierarchy.data.canManage}
-                  onClick={() => {
-                    setClientAction({ action: "project", spaceId: spaceMenuTarget.id });
+                    dialogs.spaceMenuAnchor.current = null;
+                    setClientAction({
+                      action: "project",
+                      spaceId: spaceMenuTarget.id,
+                      buildingId: spaceMenu.buildingId,
+                    });
                     setSpaceMenu(null);
                   }}
                 >
@@ -234,18 +242,7 @@ export function ShellDialogs({
                 </DropdownMenuItem>
               </>
             ) : null}
-            {spaceMenuTarget && !hierarchy.data && hierarchy.isSuccess ? (
-              <DropdownMenuItem
-                onClick={() => {
-                  setSpaceMenu(null);
-                  openSpaceSettings(spaceMenuTarget.id);
-                }}
-              >
-                <Settings />
-                {t`Settings`}
-              </DropdownMenuItem>
-            ) : null}
-            {spaceMenuTarget?.canDelete ? (
+            {spaceMenuTarget?.canDelete && !spaceMenu.buildingId ? (
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => {
@@ -261,11 +258,15 @@ export function ShellDialogs({
         </DropdownMenu>
       ) : null}
 
-      {clientAction && hierarchy.data ? (
+      {clientAction ? (
         <ClientSpaceAction
-          key={`${clientAction.spaceId}:${hierarchy.data.bindingRevision}`}
+          key={`${clientAction.spaceId}:${clientAction.buildingId ?? ""}`}
           {...clientAction}
           hierarchy={hierarchy.data}
+          loading={hierarchy.isFetching}
+          retry={() => {
+            void hierarchy.refetch();
+          }}
           onClose={() => setClientAction(null)}
           refreshRoster={refreshBots}
           onOpenBot={(bot) => {

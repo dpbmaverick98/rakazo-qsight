@@ -32,6 +32,7 @@ export const CreateProjectSchema = z
   })
   .strict();
 export const CreatedProjectSchema = z.object({
+  botId: Id.optional(),
   id: Id,
   name: Name,
   currency: z.string().min(1).max(20),
@@ -86,6 +87,7 @@ export const CreateBuildingSchema = z
   })
   .strict();
 export const CreatedBuildingSchema = z.object({
+  botId: Id.optional(),
   id: Id,
   name: z.string().max(200),
   address: z.string().min(1).max(2000),
@@ -108,6 +110,7 @@ export const ClientNavigationSchema = z.object({
     z.object({
       id: Id,
       name: Name,
+      botIds: z.array(Id).optional(),
       projects: z.array(z.object({ id: Id, name: Name, botIds: z.array(Id) })),
     }),
   ),

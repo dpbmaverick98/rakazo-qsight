@@ -22,15 +22,15 @@ export function CreateProject({
   bindingRevision?: number;
   initiallyOpen?: boolean;
   onBusyChange?: (busy: boolean) => void;
-  onCreated?: (project: Pick<CreatedProject, "id" | "name">) => Promise<void>;
-  existingProjects?: Pick<CreatedProject, "id" | "name">[];
+  onCreated?: (project: Pick<CreatedProject, "id" | "name" | "botId">) => Promise<void>;
+  existingProjects?: Pick<CreatedProject, "id" | "name" | "botId">[];
 }) {
   const { t } = useLingui();
   const id = useId();
   const operationId = useRef(crypto.randomUUID());
   const trigger = useRef<HTMLButtonElement>(null);
   const pending = useRef(false);
-  const createdProject = useRef<Pick<CreatedProject, "id" | "name"> | null>(null);
+  const createdProject = useRef<Pick<CreatedProject, "id" | "name" | "botId"> | null>(null);
   const [open, setOpen] = useState(initiallyOpen);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);

@@ -74,6 +74,7 @@ import { ChatContextMenu } from "./shell/chat-context-menu";
 import { ChatFindBar } from "./shell/chat-find-bar";
 import { ChatHeader } from "./shell/chat-header";
 import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
+import { ClientLanding } from "./shell/client-landing";
 import { clientNavigationGroups, useClientNavigations } from "./shell/client-navigation";
 import { Composer } from "./shell/composer";
 import { ComputerOverlay } from "./shell/computer-overlay";
@@ -86,7 +87,6 @@ import { ShellDialogs, useShellDialogs } from "./shell/shell-dialogs";
 import { AppOverlays, SettingsOverlays } from "./shell/shell-overlays";
 import { cycleBotId, isApplePlatform, useShellShortcuts } from "./shell/shell-shortcuts";
 import { focusSidebarSearch, ShellSidebar } from "./shell/shell-sidebar";
-import { ClientLanding } from "./shell/client-landing";
 import { ShellSidePanel } from "./shell/side-panel";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
 import { SidebarRoster } from "./shell/sidebar-roster";
@@ -894,12 +894,6 @@ function SpaceShell() {
     setOverlay({ kind: "settings", section, spaceId });
   }
 
-  // Space-scoped sections bind their own rpc client to this space, so another
-  // space's settings open in place without switching the app or reloading.
-  function openSpaceSettings(spaceId: string) {
-    openSettings("space", spaceId);
-  }
-
   const paletteActions = usePaletteActions({
     settingsAvailable: {
       messaging: messagingSurfaceEnabled,
@@ -1387,7 +1381,6 @@ function SpaceShell() {
           setPanel={setPanel}
           refreshBots={refreshBots}
           removeSpace={removeSpace}
-          openSpaceSettings={openSpaceSettings}
           closeMobileSidebar={() => setMobileSidebarOpen(false)}
           createBot={createBot}
           botAvatarSet={bootstrapMe?.botAvatarSet ?? DEFAULT_NEW_BOT_AVATAR_SET}
