@@ -7,6 +7,7 @@ import {
   isApprovalAskBlock,
   isQuestionAskBlock,
   isSecretAskBlock,
+  mcpApprovalTitle,
   receiptItems,
   resolveAskChoice,
   selectedAskActionLabel,
@@ -148,6 +149,17 @@ function PromptAskCard({
   rpc = selectedSpaceRpc,
 }: AskCardProps) {
   const { t } = useLingui();
+  // Old saved MCP approvals may contain credentials in their argument detail.
+  if (isApprovalAskBlock(block) && block.text.startsWith("Review before mcp__")) {
+    block = {
+      ...block,
+      text: mcpApprovalTitle(block.text.slice("Review before ".length))!,
+      detail: undefined,
+      actions: block.actions?.map((action) =>
+        action.id === "always" ? { ...action, label: "Always allow this action" } : action,
+      ),
+    };
+  }
   const [editing, setEditing] = useState(false);
   const [answer, setAnswer] = useState(block.instructionUpdate?.after ?? "");
   const [acceptedAnswer, setAcceptedAnswer] = useState<string>();

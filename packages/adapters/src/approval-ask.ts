@@ -5,6 +5,7 @@ import {
   batchActions,
   CARD_TITLE_ESCAPED_CHARACTERS,
   instructionUpdateDiff,
+  mcpApprovalTitle,
   messagingProviderName,
   redactSecrets,
   SITE_SENDING_TOOLS,
@@ -71,16 +72,6 @@ export function buildApprovalAskBlock(
         : [],
     );
     const cardSecrets = [...secrets, ...privateValues];
-    const action = toolName.split("__").slice(2).join("__");
-    const titles: Record<string, string> = {
-      create_client: "Create client?",
-      create_building: "Create building?",
-      create_project: "Create project?",
-      create_work_package: "Create work package?",
-      publish_documents: "Publish documents?",
-      approve_documents: "Approve documents?",
-      delete_document: "Delete document?",
-    };
     // Select display fields only. Credentials, identifiers, documents and arbitrary
     // structured arguments never enter the approval payload.
     const fields = ["client_name", "building_name", "project_name", "name", "nickname", "title"];
@@ -99,7 +90,7 @@ export function buildApprovalAskBlock(
     return {
       kind: "ask",
       approvalEffectId: effectId,
-      text: titles[action] ?? "Allow action?",
+      text: mcpApprovalTitle(toolName)!,
       detail: [...new Set(lines)].join(" · ") || undefined,
       detailFormat: "text",
       status: "pending",
