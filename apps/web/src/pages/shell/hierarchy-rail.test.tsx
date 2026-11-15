@@ -4,7 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps, ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { replaceComposerDraft } from "../../lib/composer-draft";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -15,6 +17,7 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 
+vi.mock("../../lib/composer-draft", () => ({ replaceComposerDraft: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ withSpaceHeaders: () => new Headers() }));
 const data = {
   client: { id: "client", name: "Example Client" },
@@ -29,7 +32,7 @@ const data = {
   ],
 };
 afterEach(() => vi.unstubAllGlobals());
-async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}) {
+async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}, route = "/app") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -38,14 +41,16 @@ async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}) 
   const collapse = vi.fn();
   await act(async () =>
     root.render(
-      <HierarchyRail
-        data={data}
-        loading={false}
-        error={false}
-        retry={retry}
-        collapse={collapse}
-        {...props}
-      />,
+      <MemoryRouter initialEntries={[route]}>
+        <HierarchyRail
+          data={data}
+          loading={false}
+          error={false}
+          retry={retry}
+          collapse={collapse}
+          {...props}
+        />
+      </MemoryRouter>,
     ),
   );
   return {
@@ -204,3 +209,51 @@ it("pins only complete coordinates and selects, expands and scrolls the building
     Element.prototype.scrollIntoView = originalScroll;
   }
 });
+
+it.each(["/app", "/app/g/group-1", "/app/bot-1"])(
+  "hands rail requests only to an active bot at %s",
+  async (route) => {
+    vi.mocked(replaceComposerDraft).mockClear();
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const field = document.createElement("div");
+    field.dataset.testid = "composer-field";
+    const textarea = document.createElement("textarea");
+    textarea.name = "chat-message";
+    field.append(textarea);
+    document.body.append(field);
+    const view = await mount({}, route);
+    try {
+      const find = (name: string) =>
+        [...view.container.querySelectorAll("button")].find(
+          (button) => button.textContent === name,
+        );
+      expect(find("Add project")).toBeUndefined();
+      await act(async () => find("North Building")!.click());
+      if (route === "/app/bot-1") {
+        await act(async () => find("Add building")!.click());
+        expect(replaceComposerDraft).toHaveBeenLastCalledWith(
+          "bot:bot-1",
+          "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
+          [],
+        );
+        expect(document.activeElement).toBe(textarea);
+        await act(async () => find("Add project")!.click());
+        expect(replaceComposerDraft).toHaveBeenLastCalledWith(
+          "bot:bot-1",
+          "Add a project under North Building. Ask me for the project name and show the record before creating.",
+          [],
+        );
+        expect(document.activeElement).toBe(textarea);
+      } else {
+        expect(find("Add building")).toBeUndefined();
+        expect(find("Add project")).toBeUndefined();
+        expect(replaceComposerDraft).not.toHaveBeenCalled();
+      }
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      await view.close();
+      field.remove();
+    }
+  },
+);

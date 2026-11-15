@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ComponentProps, ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { replaceComposerDraft } from "../../lib/composer-draft";
 import { CommercialPanel, CommercialSelection } from "./project-commercial";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -15,9 +17,10 @@ vi.mock("@lingui/react/macro", () => ({
   }),
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
+vi.mock("../../lib/composer-draft", () => ({ replaceComposerDraft: vi.fn() }));
 vi.mock("../../lib/rpc", () => ({ withSpaceHeaders: () => new Headers() }));
 afterEach(() => vi.unstubAllGlobals());
-async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}) {
+async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}, route = "/app") {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   document.body.append(container);
@@ -26,14 +29,16 @@ async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}
   const back = vi.fn();
   await act(async () =>
     root.render(
-      <CommercialPanel
-        data={commercialFixture}
-        loading={false}
-        error={false}
-        retry={retry}
-        back={back}
-        {...props}
-      />,
+      <MemoryRouter initialEntries={[route]}>
+        <CommercialPanel
+          data={commercialFixture}
+          loading={false}
+          error={false}
+          retry={retry}
+          back={back}
+          {...props}
+        />
+      </MemoryRouter>,
     ),
   );
   return {
@@ -142,3 +147,33 @@ it("isolates late responses across project and space changes and clears data on 
     client.clear();
   }
 });
+
+it.each(["/app", "/app/g/group-1", "/app/bot-1"])(
+  "offers project manager handoff only to an active bot at %s",
+  async (route) => {
+    vi.mocked(replaceComposerDraft).mockClear();
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const view = await mount({}, route);
+    try {
+      const action = [...view.container.querySelectorAll("button")].find(
+        (button) => button.textContent === "Create project manager",
+      );
+      if (route === "/app/bot-1") {
+        expect(action?.disabled).toBe(false);
+        await act(async () => action!.click());
+        expect(replaceComposerDraft).toHaveBeenCalledExactlyOnceWith(
+          "bot:bot-1",
+          "Create a project manager agent for Roof survey. Give it this project's context and ask before creating anything.",
+          [],
+        );
+      } else {
+        expect(action).toBeUndefined();
+        expect(replaceComposerDraft).not.toHaveBeenCalled();
+      }
+      expect(fetch).not.toHaveBeenCalled();
+    } finally {
+      await view.close();
+    }
+  },
+);

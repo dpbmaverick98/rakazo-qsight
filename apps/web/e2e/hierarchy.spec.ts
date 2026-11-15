@@ -58,11 +58,25 @@ test("client hierarchy shares the right region with chat details", async ({ page
     "aria-expanded",
     "true",
   );
-  await expect(rail.getByRole("link", { name: "Roof survey (opens in new tab)" })).toBeVisible();
-  await rail.getByRole("button", { name: "North Building" }).click();
+  const composer = page.getByTestId("composer-field").locator("textarea");
+  await rail.getByRole("button", { name: "Add building", exact: true }).click();
+  await expect(composer).toHaveValue(
+    "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
+  );
+  await expect(composer).toBeFocused();
+  await rail.getByRole("button", { name: "Add project", exact: true }).click();
+  await expect(composer).toHaveValue(
+    "Add a project under North Building. Ask me for the project name and show the record before creating.",
+  );
+  await expect(composer).toBeFocused();
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
   await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
+  await commercial.getByRole("button", { name: "Create project manager", exact: true }).click();
+  await expect(composer).toHaveValue(
+    "Create a project manager agent for Roof survey. Give it this project's context and ask before creating anything.",
+  );
+  await expect(composer).toBeFocused();
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();

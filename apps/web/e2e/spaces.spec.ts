@@ -10,8 +10,9 @@ test("a new space auto-completes onboarding, is renamed in its settings, and is 
 
   const sidebar = page.locator("aside").first();
   await openNewSpace(page);
-  const dialog = page.getByRole("dialog", { name: "New space" });
-  const name = dialog.getByLabel("Name");
+  const dialog = page.getByRole("dialog", { name: "New client space" });
+  const name = dialog.getByLabel("Client name");
+  await expect(name).toHaveAttribute("placeholder", "Example Client");
   await name.fill("Typo space");
   const windowKeys = await page.evaluateHandle(() => {
     const keys: string[] = [];
@@ -23,7 +24,9 @@ test("a new space auto-completes onboarding, is renamed in its settings, and is 
     await name.dispatchEvent("keydown", { key: "Enter", ...composition });
     await name.dispatchEvent("keydown", { key: "Escape", ...composition });
     expect(await windowKeys.evaluate((keys) => keys.includes("Escape"))).toBe(false);
-    await expect(dialog.getByRole("button", { name: "Create space", exact: true })).toBeEnabled();
+    await expect(
+      dialog.getByRole("button", { name: "Create client space", exact: true }),
+    ).toBeEnabled();
   }
   await name.press("Enter");
 
@@ -88,9 +91,9 @@ test("deleting the last bot in a space stays in the app after first use", {
 
   const sidebar = page.locator("aside").first();
   await openNewSpace(page);
-  const dialog = page.getByRole("dialog", { name: "New space" });
-  await dialog.getByLabel("Name").fill("Side");
-  await dialog.getByRole("button", { name: "Create space", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "New client space" });
+  await dialog.getByLabel("Client name").fill("Side");
+  await dialog.getByRole("button", { name: "Create client space", exact: true }).click();
   await page.waitForURL(/\/(onboarding|app)/);
   await completeOnboarding(page);
   await expect(sidebar.getByText("Side", { exact: true })).toBeVisible();
