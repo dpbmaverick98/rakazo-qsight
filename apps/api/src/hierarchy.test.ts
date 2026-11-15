@@ -152,8 +152,8 @@ it("disabled hierarchy and commercial adapters return explicit safe statuses", a
   });
   for (const path of paths) {
     const response = await app.request(path);
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ status: "disabled" });
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
   }
 });
 it("passes explicit revisions through all hierarchy and commercial reads", async () => {

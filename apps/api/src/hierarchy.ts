@@ -108,6 +108,8 @@ export function mountHierarchyRoute(
           ? undefined
           : Number(c.req.header("x-rakazo-binding-revision")),
       );
+      // A role can change while the upstream read is in flight; re-check before the write.
+      if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
       const building = hierarchy.buildings.find((item) => item.id === input.data.buildingId);
       if (!building) return c.json({ error: "Building unavailable" }, 404);
       if (
@@ -132,7 +134,7 @@ export function mountHierarchyRoute(
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
     const source = deps.source;
-    if (!source?.readCommercial) return c.json({ status: "disabled" }, 503);
+    if (!source?.readCommercial) return c.body(null, 204);
     const id = c.req.param("id");
     if (!id || id.length > 200 || id === "." || id === ".." || new URL(c.req.url).search)
       return c.json({ error: "Invalid project request" }, 400);
@@ -161,6 +163,7 @@ export function mountHierarchyRoute(
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
     if (!actor) return c.json({ error: "Unauthorized" }, 401);
+    if (!deps.source) return c.body(null, 204);
     try {
       const revision = c.req.header("x-rakazo-binding-revision");
       if (revision !== undefined && !/^[1-9][0-9]*$/.test(revision))
