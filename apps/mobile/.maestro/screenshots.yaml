@@ -85,8 +85,14 @@ tags:
 - takeScreenshot: "08b-new-bot"
 
 - openLink: "rakazo:///new-space"
-- assertVisible: "Customer support"
+- assertVisible: "Add client"
 - takeScreenshot: "09-new-space"
+- tapOn: "Cancel"
+- openLink: "rakazo:///client-setup"
+- extendedWaitUntil:
+    visible: "Archived chats"
+    timeout: 15000
+- takeScreenshot: "09a-continue-setup"
 
 - openLink: "rakazo:///account"
 - extendedWaitUntil:
@@ -268,8 +274,14 @@ tags:
 - takeScreenshot: "24b-new-bot-dark"
 
 - openLink: "rakazo:///new-space"
-- assertVisible: "Customer support"
+- assertVisible: "Add client"
 - takeScreenshot: "25-new-space-dark"
+- tapOn: "Cancel"
+- openLink: "rakazo:///client-setup"
+- extendedWaitUntil:
+    visible: "Archived chats"
+    timeout: 15000
+- takeScreenshot: "25a-continue-setup-dark"
 
 - openLink: "rakazo:///thread?botId=${RAKAZO_SCREENSHOT_BOT_ID}&name=Researcher"
 - extendedWaitUntil:

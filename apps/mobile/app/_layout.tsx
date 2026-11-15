@@ -500,7 +500,7 @@ function LayoutContent() {
                       <Stack.Screen
                         name="new-space"
                         options={{
-                          title: t`New client space`,
+                          title: t`Add client`,
                           presentation: "modal",
                           gestureEnabled: true,
                           headerBackVisible: false,

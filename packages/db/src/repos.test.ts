@@ -641,3 +641,35 @@ it("finds incoming calls independently of the sidebar message window", async () 
   expect((await createRepos(prisma).listBots(actor))[0]?.incomingCall).toBeNull();
   expect(messageQuery).not.toHaveBeenCalled();
 });
+
+describe("createRepos.createBot archive recovery", () => {
+  it("preserves an archived setup identity when a concurrent create loses its unique key", async () => {
+    const conflict = { code: "P2002", meta: { target: ["spaceId", "spawnKey"] } };
+    const update = vi.fn();
+    const transaction = vi.fn().mockRejectedValue(conflict);
+    const prisma = {
+      deploymentSettings: { findUnique: vi.fn(async () => null) },
+      $transaction: transaction,
+      bot: {
+        findUnique: vi.fn(async () => ({
+          ...baseBot,
+          spawnKey: "setup:client",
+          archivedAt: new Date(),
+        })),
+        update,
+      },
+    };
+    await expect(
+      createRepos(prisma as unknown as PrismaClient).createBot(actor, {
+        name: "PM",
+        instructions: "",
+        description: "",
+        notifyOnFinish: false,
+        spawnKey: "setup:client",
+        replaceArchived: false,
+      }),
+    ).rejects.toBe(conflict);
+    expect(update).not.toHaveBeenCalled();
+    expect(transaction).toHaveBeenCalledOnce();
+  });
+});

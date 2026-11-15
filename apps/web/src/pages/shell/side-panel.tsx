@@ -6,12 +6,13 @@ import type {
   Group,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import { Button } from "@rakazo/ui-web";
+import { Button, Sheet, SheetContent, SheetTitle, SheetTrigger } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { ComponentProps, Dispatch, ReactNode, SetStateAction } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import { PagesList } from "../../components/pages/PagesList";
+import { useMedia } from "../../lib/pages";
 import type { Panel } from "../../lib/right-panel-state";
 import type { createSpaceRpc } from "../../lib/rpc";
 import { CreateGroupForm, GroupSettings } from "../GroupPanel";
@@ -90,10 +91,15 @@ export function ShellSidePanel({
     hierarchyScope.enabled,
   );
   const [hierarchyOpen, setHierarchyOpen] = useState(true);
+  const narrow = useMedia("(max-width: 1023px)");
+  useEffect(() => {
+    // A newly selected client starts with its setup surface visible.
+    if (hierarchyScope.spaceId) setHierarchyOpen(true);
+  }, [hierarchyScope.spaceId]);
   const hierarchyAvailable =
     hierarchyScope.enabled &&
     (hierarchy.isFetching || hierarchy.data !== null || hierarchy.isError);
-  const showHierarchy = hierarchyAvailable && hierarchyOpen;
+  const showHierarchy = hierarchyAvailable && hierarchyOpen && !narrow;
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
   const botTab =
     panel === "computer" || panel === "routines" || panel === "pages" || panel === "settings"
@@ -110,9 +116,42 @@ export function ShellSidePanel({
     await refreshBots().catch(() => undefined);
   }
 
+  const hierarchyRail = (
+    <HierarchyRail
+      key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
+      scope={hierarchyScope}
+      onOpenBot={(bot) => {
+        if (narrow) setHierarchyOpen(false);
+        openCreatedBot(bot);
+      }}
+      data={hierarchy.isError ? undefined : hierarchy.data}
+      loading={hierarchy.isFetching}
+      error={hierarchy.isError}
+      retry={() => {
+        void hierarchy.refetch();
+      }}
+      collapse={() => setHierarchyOpen(false)}
+    />
+  );
+
   return (
     <>
-      {hierarchyAvailable && !hierarchyOpen && !open ? (
+      {hierarchyAvailable && narrow ? (
+        <Sheet open={hierarchyOpen} onOpenChange={setHierarchyOpen}>
+          <div className="absolute end-3 top-14 z-30">
+            <SheetTrigger render={<Button variant="outline" size="sm" />}>
+              <Trans>Hierarchy</Trans>
+            </SheetTrigger>
+          </div>
+          <SheetContent className="w-full max-w-sm overflow-y-auto" showCloseButton={false}>
+            <SheetTitle className="sr-only">
+              <Trans>Client hierarchy</Trans>
+            </SheetTitle>
+            {hierarchyRail}
+          </SheetContent>
+        </Sheet>
+      ) : null}
+      {hierarchyAvailable && !narrow && !hierarchyOpen && !open ? (
         <div className="absolute end-3 top-14 z-10">
           <Button variant="outline" size="sm" onClick={() => setHierarchyOpen(true)}>
             <Trans>Hierarchy</Trans>
@@ -123,7 +162,7 @@ export function ShellSidePanel({
         open={open || showHierarchy}
         panel={panel ?? (showHierarchy ? "hierarchy" : "closed")}
       >
-        {hierarchyAvailable && !hierarchyOpen && open ? (
+        {hierarchyAvailable && !narrow && !hierarchyOpen && open ? (
           <div className="border-b border-border px-5 py-2">
             <Button variant="ghost" size="sm" onClick={() => setHierarchyOpen(true)}>
               <Trans>Hierarchy</Trans>
@@ -138,18 +177,7 @@ export function ShellSidePanel({
                 : "min-h-0 flex-1 overflow-y-auto"
             }
           >
-            <HierarchyRail
-              key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
-              scope={hierarchyScope}
-              onOpenBot={openCreatedBot}
-              data={hierarchy.isError ? undefined : hierarchy.data}
-              loading={hierarchy.isFetching}
-              error={hierarchy.isError}
-              retry={() => {
-                void hierarchy.refetch();
-              }}
-              collapse={() => setHierarchyOpen(false)}
-            />
+            {hierarchyRail}
           </div>
         ) : null}
         {open ? (

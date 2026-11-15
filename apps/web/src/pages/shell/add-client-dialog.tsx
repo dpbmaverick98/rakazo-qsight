@@ -52,7 +52,12 @@ export function AddClientDialog({
                 body: JSON.stringify({ name: name.trim() }),
               });
               if (response.status === 409) {
-                setError(t`Client setup conflicts with an existing binding.`);
+                const failure = await response.json();
+                setError(
+                  failure.status === "setup_archived"
+                    ? t`Restore the PM from Archived chats to continue setup.`
+                    : t`Client setup conflicts with an existing binding.`,
+                );
                 return;
               }
               if (!response.ok) throw new Error("Setup unavailable");

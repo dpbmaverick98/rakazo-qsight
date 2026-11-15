@@ -308,6 +308,15 @@ export function useInboxRenderItem({
                         image: "person.crop.circle.badge.plus",
                         disabled: spaceBusy || !!spaceRecoveryId,
                       },
+                      ...(!item.space.isDefault
+                        ? [
+                            {
+                              id: "client-setup",
+                              title: t`Continue setup`,
+                              image: "building.2" as const,
+                            },
+                          ]
+                        : []),
                       { id: "members", title: t`Members`, image: "person.2" },
                       { id: "settings", title: t`Settings`, image: "gearshape" },
                       ...(canDeleteInboxSpace(item.space)
@@ -329,7 +338,12 @@ export function useInboxRenderItem({
                       else if (id === "delete") confirmDeleteSpace(item.space);
                       else
                         router.push({
-                          pathname: id === "members" ? "/space-members" : "/space",
+                          pathname:
+                            id === "members"
+                              ? "/space-members"
+                              : id === "client-setup"
+                                ? "/client-setup"
+                                : "/space",
                           params: { spaceId: item.space.id, name: item.space.name },
                         });
                     },

@@ -63,43 +63,54 @@ export async function setupClient(
     const repos = createRepos(prisma);
     if (
       await prisma.bot.findFirst({
-        where: { spaceId: target.spaceId, spawnKey: { startsWith: "pm:" }, archivedAt: null },
+        where: { spaceId: target.spaceId, spawnKey: { startsWith: "pm:" } },
       })
     )
       throw new ORPCError("CONFLICT", { message: "setup_finished" });
     const spawnKey = `setup:${client.id}`;
     // Resume the setup PM for any current Space owner/admin, not only its creator.
     const existing = await prisma.bot.findFirst({
-      where: { spaceId: target.spaceId, spawnKey, archivedAt: null },
-      select: { id: true, name: true, spawnKey: true, userId: true },
+      where: { spaceId: target.spaceId, spawnKey },
+      select: { id: true, name: true, spawnKey: true, userId: true, archivedAt: true },
     });
+    if (existing?.archivedAt) throw new ORPCError("CONFLICT", { message: "setup_archived" });
     const bot =
       existing ??
-      (await repos.createBot(target, {
-        name: "PM",
-        spawnKey,
-        description: "",
-        instructions: clientSetupInstructions(client),
-        notifyOnFinish: false,
-        dailyCheckIns: false,
-        fleetManagement: false,
-        seed: async (tx, botId) => {
-          await lockSpaceDeletion(tx, target.spaceId);
-          await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${target.spaceId} FOR UPDATE`;
-          if (
-            await tx.bot.findFirst({
-              where: { spaceId: target.spaceId, spawnKey: { startsWith: "pm:" }, archivedAt: null },
-            })
-          )
-            throw new ORPCError("CONFLICT", { message: "setup_finished" });
-          await bindingAccess(tx, target, true);
-          await resolveClientBinding(tx, target, binding.revision);
-          await tx.bot.update({
-            where: { id: botId },
-            data: { inheritMcpServers: false, crossSpaceCommunication: false },
-          });
-        },
-      }));
+      (await repos
+        .createBot(target, {
+          name: "PM",
+          spawnKey,
+          replaceArchived: false,
+          description: "",
+          instructions: clientSetupInstructions(client),
+          notifyOnFinish: false,
+          dailyCheckIns: false,
+          fleetManagement: false,
+          seed: async (tx, botId) => {
+            await lockSpaceDeletion(tx, target.spaceId);
+            await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${target.spaceId} FOR UPDATE`;
+            if (
+              await tx.bot.findFirst({
+                where: {
+                  spaceId: target.spaceId,
+                  spawnKey: { startsWith: "pm:" },
+                },
+              })
+            )
+              throw new ORPCError("CONFLICT", { message: "setup_finished" });
+            await bindingAccess(tx, target, true);
+            await resolveClientBinding(tx, target, binding.revision);
+            await tx.bot.update({
+              where: { id: botId },
+              data: { inheritMcpServers: false, crossSpaceCommunication: false },
+            });
+          },
+        })
+        .catch((error) => {
+          if (isUniqueViolation(error))
+            throw new ORPCError("CONFLICT", { message: "setup_unavailable" });
+          throw error;
+        }));
     const serverId = await prisma.$transaction(async (tx) => {
       await lockSpaceDeletion(tx, target.spaceId);
       await tx.$queryRaw`SELECT id FROM spaces WHERE id = ${target.spaceId} FOR UPDATE`;
@@ -107,7 +118,7 @@ export async function setupClient(
       await resolveClientBinding(tx, target, binding.revision);
       if (
         await tx.bot.findFirst({
-          where: { spaceId: target.spaceId, spawnKey: { startsWith: "pm:" }, archivedAt: null },
+          where: { spaceId: target.spaceId, spawnKey: { startsWith: "pm:" } },
         })
       )
         throw new ORPCError("CONFLICT", { message: "setup_finished" });
