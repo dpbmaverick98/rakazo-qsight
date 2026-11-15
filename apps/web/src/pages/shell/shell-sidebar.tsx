@@ -72,6 +72,7 @@ export function ShellSidebar({
   toggleSidebarSection,
   setPanel,
   navigate,
+  setAddClientOpen,
   setNewSpaceOpen,
   setCreateBotOpen,
   chatMenu,
@@ -102,6 +103,7 @@ export function ShellSidebar({
   toggleSidebarSection: (key: string) => void;
   setPanel: (panel: Panel) => void;
   navigate: (path: string) => void;
+  setAddClientOpen: (open: boolean) => void;
   setNewSpaceOpen: (open: boolean) => void;
   setCreateBotOpen: (open: boolean) => void;
   chatMenu: ChatMenuState;
@@ -191,6 +193,7 @@ export function ShellSidebar({
           setMobileSidebarOpen={setMobileOpen}
           setPanel={setPanel}
           navigate={navigate}
+          setAddClientOpen={setAddClientOpen}
           setNewSpaceOpen={setNewSpaceOpen}
           setCreateBotOpen={setCreateBotOpen}
         />

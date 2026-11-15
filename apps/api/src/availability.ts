@@ -209,6 +209,25 @@ async function place(
   return availability;
 }
 
+/** Add one Space without discarding the owner's existing availability or copying its secret. */
+export async function makeServerAvailableInSpace(
+  tx: Prisma.TransactionClient,
+  actor: Actor,
+  server: Joined & { id: string; availableIn: Array<{ spaceId: string }> },
+) {
+  await assertOwnSpaces(tx, actor, [actor.spaceId]);
+  return place(tx, actor, "mcpServer", server, {
+    allSpaces: server.allSpaces,
+    spaceIds: [
+      ...new Set([
+        server.spaceId,
+        ...server.availableIn.map((item) => item.spaceId),
+        actor.spaceId,
+      ]),
+    ],
+  });
+}
+
 /**
  * Make an item the actor can see here available in every space or exactly the chosen ones.
  * A plugin's skills and connectors follow its install. When the space an item was added in is

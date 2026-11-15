@@ -1,7 +1,11 @@
 import { ORPCError } from "@orpc/server";
 import type { Actor } from "@rakazo/contracts";
-import type { CreatedProject, Hierarchy } from "@rakazo/contracts/hierarchy";
-import { ChangeClientBindingSchema, CreateProjectSchema } from "@rakazo/contracts/hierarchy";
+import type { ClientSetup, CreatedProject, Hierarchy } from "@rakazo/contracts/hierarchy";
+import {
+  ChangeClientBindingSchema,
+  CreateClientSchema,
+  CreateProjectSchema,
+} from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
 import type { ClientBinding } from "./space-client-binding.js";
@@ -14,6 +18,7 @@ export function mountHierarchyRoute(
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
     resolveBinding: (actor: Actor, revision?: number) => Promise<ClientBinding>;
+    setupClient?: (actor: Actor, name: string) => Promise<ClientSetup>;
     bindingCommands?: {
       status: (actor: Actor) => Promise<unknown>;
       change: (
@@ -47,6 +52,28 @@ export function mountHierarchyRoute(
     await deps.resolveBinding(actor, binding.revision);
     return { hierarchy, binding };
   };
+  app.post("/api/agent-plane/clients", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.json({ status: "unauthorized" }, 401);
+    const origin = c.req.header("origin");
+    if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
+      return c.json({ status: "forbidden" }, 403);
+    if (c.req.header("content-type")?.split(";")[0]?.trim() !== "application/json")
+      return c.json({ status: "invalid_request" }, 400);
+    try {
+      const input = CreateClientSchema.safeParse(await c.req.json());
+      if (!input.success) return c.json({ status: "invalid_request" }, 400);
+      if (!deps.setupClient) return c.json({ status: "disabled" }, 503);
+      const result = await deps.setupClient(actor, input.data.name);
+      await deps.changed?.({ ...actor, spaceId: result.spaceId });
+      return c.json(result);
+    } catch (error) {
+      if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
+      const result = failure(error);
+      return c.json(result.body, result.status);
+    }
+  });
   app.get("/api/agent-plane/client-binding", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);

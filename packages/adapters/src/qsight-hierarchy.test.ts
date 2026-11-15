@@ -21,6 +21,53 @@ const raw = {
   ],
 };
 afterEach(() => vi.unstubAllGlobals());
+const client = { id: "7", name: "Example Client", url: "https://hierarchy.example.test/clients/7" };
+it("creates clients with the server token and recovers 409 using an exact-name lookup", async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(Response.json({ ...client, id: 7 }, { status: 201 }))
+    .mockResolvedValueOnce(new Response(null, { status: 409 }))
+    .mockResolvedValueOnce(
+      Response.json({ items: [{ ...client, id: "8", name: "Example Client other" }, client] }),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.createClient(" Example Client ")).resolves.toEqual(client);
+  expect(fetch.mock.calls[0]).toEqual([
+    new URL("https://hierarchy.example.test/api/v2/agent/clients"),
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ name: client.name }),
+      redirect: "error",
+      headers: expect.objectContaining({ Authorization: "Bearer fake-token" }),
+      signal: expect.any(AbortSignal),
+    }),
+  ]);
+  await expect(source.createClient(client.name)).resolves.toBeNull();
+  await expect(source.findClient(client.name)).resolves.toEqual(client);
+  const [url, request] = fetch.mock.calls[2]!;
+  expect(new URL(String(url)).searchParams.get("name")).toBe(client.name);
+  expect(request).toMatchObject({
+    headers: { Authorization: "Bearer fake-token" },
+    redirect: "error",
+  });
+});
+it("does not adopt a different or ambiguous client and sanitizes upstream errors", async () => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockResolvedValueOnce(Response.json({ items: [{ ...client, name: "example client" }] }))
+    .mockResolvedValueOnce(Response.json({ items: [client, { ...client, id: "8" }] }))
+    .mockResolvedValueOnce(Response.json({ ...client, name: "Other" }, { status: 201 }))
+    .mockResolvedValueOnce(Response.json(client))
+    .mockRejectedValueOnce(new Error("fake-secret-value"));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.findClient(client.name)).resolves.toBeNull();
+  await expect(source.findClient(client.name)).rejects.toThrow("Client lookup unavailable");
+  await expect(source.createClient(client.name)).rejects.toThrow("Client creation unavailable");
+  await expect(source.createClient(client.name)).rejects.toThrow("Client creation unavailable");
+  await expect(source.createClient(client.name)).rejects.toThrow("Client creation unavailable");
+});
 it("requires only base and token and rejects unsafe base URLs", () => {
   expect(qsightHierarchyFromEnv({})).toBeNull();
   expect(

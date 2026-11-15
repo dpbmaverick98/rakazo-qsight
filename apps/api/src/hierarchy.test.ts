@@ -191,3 +191,46 @@ it("keeps project input/origin checks and duplicate guards before upstream write
     ).toBe(status);
   expect(deps.source.createProject).not.toHaveBeenCalled();
 });
+
+it("validates client setup writes and returns resumable IDs without treating missing MCP as failure", async () => {
+  const result = {
+    clientId: "client",
+    spaceId: "client-space",
+    botId: "pm",
+    serverId: null,
+    status: "mcp_missing" as const,
+  };
+  const setupClient = vi.fn(async () => result);
+  const sessionActor = vi.fn(async () => actor as typeof actor | null);
+  const changed = vi.fn(async () => {});
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    sessionActor,
+    setupClient,
+    changed,
+    source: null,
+    resolveBinding: async () => binding,
+  });
+  const post = (body: unknown, origin?: string) =>
+    app.request("/api/agent-plane/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(origin ? { origin } : {}) },
+      body: JSON.stringify(body),
+    });
+  expect((await post({ name: "Example Client" }, "https://untrusted.test")).status).toBe(403);
+  expect((await post({ name: "" })).status).toBe(400);
+  expect((await post({ name: "Client", credentials: "ignored" })).status).toBe(400);
+  sessionActor.mockResolvedValueOnce(null);
+  expect((await post({ name: "Client" })).status).toBe(401);
+  expect(setupClient).not.toHaveBeenCalled();
+  const response = await post({ name: " Example Client " });
+  expect(response.status).toBe(200);
+  expect(await response.json()).toEqual(result);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(setupClient).toHaveBeenCalledWith(actor, "Example Client");
+  expect(changed).toHaveBeenCalledWith({ ...actor, spaceId: "client-space" });
+  setupClient.mockRejectedValueOnce(new ORPCError("CONFLICT", { message: "binding_conflict" }));
+  const conflict = await post({ name: "Example Client" });
+  expect(conflict.status).toBe(409);
+  expect(await conflict.json()).toEqual({ status: "binding_conflict" });
+});
