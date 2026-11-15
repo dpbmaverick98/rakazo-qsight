@@ -15,6 +15,8 @@ export async function provisionProjectManager(
   input: { projectId: string; projectName: string; clientName: string },
 ) {
   const { deps, repos, prepareMcpServer, insertMcpServer } = ctx;
+  if (!actor.isDeploymentOwner)
+    throw new ORPCError("FORBIDDEN", { message: "Only the deployment owner can provision a project manager" });
   const source = deps.projectManagers;
   if (!source) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
   const space = await deps.prisma.space.findFirst({ where: { id: actor.spaceId } });

@@ -13,7 +13,7 @@ const actor: Actor = {
   userId: "user",
   spaceId: "space",
   email: "user@example.test",
-  isDeploymentOwner: false,
+  isDeploymentOwner: true,
 };
 const input = { projectId: "roof", projectName: "Untrusted name", clientName: "Untrusted client" };
 const hierarchy = {

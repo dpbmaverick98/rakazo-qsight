@@ -1004,6 +1004,8 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     sessionActor,
     source: qsightHierarchyFromEnv(),
     spaceClientName: async (actor) => {
+      // Avoid turning a renameable Space into another client's authority.
+      if (!actor.isDeploymentOwner) return null;
       const space = await runAsTenant(actor, () =>
         prisma.space.findUnique({
           where: { id: actor.spaceId },
