@@ -146,7 +146,7 @@ unused cache immediately, and hide figures during refresh or failure. Reads occu
 on entry, focus, retry and the existing roster stream signals, with no polling or
 offline persistence. Upstream-only changes still have no push bridge.
 
-Live wiring requires the QSight commercial endpoint PR to be merged with this
+Live wiring requires the Vendor One commercial endpoint PR to be merged with this
 shape and the deep-link routes confirmed. No live endpoint, real credentials,
 financial parity against live projections or upstream authorization was exercised;
 consumer checks use synthetic mocked responses only.
@@ -187,7 +187,7 @@ still apply; a local endpoint needs the deployment's standard private-endpoint
 opt-in. No provider-specific browser settings are introduced.
 
 `prepareMcpServer` validates the endpoint and encrypts the bearer; `insertMcpServer`
-creates a `streamable_http` server named `QSight PM — {projectName}` (120 characters
+creates a `streamable_http` server named `Vendor One PM — {projectName}` (120 characters
 maximum), scoped to the current space with `allBots: false`. A project-ID-derived
 SHA-256 slug keeps identity stable when names change. A matching legacy name can
 be adopted; projects sharing a display name keep separate slugs. A server shared
@@ -241,3 +241,9 @@ returning 409; the local name check alone cannot enforce uniqueness.
 Space names remain the integration binding, so Space owners must be trusted to
 select that binding. There is no new native mobile screen; the existing native
 app has no hierarchy rail, and server authorization also applies to native callers.
+
+New client Spaces name their first bot `PM`, with instructions scoped to the client.
+Project bots remain `PM — {projectName}` (80 characters maximum); MCP server names
+remain capped at 120 characters including the `Vendor One PM — ` prefix. Existing
+bots are not renamed here; that is deferred to a migration. Personal onboarding
+keeps its existing name. Internal identifiers and `QSIGHT_*` configuration stay unchanged.
