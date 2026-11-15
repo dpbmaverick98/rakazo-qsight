@@ -34,6 +34,7 @@ describe("account email templates", () => {
   ] as const)("preserves the exact %s link in HTML and text", async (_name, create) => {
     const message = await create();
     expect(message.to).toBe("user@example.test");
+    expect(message.html).toContain(">Vendor One Management</p>");
     expect(message.text).toContain(url);
     expect(message.html).toContain(`href="${url.replaceAll("&", "&amp;")}"`);
   });
