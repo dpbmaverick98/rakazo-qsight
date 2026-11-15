@@ -84,9 +84,11 @@ export async function provisionProjectManager(
           await resolveClientBinding(tx, actor, binding.revision);
           await lockOwner(tx, actor.userId, "names:mcpServer");
           const bot = await tx.bot.findFirst({
-            where: { id: botId, spaceId: actor.spaceId, userId: actor.userId, archivedAt: null },
+            where: { id: botId, spaceId: actor.spaceId, archivedAt: null },
           });
           if (!bot) throw new ORPCError("CONFLICT", { message: "Project manager unavailable" });
+          if (!input.finishSetup && bot.userId !== actor.userId)
+            throw new ORPCError("CONFLICT", { message: "Project manager unavailable" });
           const scope = { spaceId: actor.spaceId, userId: actor.userId };
           const bySlug = await tx.mcpServer.findFirst({ where: { ...scope, slug: config.slug } });
           const byName = bySlug
@@ -171,7 +173,14 @@ export async function provisionProjectManager(
         };
         const spawnKey = `pm:${project.id}`;
         const bots = await repos.listBots(actor);
-        const setup = bots.find((bot) => bot.spawnKey === `setup:${binding.externalClientId}`);
+        // Any current Space owner/admin can finish/kill the setup PM, not only its creator.
+        const setup = await deps.prisma.bot.findFirst({
+          where: {
+            spaceId: actor.spaceId,
+            spawnKey: `setup:${binding.externalClientId}`,
+            archivedAt: null,
+          },
+        });
         if (setup && !input.finishSetup)
           throw new ORPCError("CONFLICT", {
             message: "Finish setup before creating project managers",

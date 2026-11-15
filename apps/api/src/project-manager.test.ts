@@ -64,7 +64,12 @@ function setup() {
     bot: {
       findFirst: vi.fn(async ({ where }: Row) =>
         state.bots.find(
-          (bot) => bot.id === where.id && bot.userId === where.userId && !bot.archivedAt,
+          (bot) =>
+            (!where.id || bot.id === where.id) &&
+            (!where.userId || bot.userId === where.userId) &&
+            (!where.spaceId || bot.spaceId === where.spaceId) &&
+            (!where.spawnKey || bot.spawnKey === where.spawnKey) &&
+            !bot.archivedAt,
         ),
       ),
       update: vi.fn(async ({ where, data }: Row) =>
@@ -183,7 +188,7 @@ function setup() {
     listBots: vi.fn(async () => state.bots),
     createBot: vi.fn(async (_actor: Actor, request: Row) =>
       prisma.$transaction(async (tx) => {
-        const bot: Row = { id: "pm", userId: "user", ...request };
+        const bot: Row = { id: "pm", userId: "user", spaceId: "space", ...request };
         delete bot.seed;
         state.bots.push(bot);
         await request.seed(tx, bot.id);
