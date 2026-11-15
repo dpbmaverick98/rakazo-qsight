@@ -21,6 +21,7 @@ import {
   runThreadSubscription,
 } from "@rakazo/core";
 import { fetchFresh } from "@rakazo/core/query";
+import { bestEffort } from "@rakazo/logging";
 import type { RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -43,6 +44,7 @@ import {
   transcriptCanSnapAfterFrame,
   transcriptIsNearEnd,
 } from "../../lib/transcript-scroll";
+import { hierarchyChangedBy, refreshHierarchy } from "./hierarchy-refresh";
 import type { useBrowserNotifications } from "./use-browser-notifications";
 import type { ComputerState } from "./use-computer";
 import type { ThreadState } from "./use-thread-state";
@@ -402,6 +404,9 @@ export function useThreadSync({
           isRunWorking(active.threadStatus))
     )
       commitSnapshot(cachedThread);
+    const hierarchyRefresh = createRefreshCoalescer(() =>
+      refreshHierarchy(queryClient, meId ?? null),
+    );
     const sidebarRefresh = createRefreshCoalescer(() => refreshBots());
     const snapshotRefresh = createRefreshCoalescer(() => refreshThread(active.id));
     const abort = new AbortController();
@@ -433,6 +438,8 @@ export function useThreadSync({
       applyEvent: (event) =>
         applyThreadEvent(event, commitSnapshot, commitComputer, snapshotRef, computerRef),
       onEvent: (event, initial) => {
+        if (hierarchyChangedBy(event))
+          bestEffort("refresh hierarchy", hierarchyRefresh.invalidate());
         const currentBot = botsRef.current.find((bot) => bot.id === active.id);
         notifyBrowserForEvent(
           event,
@@ -489,6 +496,7 @@ export function useThreadSync({
       },
     });
     return () => {
+      hierarchyRefresh.dispose();
       sidebarRefresh.dispose();
       snapshotRefresh.dispose();
       abort.abort();
@@ -509,6 +517,9 @@ export function useThreadSync({
     const threadKey = cachedThreadKey({ groupId });
     const cachedThread = pendingJump ? undefined : queryClient.getQueryData(threadKey);
     if (cachedThread && snapshotRef.current?.groupId !== groupId) commitSnapshot(cachedThread);
+    const hierarchyRefresh = createRefreshCoalescer(() =>
+      refreshHierarchy(queryClient, meId ?? null),
+    );
     const sidebarRefresh = createRefreshCoalescer(() => refreshBots());
     const snapshotRefresh = createRefreshCoalescer(() => refreshGroupThread(groupId));
     const abort = new AbortController();
@@ -539,6 +550,8 @@ export function useThreadSync({
           computerRef,
         ),
       onEvent: (event, initial) => {
+        if (hierarchyChangedBy(event))
+          bestEffort("refresh hierarchy", hierarchyRefresh.invalidate());
         const eventBot = botsRef.current.find((bot) => bot.id === event.botId);
         notifyBrowserForEvent(
           event,
@@ -580,6 +593,7 @@ export function useThreadSync({
       },
     });
     return () => {
+      hierarchyRefresh.dispose();
       sidebarRefresh.dispose();
       snapshotRefresh.dispose();
       abort.abort();

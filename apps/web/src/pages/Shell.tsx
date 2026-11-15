@@ -79,6 +79,7 @@ import { Composer } from "./shell/composer";
 import { ComputerOverlay } from "./shell/computer-overlay";
 import { ComputerPanel } from "./shell/computer-panel";
 import type { CreateBotDialogInput } from "./shell/create-bot-dialog";
+import { refreshHierarchy } from "./shell/hierarchy-refresh";
 import type { ImportSetupTarget } from "./shell/import-setup-card";
 import { KeyboardShortcutsDialog } from "./shell/keyboard-shortcuts-dialog";
 import { ShellDialogs, useShellDialogs } from "./shell/shell-dialogs";
@@ -463,13 +464,11 @@ function SpaceShell() {
       roster: {
         changed: () => {
           rosterSignals.changed();
-          void queryClient.invalidateQueries({ queryKey: ["client-navigation", userId] });
-          void queryClient.invalidateQueries({
-            queryKey: ["hierarchy", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["project-commercial", userId, shellSpaceId ?? bootstrapMe?.spaceId ?? null],
-          });
+          void refreshHierarchy(
+            queryClient,
+            userId ?? null,
+            shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+          );
         },
       },
     },

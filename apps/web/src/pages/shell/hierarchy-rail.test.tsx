@@ -20,12 +20,17 @@ vi.mock("../../lib/rpc", () => ({
   withSpaceHeaders: () => new Headers(),
   rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: vi.fn() } } }),
 }));
+vi.mock("./project-commercial", () => ({
+  ProjectActivity: () => null,
+  CommercialSelection: () => null,
+}));
 const data = {
   client: { id: "client", name: "Example Client" },
   buildings: [
     {
       id: "north",
       name: "North Building",
+      address: "10 Example Street",
       projects: [
         { id: "roof", name: "Roof survey", url: "https://hierarchy.example.test/projects/roof" },
       ],
@@ -70,9 +75,9 @@ it("expands buildings, offers project selection and collapses the rail", async (
     const button = [...view.container.querySelectorAll("button")].find((button) =>
       button.textContent?.includes("North Building"),
     )!;
-    expect(button.getAttribute("aria-expanded")).toBe("false");
-    await act(async () => button.click());
     expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(view.container.textContent).toContain("10 Example Street");
+    expect(view.container.textContent).toContain("Workspace artifacts");
     expect(
       [...view.container.querySelectorAll("button")].some(
         (item) => item.textContent === "Roof survey",
@@ -91,7 +96,7 @@ it("expands buildings, offers project selection and collapses the rail", async (
 it("renders loading, empty and retryable errors", async () => {
   for (const [props, text] of [
     [{ data: undefined, loading: true }, "Loading hierarchy…"],
-    [{ data: { ...data, buildings: [] } }, "No buildings"],
+    [{ data: { ...data, buildings: [] } }, "Quick access to building and project details"],
     [{ data: undefined, error: true }, "Hierarchy unavailable"],
   ] as [Partial<ComponentProps<typeof HierarchyRail>>, string][]) {
     const view = await mount(props);
@@ -246,7 +251,6 @@ it("submits in the rail, retains errors and refreshes after success without a ch
           .find((button) => button.textContent === name)!
           .click(),
       );
-    await click("North Building");
     await click("Add project");
     const form = view.container.querySelector("form")!;
     const input = form.querySelector("input")!;
@@ -363,5 +367,59 @@ it("requires a selectable candidate and canonical confirmation, and retains the 
     expect(view.container.querySelector('form[aria-label="Add building"]')).toBeNull();
   } finally {
     await view.close();
+  }
+});
+
+it("recovers from temporary session/proxy errors and empty responses, then stops fallback reads", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(new Response(null, { status: 502 }))
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    .mockResolvedValueOnce(Response.json({ ...data, buildings: [] }))
+    .mockResolvedValue(Response.json(data));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  function Probe() {
+    const query = useHierarchy("user", "space", true);
+    return <span>{query.data?.buildings[0]?.name ?? "Empty"}</span>;
+  }
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(container.textContent).toBe("Empty");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_010);
+    });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_010);
+    });
+    expect(container.textContent).toBe("North Building");
+    const count = fetch.mock.calls.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(20_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(count);
+    await act(async () => root.unmount());
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fetch).toHaveBeenCalledTimes(count);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    vi.useRealTimers();
   }
 });
