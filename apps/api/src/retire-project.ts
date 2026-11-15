@@ -13,6 +13,7 @@ export async function retireProject(
   deps: Lifecycle & {
     archive: typeof archiveBot;
     revokeManagerToken: (id: string) => Promise<void>;
+    managerConnectionKey: (projectId: string) => string;
   },
   actor: Actor,
   projectId: string,
@@ -30,7 +31,10 @@ export async function retireProject(
       where: {
         spaceId: actor.spaceId,
         managedCredentialId: { not: null },
-        assignments: { some: { botId: { in: ids } } },
+        OR: [
+          { slug: deps.managerConnectionKey(projectId) },
+          { assignments: { some: { botId: { in: ids } } } },
+        ],
       },
     });
     for (const server of servers) {
@@ -79,19 +83,7 @@ export async function retireProject(
         },
       });
       for (const server of servers) {
-        await tx.mcpServer.update({
-          where: { id: server.id },
-          data: {
-            secretId: null,
-            managedCredentialId: null,
-            headers: {},
-            env: {},
-            args: [],
-            files: {},
-            enabled: false,
-            revision: { increment: 1 },
-          },
-        });
+        await tx.mcpServer.deleteMany({ where: { id: server.id, spaceId: actor.spaceId } });
         if (server.secretId)
           await tx.secret.deleteMany({ where: { id: server.secretId, spaceId: actor.spaceId } });
       }

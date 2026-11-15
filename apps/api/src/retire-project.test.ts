@@ -28,7 +28,7 @@ function setup(shared = false) {
       findMany: vi.fn(async ({ where }) => bots.filter((bot) => bot.spawnKey === where.spawnKey)),
       updateMany: vi.fn(),
     },
-    mcpServer: { findMany: vi.fn(async () => [server]), updateMany: vi.fn(), update: vi.fn() },
+    mcpServer: { findMany: vi.fn(async () => [server]), updateMany: vi.fn(), deleteMany: vi.fn() },
     botMcpServer: { count: vi.fn(async () => 0), deleteMany: vi.fn() },
     chatGroupMember: { deleteMany: vi.fn() },
     secret: { deleteMany: vi.fn() },
@@ -36,9 +36,12 @@ function setup(shared = false) {
   const prisma = { ...tx, $transaction: vi.fn(async (fn) => fn(tx)) } as unknown as PrismaClient;
   const archive = vi.fn<Parameters<typeof retireProject>[0]["archive"]>(async () => {});
   const revokeManagerToken = vi.fn(async () => {});
-  const deps = { prisma, archive, revokeManagerToken } as unknown as Parameters<
-    typeof retireProject
-  >[0];
+  const deps = {
+    prisma,
+    archive,
+    revokeManagerToken,
+    managerConnectionKey: () => "pm-roof",
+  } as unknown as Parameters<typeof retireProject>[0];
   return { tx, bots, deps, archive, revokeManagerToken };
 }
 it("archives only the project's PM, revokes credentials and removes roster assignments while retaining history", async () => {
@@ -57,16 +60,16 @@ it("archives only the project's PM, revokes credentials and removes roster assig
   expect(tx.chatGroupMember.deleteMany).toHaveBeenCalledWith({
     where: { spaceId: "space", botId: { in: ["pm"] } },
   });
-  expect(tx.mcpServer.update).toHaveBeenCalledWith(
-    expect.objectContaining({
-      data: expect.objectContaining({
-        managedCredentialId: null,
-        secretId: null,
-        headers: {},
-        enabled: false,
-      }),
-    }),
-  );
+  expect(tx.mcpServer.deleteMany).toHaveBeenCalledWith({
+    where: { id: "server", spaceId: "space" },
+  });
+  expect(tx.mcpServer.findMany).toHaveBeenCalledWith({
+    where: {
+      spaceId: "space",
+      managedCredentialId: { not: null },
+      OR: [{ slug: "pm-roof" }, { assignments: { some: { botId: { in: ["pm"] } } } }],
+    },
+  });
   expect(tx.bot.updateMany).toHaveBeenCalledWith(
     expect.objectContaining({ data: expect.objectContaining({ spawnKey: null, sectionId: null }) }),
   );
@@ -78,4 +81,20 @@ it("refuses shared managed credentials before archiving or revoking another proj
   expect(archive).not.toHaveBeenCalled();
   expect(revokeManagerToken).not.toHaveBeenCalled();
   expect(tx.mcpServer.updateMany).not.toHaveBeenCalled();
+});
+
+it("also revokes detached project credentials when no manager assignment remains", async () => {
+  const { deps, tx, archive, revokeManagerToken } = setup();
+  tx.bot.findMany.mockResolvedValueOnce([]);
+  await retireProject(deps, actor, "roof", 1);
+  expect(archive).not.toHaveBeenCalled();
+  expect(revokeManagerToken).toHaveBeenCalledWith("issued");
+  expect(tx.mcpServer.findMany).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: expect.objectContaining({ OR: expect.arrayContaining([{ slug: "pm-roof" }]) }),
+    }),
+  );
+  expect(tx.mcpServer.deleteMany).toHaveBeenCalledWith({
+    where: { id: "server", spaceId: "space" },
+  });
 });

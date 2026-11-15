@@ -1029,6 +1029,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
                 artifacts,
                 archive: archiveBot,
                 revokeManagerToken: hierarchySource.revokeManagerToken,
+                managerConnectionKey: hierarchySource.managerConnectionKey,
               },
               actor,
               projectId,
