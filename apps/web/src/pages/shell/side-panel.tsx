@@ -89,9 +89,10 @@ export function ShellSidePanel({
     hierarchyScope.spaceId,
     hierarchyScope.enabled,
   );
-  const [hierarchyOpen, setHierarchyOpen] = useState(() => window.innerWidth >= 1024);
+  const [hierarchyOpen, setHierarchyOpen] = useState(true);
   const hierarchyAvailable =
-    hierarchyScope.enabled && hierarchy.data !== null && (hierarchy.isSuccess || hierarchy.isError);
+    hierarchyScope.enabled &&
+    (hierarchy.isFetching || hierarchy.data !== null || hierarchy.isError);
   const showHierarchy = hierarchyAvailable && hierarchyOpen;
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
   const botTab =

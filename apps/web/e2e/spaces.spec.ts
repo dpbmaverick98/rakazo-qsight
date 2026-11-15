@@ -30,15 +30,13 @@ test("a new space auto-completes onboarding, is renamed in its settings, and is 
   }
   await name.press("Enter");
 
-  // Model is already connected, so onboarding skips the form and lands in Chief.
+  // Model is already connected, so onboarding skips the form and lands in the client lead.
   await completeOnboarding(page);
   await expect(page).toHaveURL(/\/app\//);
   await expect(sidebar.getByText("Typo space", { exact: true })).toBeVisible();
-  const occupied = sidebar
-    .locator('[data-sidebar-group^="space:"]')
-    .filter({ hasText: "Typo space" });
-  await expect(occupied.getByRole("button", { name: /^Chief/ })).toBeVisible();
-  await expect(sidebar.getByRole("button", { name: /^Chief/ })).toHaveCount(2);
+  await expect(sidebar.getByRole("button", { name: /^Typo space Lead/ })).toBeVisible();
+  await expect(sidebar.getByRole("button", { name: /^Chief/ })).toHaveCount(0);
+  await expect(sidebar.getByText("Archive (Personal)", { exact: true })).toHaveCount(0);
   await captureScreenshot(page, testInfo, "new-space-after-onboarding");
 
   // The space menu's Settings opens the Space section, where it is renamed in place.
@@ -100,13 +98,10 @@ test("deleting the last bot in a space stays in the app after first use", {
 
   // Delete the only bot in the new space: the app must stay put instead of
   // forcing onboarding again.
-  const sideBot = sidebar
-    .locator('[data-sidebar-group^="space:"]')
-    .filter({ hasText: "Side" })
-    .getByRole("button", { name: /^Chief/ });
+  const sideBot = sidebar.getByRole("button", { name: /^Side Lead/ });
   await sideBot.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  const deleteDialog = page.getByRole("alertdialog", { name: /Delete Chief/ });
+  const deleteDialog = page.getByRole("alertdialog", { name: /Delete Side Lead/ });
   await expect(deleteDialog).toBeVisible();
   await deleteDialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(sideBot).toHaveCount(0);
