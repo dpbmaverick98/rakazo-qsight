@@ -24,8 +24,12 @@ it("stays disabled without all settings and rejects unsafe base URLs", () => {
   expect(qsightHierarchyFromEnv({})).toBeNull();
   expect(qsightHierarchyFromEnv({ ...config, QSIGHT_SPACE_ID: "" })).toBeNull();
   expect(() => qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "file:///tmp" })).toThrow();
-  expect(() => qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://example.test" })).toThrow();
-  expect(qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://127.0.0.1:8002" })).not.toBeNull();
+  expect(() =>
+    qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://example.test" }),
+  ).toThrow();
+  expect(
+    qsightHierarchyFromEnv({ ...config, QSIGHT_BASE_URL: "http://127.0.0.1:8002" }),
+  ).not.toBeNull();
 });
 it("authenticates server-side, sanitizes data, encodes links and caches briefly", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>(async () => Response.json(raw));
@@ -56,3 +60,36 @@ it("does not cache errors, malformed data, or another client", async () => {
   for (let i = 0; i < 3; i++) await expect(source.read()).rejects.toThrow();
   await expect(source.read()).resolves.toHaveProperty("client.id", "7");
 });
+
+it.each([
+  [
+    { latitude: 0, longitude: 0 },
+    { latitude: 0, longitude: 0 },
+  ],
+  [
+    { latitude: null, longitude: null },
+    { latitude: null, longitude: null },
+  ],
+  [
+    { latitude: 91, longitude: -181 },
+    { latitude: null, longitude: null },
+  ],
+  [
+    { latitude: "12", longitude: {} },
+    { latitude: null, longitude: null },
+  ],
+  [{}, { latitude: null, longitude: null }],
+])(
+  "sanitizes optional upstream coordinates %j without losing navigation",
+  async (coordinates, expected) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({ ...raw, buildings: [{ ...raw.buildings[0], ...coordinates }] }),
+      ),
+    );
+    const result = await qsightHierarchyFromEnv(config)!.read();
+    expect(result.buildings[0]).toMatchObject({ ...expected, id: "1" });
+    expect(result.buildings[0]).not.toHaveProperty("address");
+  },
+);

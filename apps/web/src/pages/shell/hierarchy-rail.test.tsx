@@ -147,3 +147,59 @@ it("does not display a previous space while a new space loads or is disabled", a
     client.clear();
   }
 });
+
+it("hides the map when coordinates are absent or incomplete", async () => {
+  const view = await mount({
+    data: { ...data, buildings: [{ ...data.buildings[0]!, latitude: 12, longitude: null }] },
+  });
+  try {
+    expect(view.container.querySelector('[aria-label="Building map"]')).toBeNull();
+    expect(view.container.textContent).toContain("North Building");
+  } finally {
+    await view.close();
+  }
+});
+
+it("pins only complete coordinates and selects, expands and scrolls the building", async () => {
+  // Preload the lazy module so this test can observe the real Leaflet marker DOM.
+  await import("./building-map");
+  const scroll = vi.fn();
+  const originalScroll = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = scroll;
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const view = await mount({
+    data: {
+      ...data,
+      buildings: [
+        { ...data.buildings[0]!, latitude: 0, longitude: 0 },
+        { id: "south", name: "South", latitude: null, longitude: 10, projects: [] },
+      ],
+    },
+  });
+  try {
+    // React retries the resolved lazy boundary on its next task.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const pins = view.container.querySelectorAll<HTMLElement>(".leaflet-marker-icon");
+    expect(pins).toHaveLength(1);
+    expect(pins[0]!.getAttribute("title")).toBe("North Building");
+    expect(pins[0]!.getAttribute("tabindex")).toBe("0");
+    await act(async () => pins[0]!.click());
+    const button = [...view.container.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("North Building"),
+    )!;
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(button);
+    expect(scroll).toHaveBeenCalledWith({ block: "nearest" });
+  } finally {
+    await view.close();
+    Element.prototype.scrollIntoView = originalScroll;
+  }
+});

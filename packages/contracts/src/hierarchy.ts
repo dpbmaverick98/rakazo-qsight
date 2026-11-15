@@ -11,6 +11,8 @@ export const HierarchySchema = z.object({
       z.object({
         id: Id,
         name: Name,
+        latitude: z.number().min(-90).max(90).nullable().optional(),
+        longitude: z.number().min(-180).max(180).nullable().optional(),
         projects: z
           .array(z.object({ id: Id, name: Name, url: z.url({ protocol: /^https?$/ }) }))
           .max(5000),
