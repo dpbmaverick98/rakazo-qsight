@@ -76,7 +76,10 @@ export async function changeClientBinding(
         "check all scoped project credentials before binding change",
         async () =>
           (await tx.bot.count({
-            where: { spaceId: actor.spaceId, spawnKey: { startsWith: "pm:" } },
+            where: {
+              spaceId: actor.spaceId,
+              OR: [{ spawnKey: { startsWith: "pm:" } }, { spawnKey: { startsWith: "setup:" } }],
+            },
           })) > 0 ||
           (await tx.mcpServer.count({
             where: { spaceId: actor.spaceId, slug: { startsWith: "pm-" } },

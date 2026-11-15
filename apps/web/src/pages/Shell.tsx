@@ -986,6 +986,7 @@ function SpaceShell() {
         toggleSidebarSection={toggleSidebarSection}
         setPanel={setPanel}
         navigate={navigate}
+        setAddClientOpen={dialogs.setAddClientOpen}
         setNewSpaceOpen={dialogs.setNewSpaceOpen}
         setCreateBotOpen={dialogs.setCreateBotOpen}
         chatMenu={chatMenu}

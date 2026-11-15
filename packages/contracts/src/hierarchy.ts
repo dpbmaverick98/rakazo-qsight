@@ -44,3 +44,14 @@ export const ChangeClientBindingSchema = z
     externalClientId: Id.trim().min(1).optional(),
   })
   .strict();
+
+/** One-field setup; the Space name shares the native Space length limit. */
+export const CreateClientSchema = z.object({ name: Name.max(60) }).strict();
+export const ClientSetupSchema = z.object({
+  clientId: Id,
+  spaceId: Id,
+  botId: Id,
+  serverId: Id.nullable(),
+  status: z.enum(["ready", "mcp_missing"]),
+});
+export type ClientSetup = z.infer<typeof ClientSetupSchema>;

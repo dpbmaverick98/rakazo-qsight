@@ -20,6 +20,7 @@ const Id = z
   ])
   .transform(String);
 const Name = z.string().trim().min(1).max(500);
+const Client = z.object({ id: Id, name: Name, url: z.url({ protocol: /^https?$/ }) });
 const ResponseSchema = z.object({
   client: z.object({ id: Id, name: Name }),
   buildings: z
@@ -62,6 +63,57 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
   return {
     spaceId,
     ownerServerPrefix: PROJECT_MANAGER_TOOLS.name,
+    /** A null result means the upstream returned 409; recover with findClient. */
+    async createClient(name: string) {
+      const input = Name.parse(name);
+      const signal = deadlineSignal(5000);
+      try {
+        const response = await fetch(new URL("/api/v2/agent/clients", origin), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: input }),
+          redirect: "error",
+          signal,
+        });
+        if (response.status === 409) return null;
+        if (response.status !== 201) throw new Error("Client creation unavailable");
+        const client = Client.parse(await readBoundedJsonResponse(response, 32_000, signal));
+        if (client.name !== input || new URL(client.url).origin !== origin.origin)
+          throw new Error("Client creation unavailable");
+        return client;
+      } catch {
+        throw new Error("Client creation unavailable");
+      }
+    },
+    async findClient(name: string) {
+      const input = Name.parse(name);
+      const signal = deadlineSignal(5000);
+      try {
+        const url = new URL("/api/v2/agent/clients", origin);
+        url.searchParams.set("name", input);
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          redirect: "error",
+          signal,
+        });
+        if (!response.ok) throw new Error("Client lookup unavailable");
+        const { items } = z
+          .object({ items: z.array(Client).max(100) })
+          .parse(await readBoundedJsonResponse(response, 128_000, signal));
+        const matches = items.filter((client) => client.name === input);
+        if (matches.length > 1) throw new Error("Client lookup unavailable");
+        const client = matches[0] ?? null;
+        if (client && new URL(client.url).origin !== origin.origin)
+          throw new Error("Client lookup unavailable");
+        return client;
+      } catch {
+        throw new Error("Client lookup unavailable");
+      }
+    },
     async createProject(buildingId: string, name: string) {
       const input = CreateProjectSchema.parse({ buildingId, name });
       const signal = deadlineSignal(5000);

@@ -9,21 +9,21 @@ import {
   CommandList,
   CommandSeparator,
 } from "@rakazo/ui-web";
-import { Info, Lock, Plus, Users } from "lucide-react";
+import { Info, Lock, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { IconTooltip } from "../../components/IconTooltip";
 
 export function BotCreatePicker({
   bots,
-  onCreateBot,
   onOpenBot,
-  onCreateGroup,
+  onCreateClient,
   onCreateSpace,
 }: {
   bots: Bot[];
   onCreateBot: () => void;
   onOpenBot: (botId: string) => void;
   onCreateGroup: () => void;
+  onCreateClient?: () => void;
   onCreateSpace: () => void;
 }) {
   const { t } = useLingui();
@@ -56,6 +56,16 @@ export function BotCreatePicker({
             <Trans>No bots match</Trans>
           </CommandEmpty>
           <CommandGroup className="shrink-0">
+            {onCreateClient ? (
+              <CommandItem value="add-client" onSelect={onCreateClient} className="gap-2">
+                <span className="flex size-[22px] shrink-0 items-center justify-center">
+                  <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1 truncate">
+                  <Trans>Add client</Trans>
+                </span>
+              </CommandItem>
+            ) : null}
             <CommandItem
               value="create-space"
               data-testid="create-new-space"

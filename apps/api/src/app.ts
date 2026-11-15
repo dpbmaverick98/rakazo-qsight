@@ -104,6 +104,7 @@ import {
   createThreadEvents,
   databaseOutage,
   describeRowSecurity,
+  InvalidSpaceNameError,
   IsolationError,
   installAuditEventStore,
   installSecurityEventStore,
@@ -114,6 +115,8 @@ import {
   rowSecurityWarning,
   runAsSystem,
   runAsTenant,
+  SpaceDeletionInProgressError,
+  SpaceLimitError,
   verifyContentKeys,
 } from "@rakazo/db";
 import type { Logger } from "@rakazo/logging";
@@ -146,6 +149,7 @@ import {
   requestClientIp,
   withClientIp,
 } from "./client-ip.js";
+import { setupClient } from "./client-setup.js";
 import { cspReportRoutes } from "./csp-report.js";
 import { configuredEmailProvider } from "./email.js";
 import { mountEmailInboundRoute } from "./email-inbound.js";
@@ -1009,6 +1013,19 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   mountHierarchyRoute(app, {
     sessionActor,
     source: hierarchySource,
+    setupClient: hierarchySource
+      ? async (actor, name) => {
+          try {
+            return await setupClient(prisma, actor, hierarchySource, name);
+          } catch (error) {
+            if (error instanceof InvalidSpaceNameError || error instanceof SpaceLimitError)
+              throw new ORPCError("BAD_REQUEST", { message: "invalid_request" });
+            if (error instanceof SpaceDeletionInProgressError)
+              throw new ORPCError("CONFLICT", { message: "space_unavailable" });
+            throw error;
+          }
+        }
+      : undefined,
     canCreateProject: async (actor) =>
       runAsTenant(actor, async () => {
         await bindingAccess(prisma, actor, true);

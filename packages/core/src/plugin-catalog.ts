@@ -6,6 +6,7 @@ export const PROJECT_MANAGER_TOOLS = {
   name: "Vendor One",
   legacyServerPrefix: "QSight",
   serverName: "Vendor One Pilot",
+  legacyServerName: "QSight Pilot",
   managerServerPrefix: "Vendor One PM — ",
 } as const;
 
