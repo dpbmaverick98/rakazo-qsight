@@ -134,11 +134,28 @@ export async function startOnboarding(
   actor: Actor,
   botId: string,
 ): Promise<void> {
-  const { thread } = await requireBotThread(deps, actor, botId);
+  const { bot, thread } = await requireBotThread(deps, actor, botId);
   const existing = await deps.prisma.message.count({ where: { threadId: thread.id } });
   if (existing > 0) return;
-  // The focus card is posted later via promptFocus so non-first bots can wait ~10s for
-  // free typing, or skip if the user already engaged.
+  if (bot.spawnKey?.startsWith("setup:")) {
+    await post(deps, { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id }, [
+      {
+        kind: "text",
+        text: "To set up this client, tell me the building name and address first. I’ll verify the address, then ask for the project name.",
+      },
+    ]);
+    return;
+  }
+  if (bot.name === "Welcome") {
+    await post(deps, { spaceId: actor.spaceId, botId: bot.id, threadId: thread.id }, [
+      {
+        kind: "text",
+        text: "Welcome to Vendor One Management.\n\nStart by adding a client. Each client gets its own Space with buildings, projects and a project manager. Use the + button and choose Add client.",
+      },
+    ]);
+    return;
+  }
+  // Other bots use the focus card posted later via promptFocus.
 }
 
 /** A focus card, or a question the bot asked itself; either way the thread already asks. */

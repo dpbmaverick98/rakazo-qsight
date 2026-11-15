@@ -42,18 +42,21 @@ it("uses PM even for a long client name", async () => {
   expect(mocks.create.mock.calls[0]?.[0].name).toBe("PM");
 });
 
-it("keeps Chief and its empty instructions in Personal", async () => {
+it("creates a Welcome guide in Personal", async () => {
   mocks.spaces.mockResolvedValue({
     current: { id: "personal", name: "Archive (Personal)" },
     spaces: [{ id: "personal", isDefault: true }],
   });
   await ensureFirstBot();
   expect(mocks.create).toHaveBeenCalledWith(
-    expect.objectContaining({ name: "Chief", instructions: "" }),
+    expect.objectContaining({
+      name: "Welcome",
+      instructions: expect.stringContaining("welcome guide for Vendor One Management"),
+    }),
   );
 });
 
-it("does not reuse a legacy Chief in a client Space", async () => {
+it("does not reuse a legacy personal bot in a client Space", async () => {
   mocks.list.mockResolvedValue([{ id: "legacy", name: "Chief", spawnKey: null }]);
   await expect(ensureFirstBot()).resolves.toEqual({ id: "created" });
 });

@@ -85,6 +85,7 @@ import { ShellDialogs, useShellDialogs } from "./shell/shell-dialogs";
 import { AppOverlays, SettingsOverlays } from "./shell/shell-overlays";
 import { cycleBotId, isApplePlatform, useShellShortcuts } from "./shell/shell-shortcuts";
 import { focusSidebarSearch, ShellSidebar } from "./shell/shell-sidebar";
+import { ClientLanding } from "./shell/client-landing";
 import { ShellSidePanel } from "./shell/side-panel";
 import { BotsSidebarLayout } from "./shell/sidebar-layout";
 import { SidebarRoster } from "./shell/sidebar-roster";
@@ -1473,6 +1474,8 @@ function SpaceShell() {
       ) : null}
     </BotsSidebarLayout>
   );
+
+  if (initialBotsLoaded && !spaces.some((space) => !space.isDefault)) return <ClientLanding />;
 
   // Empty chrome until the first bot list lands would flash "Select a bot" before the chat.
   return (

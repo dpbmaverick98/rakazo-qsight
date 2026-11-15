@@ -363,6 +363,8 @@ function botSecretMetadataDto(
 export async function enqueueBotIntroRun(deps: RouterDeps, actor: Actor, bot: Bot): Promise<void> {
   const threadId = bot.threadId;
   if (!threadId) return;
+  // The welcome bot uses a deterministic first message, not a model intro.
+  if (bot.name === "Welcome" || bot.spawnKey === "onboarding:first") return;
   // In the scripted test/eval runtime an automatic run would compete with the harness's next
   // queued response.
   if (deps.env.agentRuntime === "scripted") return;

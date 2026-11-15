@@ -65,6 +65,16 @@ export function AddClientDialog({
                 status: "parsed",
               });
               setResult(setup);
+              // Seed the PM's first construction-setup message in the new Space.
+              await fetch("/rpc/onboarding/start", {
+                method: "POST",
+                credentials: "include",
+                headers: withSpaceHeaders(
+                  { "Content-Type": "application/json" },
+                  setup.spaceId,
+                ),
+                body: JSON.stringify({ json: { botId: setup.botId } }),
+              }).catch(() => undefined);
               if (setup.status === "ready") onDone(setup);
             } catch {
               setError(t`Could not finish client setup. Try again.`);

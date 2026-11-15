@@ -29,7 +29,7 @@ clientUpdates().install();
 registerServiceWorker();
 lockStandaloneZoom();
 applyUiDirection(resolveUiLocale());
-applyUiAppearance();
+applyUiAppearance("light");
 captureReferral(window.location.search);
 
 function PerformanceProbe() {

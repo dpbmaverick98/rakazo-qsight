@@ -4,7 +4,7 @@ import { Button } from "@rakazo/ui-web";
 import { rpc } from "../../lib/rpc";
 import { clientLeadProfile } from "./first-bot.prompt";
 
-const FIRST_BOT_NAME = "Chief";
+const FIRST_BOT_NAME = "Welcome";
 const FIRST_BOT_COLOR = BOT_COLOR_LIST.find((color) => color.id === "orange")!.hex;
 const FIRST_BOT_SPAWN_KEY = "onboarding:first";
 const FIRST_BOT_LOCK = "rakazo:onboarding-first-bot";
@@ -29,7 +29,11 @@ async function createOrReuseFirstBot(): Promise<{ id: string }> {
   const profile =
     space && !space.isDefault
       ? clientLeadProfile(current.name.trim())
-      : { name: FIRST_BOT_NAME, instructions: "" };
+      : {
+          name: FIRST_BOT_NAME,
+          instructions:
+            "You are the welcome guide for Vendor One Management. Help the person add their first client. Do not ask generic role questions and do not act as a personal chief of staff.",
+        };
   const existing = await rpc.bots.list();
   const reuse = findFirstBot(existing, space?.isDefault === true);
   if (reuse) return reuse;

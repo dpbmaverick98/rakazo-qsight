@@ -56,16 +56,6 @@ export function BotCreatePicker({
             <Trans>No bots match</Trans>
           </CommandEmpty>
           <CommandGroup className="shrink-0">
-            {onCreateClient ? (
-              <CommandItem value="add-client" onSelect={onCreateClient} className="gap-2">
-                <span className="flex size-[22px] shrink-0 items-center justify-center">
-                  <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <span className="min-w-0 flex-1 truncate">
-                  <Trans>Add client</Trans>
-                </span>
-              </CommandItem>
-            ) : null}
             <CommandItem
               value="create-space"
               data-testid="create-new-space"
