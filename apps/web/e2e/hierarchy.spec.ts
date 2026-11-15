@@ -90,13 +90,13 @@ test("client hierarchy shares the right region with chat details", async ({ page
   const { json: bot } = (await botResponse.json()) as { json: { id: string } };
   await page.goto(`/app/${bot.id}`);
   const rail = page.getByRole("region", { name: "Client hierarchy" });
+  const building = rail
+    .getByRole("button", { name: "North Building", exact: true })
+    .and(rail.locator("[aria-expanded]"));
   await expect(rail).toBeVisible();
   await expect(rail.getByRole("region", { name: "Building map" })).toBeVisible();
   await rail.locator(".leaflet-marker-icon").click();
-  await expect(rail.getByRole("button", { name: "North Building", exact: true })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  await expect(building).toHaveAttribute("aria-expanded", "true");
   const composer = page.getByTestId("composer-field").locator("textarea");
   await rail.getByRole("button", { name: "Add building", exact: true }).click();
   const buildingForm = rail.getByRole("form", { name: "Add building", exact: true });
@@ -153,7 +153,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await page.reload();
   await page.getByRole("button", { name: "Hierarchy", exact: true }).click();
   await expect(rail).toBeVisible();
-  await rail.getByRole("button", { name: "North Building", exact: true }).click();
+  await building.click();
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   await rail.getByRole("button", { name: "Finishes", exact: true }).click();
   await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();
