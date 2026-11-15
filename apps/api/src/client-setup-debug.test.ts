@@ -9,13 +9,16 @@ import {
 } from "@rakazo/logging";
 import { afterEach, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ reused: false }));
+const state = vi.hoisted(() => ({
+  reused: false,
+  createBot: vi.fn(async () => ({ id: "setup-bot" })),
+}));
 vi.mock("@rakazo/adapters", () => ({ lockMcpOAuthMaterial: vi.fn() }));
 vi.mock("@rakazo/db", () => ({
   ClientSpaceConflictError: class extends Error {},
   isUniqueViolation: () => false,
   createSpaceForMember: async () => ({ id: "target-space", reused: state.reused }),
-  createRepos: () => ({ createBot: async () => ({ id: "setup-bot" }) }),
+  createRepos: () => ({ createBot: state.createBot }),
   runAsSystem: (_label: string, work: () => unknown) => work(),
   runAsTenant: (_actor: unknown, work: () => unknown) => work(),
   runAsSystemInTransaction: vi.fn(),
@@ -36,6 +39,7 @@ afterEach(() => {
 });
 it.each([false, true])("covers setup stages and correlated IDs when reuse=%s", async (reused) => {
   state.reused = reused;
+  state.createBot.mockClear();
   vi.stubEnv("CLIENT_SETUP_DEBUG", "1");
   const sink = createTestSink();
   installLogger(createLogger({ service: "test", sinks: [sink] }));
@@ -64,6 +68,12 @@ it.each([false, true])("covers setup stages and correlated IDs when reuse=%s", a
     botId: "setup-bot",
     serverId: "setup-server",
   });
+  if (reused) expect(state.createBot).not.toHaveBeenCalled();
+  else
+    expect(state.createBot).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ name: "Proj. Manager - Sam" }),
+    );
   const names = sink.events.map((event) => event.message);
   for (const stage of [
     "client.lookup",

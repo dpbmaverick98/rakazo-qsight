@@ -84,9 +84,7 @@ export function OnboardingPage() {
         .start({ botId: bot.id })
         .then(() => true)
         .catch(() => false);
-      if (started) {
-        await rpc.onboarding.promptFocus({ botId: bot.id }).catch(() => undefined);
-      }
+      // The welcome message is seeded deterministically; no generic focus choices.
       navigate(`/app/${bot.id}`);
     } catch (err) {
       createStartedRef.current = false;

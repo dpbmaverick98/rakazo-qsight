@@ -137,7 +137,10 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         if (response.status === 409) return null;
         if (response.status !== 201) throw new Error("Client creation unavailable");
         const client = Client.parse(await readBoundedJsonResponse(response, 32_000, signal));
-        if (client.name !== input || new URL(client.url).origin !== origin.origin)
+        if (
+          client.name !== input ||
+          new URL(client.url).pathname !== `/clients/${encodeURIComponent(client.id)}`
+        )
           throw new Error("Client creation unavailable");
         return client;
       } catch {
@@ -162,11 +165,14 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         const matches = items.filter((client) => client.name === input);
         if (matches.length > 1) throw new Error("Client lookup unavailable");
         const client = matches[0] ?? null;
-        if (client && new URL(client.url).origin !== origin.origin)
+        if (
+          client &&
+          new URL(client.url).pathname !== `/clients/${encodeURIComponent(client.id)}`
+        )
           throw new Error("Client lookup unavailable");
         return client;
-      } catch {
-        throw new Error("Client lookup unavailable");
+      } catch (error) {
+        throw new Error(`Client lookup unavailable: ${error instanceof Error ? error.message : "unknown"}`);
       }
     },
     async searchLocations(query: string) {

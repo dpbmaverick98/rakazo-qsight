@@ -93,6 +93,7 @@ export function mountHierarchyRoute(
       await deps.changed?.({ ...actor, spaceId: result.spaceId });
       return c.json(result);
     } catch (error) {
+      console.log("client-setup-error", error);
       if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
       const result = failure(error);
       return c.json(result.body, result.status);

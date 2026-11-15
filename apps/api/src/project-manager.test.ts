@@ -246,7 +246,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   });
   expect(test.state.bots[0]!.instructions).toContain('"client":"Example Client"');
   expect(test.state.bots[0]!.instructions).not.toContain("Untrusted");
-  expect(test.state.bots[0]!.instructions).toContain("Use Vendor One tools");
+  expect(test.state.bots[0]!.instructions).toContain("Speak like a construction PM.");
   expect(test.state.assignments).toEqual([
     {
       botId: "pm",

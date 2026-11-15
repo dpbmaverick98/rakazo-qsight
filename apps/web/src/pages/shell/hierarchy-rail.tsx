@@ -53,7 +53,6 @@ export function HierarchyRail({
   loading,
   error,
   retry,
-  collapse,
   scope,
   onOpenBot,
 }: {
@@ -92,9 +91,6 @@ export function HierarchyRail({
         <SectionHeading className="min-w-0 break-words">
           <Trans>Workspace artifacts</Trans>
         </SectionHeading>
-        <Button variant="ghost" size="sm" onClick={collapse} aria-label={t`Collapse hierarchy`}>
-          <Trans>Hide</Trans>
-        </Button>
       </div>
       {data?.buildings.length ? (
         <p className="mb-3 text-body font-medium break-words">{data.client.name}</p>
@@ -117,14 +113,11 @@ export function HierarchyRail({
           <Trans>Loading hierarchy…</Trans>
         </p>
       ) : null}
-      {error ? (
-        <div role="alert">
-          <p className="text-body text-muted-foreground">
-            <Trans>Hierarchy unavailable</Trans>
+      {error || (!loading && !data) ? (
+        <div role="status" className="space-y-2">
+          <p className="text-body-sm text-muted-foreground">
+            <Trans>Quick access to building and project details</Trans>
           </p>
-          <Button variant="ghost" size="sm" onClick={retry}>
-            <Trans>Retry</Trans>
-          </Button>
         </div>
       ) : null}
       {data &&

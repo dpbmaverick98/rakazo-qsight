@@ -147,7 +147,7 @@ export function SidebarHeader({
                 onCreateSpace={() => {
                   setCreateMenuOpen(false);
                   setMobileSidebarOpen(false);
-                  setNewSpaceOpen(true);
+                  setAddClientOpen(true);
                 }}
               />
             </PopoverContent>

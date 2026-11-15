@@ -114,7 +114,7 @@ async function performSetup(
       async () =>
         existing ??
         (await repos.createBot(target, {
-          name: "PM",
+          name: "Proj. Manager - Sam",
           spawnKey,
           description: "",
           instructions: clientSetupInstructions(client),
