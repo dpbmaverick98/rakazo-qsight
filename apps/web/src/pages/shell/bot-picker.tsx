@@ -33,11 +33,6 @@ export function BotCreatePicker({
     if (!needle) return bots;
     return bots.filter((bot) => bot.name.toLowerCase().includes(needle));
   }, [bots, needle]);
-  const showCreate =
-    !needle ||
-    "new bot".includes(needle) ||
-    needle.split(/\s+/).every((part) => "new bot".includes(part));
-
   return (
     <div data-testid="bot-create-picker" className="w-[min(320px,calc(100vw-2rem))]">
       <Command
@@ -61,30 +56,6 @@ export function BotCreatePicker({
             <Trans>No bots match</Trans>
           </CommandEmpty>
           <CommandGroup className="shrink-0">
-            {showCreate ? (
-              <CommandItem
-                value="create-new-bot"
-                data-testid="create-new-bot"
-                onSelect={() => onCreateBot()}
-                className="gap-2"
-              >
-                <span className="flex size-[22px] shrink-0 items-center justify-center">
-                  <Plus size={16} strokeWidth={1.8} aria-hidden="true" />
-                </span>
-                <Trans>New bot</Trans>
-              </CommandItem>
-            ) : null}
-            <CommandItem
-              value="create-group"
-              data-testid="create-new-group"
-              onSelect={() => onCreateGroup()}
-              className="gap-2"
-            >
-              <span className="flex size-[22px] shrink-0 items-center justify-center">
-                <Users size={16} strokeWidth={1.8} aria-hidden="true" />
-              </span>
-              <Trans>New group chat</Trans>
-            </CommandItem>
             <CommandItem
               value="create-space"
               data-testid="create-new-space"

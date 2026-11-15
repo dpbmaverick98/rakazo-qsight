@@ -377,6 +377,7 @@ export async function enqueueBotIntroRun(deps: RouterDeps, actor: Actor, bot: Bo
   const prompt = botIntroPrompt({
     userName: displayName(user?.name, ""),
     spaceName: space && !space.isDefault ? space.name.trim() || null : null,
+    clientLead: bot.spawnKey === "onboarding:first",
     disabledBuiltinTools: bot.disabledBuiltinTools ?? [],
   });
   const run = await deps.prisma.$transaction(async (tx) => {

@@ -2,20 +2,22 @@
 export function botIntroPrompt(input: {
   userName: string;
   spaceName: string | null;
+  clientLead?: boolean;
   disabledBuiltinTools: readonly string[];
 }): string {
   const canAsk = !input.disabledBuiltinTools.includes("ask_user");
   const canUpdate = !input.disabledBuiltinTools.includes("update_bot");
   const options =
     "two to four short options that fit your name, anything your description or instructions already say, and what you know about them, never a stock list";
-  const purpose = input.spaceName
+  const clientSpace = Boolean(input.clientLead && input.spaceName);
+  const purpose = clientSpace
     ? "what to take care of for this client first, rather than what your role should be"
     : "what they want you for";
   return [
     [
       "You were just created.",
       input.userName ? `${input.userName} made you.` : undefined,
-      input.spaceName ? `This is a client Space for "${input.spaceName}".` : undefined,
+      clientSpace ? `This is a client Space for "${input.spaceName}".` : undefined,
     ]
       .filter(Boolean)
       .join(" "),
@@ -23,7 +25,7 @@ export function botIntroPrompt(input: {
     canAsk
       ? `Call ask_user right away, with no text before it. Its question greets them by first name in a few words and asks ${purpose}, with ${options}. They can also type their own answer.`
       : `Greet them by first name in a few words and ask in one sentence ${purpose}, suggesting ${options}.`,
-    input.spaceName
+    clientSpace
       ? "Your client role is already set. Ask which client work to start with, even if your profile describes your role."
       : "If your profile already makes that clear, say in one line what you will do instead of asking.",
     canUpdate
