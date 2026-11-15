@@ -80,6 +80,7 @@ export function SidebarRoster({
   setSpaceMenu: (menu: {
     id: string;
     buildingId?: string;
+    project?: { id: string; name: string };
     position: { x: number; y: number };
   }) => void;
   setRenameSectionTarget: (target: { section: BotSection; spaceId: string }) => void;
@@ -184,6 +185,7 @@ export function SidebarRoster({
                             setSpaceMenu({
                               id: group.spaceId,
                               buildingId: group.buildingId,
+                              project: group.project,
                               position: { x: event.clientX, y: event.clientY },
                             });
                           }
@@ -263,6 +265,7 @@ export function SidebarRoster({
                   setSpaceMenu({
                     id: group.spaceId,
                     buildingId: group.buildingId,
+                    project: group.project,
                     position: { x: rect.left, y: rect.bottom },
                   });
                 }}

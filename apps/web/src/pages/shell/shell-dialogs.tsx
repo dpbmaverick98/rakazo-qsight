@@ -31,6 +31,7 @@ import {
   RenameBotSectionDialog,
 } from "./dialogs";
 import { useHierarchy } from "./hierarchy-rail";
+import { ProjectMutationDialog } from "./project-actions";
 
 type ChatTarget = { kind: "bot"; chat: Bot } | { kind: "group"; chat: Group };
 type SectionTarget = { section: BotSection; spaceId: string };
@@ -43,6 +44,7 @@ export function useShellDialogs() {
   const [spaceMenu, setSpaceMenu] = useState<{
     id: string;
     buildingId?: string;
+    project?: { id: string; name: string };
     position: { x: number; y: number };
   } | null>(null);
   const spaceMenuAnchor = useRef<HTMLElement | null>(null);
@@ -170,6 +172,12 @@ export function ShellDialogs({
     spaceId: string;
     buildingId?: string;
   } | null>(null);
+  const [projectAction, setProjectAction] = useState<{
+    action: "rename" | "delete";
+    spaceId: string;
+    project: { id: string; name: string };
+    bindingRevision?: number;
+  } | null>(null);
   const hierarchy = useHierarchy(
     useQueryUserId(),
     clientAction?.spaceId ?? spaceMenu?.id ?? null,
@@ -210,7 +218,7 @@ export function ShellDialogs({
             sideOffset={0}
             className="w-[220px]"
           >
-            {spaceMenuTarget ? (
+            {spaceMenuTarget && !spaceMenu.project ? (
               <>
                 {!spaceMenu.buildingId ? (
                   <DropdownMenuItem
@@ -242,7 +250,36 @@ export function ShellDialogs({
                 </DropdownMenuItem>
               </>
             ) : null}
-            {spaceMenuTarget?.canDelete && !spaceMenu.buildingId ? (
+            {spaceMenu.project && hierarchy.data?.canManage !== false ? (
+              <>
+                <DropdownMenuItem
+                  onClick={() => {
+                    dialogs.spaceMenuAnchor.current = null;
+                    setProjectAction({
+                      action: "rename",
+                      spaceId: spaceMenu.id,
+                      project: spaceMenu.project!,
+                      bindingRevision: hierarchy.data?.bindingRevision,
+                    });
+                    setSpaceMenu(null);
+                  }}
+                >{t`Rename`}</DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => {
+                    dialogs.spaceMenuAnchor.current = null;
+                    setProjectAction({
+                      action: "delete",
+                      spaceId: spaceMenu.id,
+                      project: spaceMenu.project!,
+                      bindingRevision: hierarchy.data?.bindingRevision,
+                    });
+                    setSpaceMenu(null);
+                  }}
+                >{t`Delete`}</DropdownMenuItem>
+              </>
+            ) : null}
+            {spaceMenuTarget?.canDelete && !spaceMenu.buildingId && !spaceMenu.project ? (
               <DropdownMenuItem
                 variant="destructive"
                 onClick={() => {
@@ -258,6 +295,9 @@ export function ShellDialogs({
         </DropdownMenu>
       ) : null}
 
+      {projectAction ? (
+        <ProjectMutationDialog {...projectAction} onClose={() => setProjectAction(null)} />
+      ) : null}
       {clientAction ? (
         <ClientSpaceAction
           key={`${clientAction.spaceId}:${clientAction.buildingId ?? ""}`}

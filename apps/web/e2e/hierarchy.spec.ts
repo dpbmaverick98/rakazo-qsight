@@ -78,6 +78,12 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await expect(rail.getByText(candidate.address, { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "live-hierarchy-stage");
   await expect(rail.getByRole("region", { name: "Building map" })).toBeVisible();
+  await expect(rail.locator(".leaflet-tile-pane")).toHaveCSS(
+    "filter",
+    "saturate(0.12) brightness(1.16) contrast(0.72)",
+  );
+  await expect(rail.locator(".leaflet-control-attribution")).toContainText("OpenStreetMap");
+  await expect(rail.locator(".leaflet-control-zoom")).toHaveCount(0);
   await expect(rail.locator(".leaflet-marker-icon")).not.toHaveAttribute("tabindex");
   await expect(building.locator(".lucide-building")).toBeVisible();
   await expect(building).toHaveAttribute("aria-expanded", "true");

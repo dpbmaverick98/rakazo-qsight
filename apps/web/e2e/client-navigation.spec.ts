@@ -76,7 +76,7 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   const project = sidebar.getByRole("button", { name: "Collapse Roof survey", exact: true });
   const pm = sidebar.locator(`[data-roster-bot-id="${manager.id}"]`);
   await expect(building).toBeVisible();
-  await expect(project).toHaveCount(0);
+  await expect(project).toBeVisible();
   await expect(pm).toHaveCount(1);
   await expect(sidebar.locator(`[data-roster-bot-id="${legacy.id}"]`)).toHaveCount(0);
   await captureScreenshot(page, testInfo, "client-sidebar-grouped");
@@ -113,6 +113,30 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await captureScreenshot(page, testInfo, "building-add-project");
   await addProject.getByRole("button", { name: "Cancel", exact: true }).click();
 
+  await sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }).click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Rename", "Delete"]);
+  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const rename = page.getByRole("dialog", { name: "Rename project", exact: true });
+  await expect(rename.getByRole("textbox", { name: "Project name", exact: true })).toHaveValue(
+    "Roof survey",
+  );
+  await captureScreenshot(page, testInfo, "project-rename");
+  await rename.getByRole("button", { name: "Cancel", exact: true }).click();
+  await sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  const remove = page.getByRole("dialog", { name: "Delete project", exact: true });
+  await expect(remove).toContainText("work packages and documents");
+  const confirm = remove.getByRole("button", { name: "Delete project", exact: true });
+  await expect(confirm).toBeDisabled();
+  await remove.getByRole("textbox").fill("roof survey");
+  await expect(confirm).toBeDisabled();
+  await remove.getByRole("textbox").fill("Roof survey ");
+  await expect(confirm).toBeDisabled();
+  await remove.getByRole("textbox").fill("Roof survey");
+  await expect(confirm).toBeEnabled();
+  await captureScreenshot(page, testInfo, "project-delete-confirmation");
+  await remove.getByRole("button", { name: "Cancel", exact: true }).click();
+
   await building.click();
   await expect(pm).toHaveCount(0);
   await page.reload();
@@ -121,7 +145,7 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   ).toBeVisible();
   await sidebar.getByRole("button", { name: "Search", exact: true }).click();
   await sidebar.getByRole("textbox", { name: "Search", exact: true }).fill("Roof survey");
-  await expect(project).toHaveCount(0);
+  await expect(project).toBeVisible();
   await expect(pm).toHaveCount(1);
   await captureScreenshot(page, testInfo, "client-sidebar-search-context");
   await sidebar.getByRole("textbox", { name: "Search", exact: true }).fill("");
@@ -135,6 +159,6 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await archived.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
   await expect(
-    sidebar.locator(`[data-sidebar-group$=":building:north"] [data-roster-bot-id="${manager.id}"]`),
+    sidebar.locator(`[data-sidebar-group$=":project:roof"] [data-roster-bot-id="${manager.id}"]`),
   ).toHaveCount(1);
 });

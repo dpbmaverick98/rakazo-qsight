@@ -116,3 +116,12 @@ export const ClientNavigationSchema = z.object({
   ),
 });
 export type ClientNavigation = z.infer<typeof ClientNavigationSchema>;
+
+/** Exact confirmation preserves whitespace; rename normalizes a newly entered name. */
+export const ProjectMutationSchema = z
+  .object({
+    projectId: Id.refine((id) => id !== "." && id !== ".."),
+    name: z.string().min(1).max(500),
+  })
+  .strict();
+export const RenameProjectSchema = ProjectMutationSchema.extend({ name: Name.max(200) });

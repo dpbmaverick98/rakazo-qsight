@@ -11,6 +11,7 @@ type Groups = ReturnType<
 >;
 export type NavigationGroup = Groups[number] & {
   buildingId?: string;
+  project?: { id: string; name: string };
   ancestors?: string[];
   depth?: number;
   defaultCollapsed?: boolean;
@@ -118,10 +119,19 @@ export function clientNavigationGroups(
       building.projects.some((project) => matches(project.name))
     )
       result.push({
-        ...make(key, building.name, [root], bots),
+        ...make(key, building.name, [root], selected(building.botIds ?? [], buildingMatch)),
         buildingId: building.id,
         canOpenSpaceSettings: true,
       });
+    for (const project of building.projects) {
+      const projectBots = selected(project.botIds, buildingMatch || matches(project.name));
+      if (!needle || buildingMatch || matches(project.name) || projectBots.length)
+        result.push({
+          ...make(`${key}:project:${project.id}`, project.name, [root, key], projectBots),
+          project: { id: project.id, name: project.name },
+          canOpenSpaceSettings: true,
+        });
+    }
   }
   const unassigned = items
     .filter((item) => item.kind !== "bot" || !assigned.has(item.chat.id))

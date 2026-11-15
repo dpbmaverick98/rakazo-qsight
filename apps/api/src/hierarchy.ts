@@ -17,6 +17,8 @@ import {
   HierarchyOperationIdSchema,
   LocationProofInputSchema,
   LocationQuerySchema,
+  ProjectMutationSchema,
+  RenameProjectSchema,
 } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
@@ -40,6 +42,8 @@ export function mountHierarchyRoute(
       revision: number,
       finishSetup: boolean,
     ) => Promise<string>;
+    retireProject?: (actor: Actor, projectId: string, revision: number) => Promise<void>;
+    auditProject?: (actor: Actor, projectId: string, action: "rename" | "delete") => Promise<void>;
     navigationBots?: (actor: Actor) => Promise<{ id: string; spawnKey: string | null }[]>;
     resolveBinding: (actor: Actor, revision?: number) => Promise<ClientBinding>;
     setupClient?: (actor: Actor, name: string) => Promise<ClientSetup>;
@@ -64,6 +68,8 @@ export function mountHierarchyRoute(
         name: string,
         operationId?: string,
       ) => Promise<CreatedProject>;
+      renameProject?: (id: string, name: string, buildingId: string) => Promise<unknown>;
+      deleteProject?: (id: string, name: string) => Promise<void>;
       readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     } | null;
   },
@@ -255,6 +261,66 @@ export function mountHierarchyRoute(
       return c.json(result.body, result.status);
     }
   });
+  for (const method of ["patch", "delete"] as const) {
+    app[method]("/api/agent-plane/projects/:id", async (c) => {
+      c.header("Cache-Control", "no-store");
+      const actor = await deps.sessionActor(c.req.raw);
+      if (!actor) return c.json({ status: "unauthorized" }, 401);
+      const origin = c.req.header("origin");
+      if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
+        return c.json({ status: "forbidden" }, 403);
+      if (
+        c.req.header("content-type")?.split(";")[0]?.trim() !== "application/json" ||
+        new URL(c.req.url).search
+      )
+        return c.json({ status: "invalid_request" }, 400);
+      try {
+        const body = await c.req.json();
+        const schema = method === "patch" ? RenameProjectSchema : ProjectMutationSchema;
+        const input = schema.safeParse({ ...body, projectId: c.req.param("id") });
+        if (!input.success) return c.json({ status: "invalid_request" }, 400);
+        if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
+        const revision = c.req.header("x-rakazo-binding-revision");
+        const { hierarchy, binding } = await read(
+          actor,
+          revision === undefined ? undefined : Number(revision),
+        );
+        const building = hierarchy.buildings.find((item) =>
+          item.projects.some((project) => project.id === input.data.projectId),
+        );
+        const project = building?.projects.find((item) => item.id === input.data.projectId);
+        if (!project || !building) return c.json({ status: "project_unavailable" }, 404);
+        if (!(await deps.canCreateProject?.(actor))) return c.json({ status: "forbidden" }, 403);
+        if (method === "delete") {
+          if (input.data.name !== project.name)
+            return c.json({ status: "confirmation_mismatch" }, 400);
+          if (!deps.source?.deleteProject || !deps.retireProject)
+            return c.json({ status: "disabled" }, 503);
+          // Retire credentials before the irreversible upstream cascade. A retry is safe.
+          try {
+            await deps.retireProject(actor, project.id, binding.revision);
+            await deps.resolveBinding(actor, binding.revision);
+            await deps.source.deleteProject(project.id, project.name);
+          } catch (error) {
+            // Retirement can archive a bot before a revocation error. Publish that committed state.
+            await deps.changed?.(actor);
+            throw error;
+          }
+        } else {
+          if (!deps.source?.renameProject) return c.json({ status: "disabled" }, 503);
+          await deps.source.renameProject(project.id, input.data.name, building.id);
+        }
+        await deps.auditProject?.(actor, project.id, method === "patch" ? "rename" : "delete");
+        await deps.changed?.(actor);
+        await deps.resolveBinding(actor, binding.revision);
+        return c.body(null, 204);
+      } catch (error) {
+        if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
+        const result = failure(error);
+        return c.json(result.body, result.status);
+      }
+    });
+  }
   app.get("/api/agent-plane/projects/:id/commercial", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
