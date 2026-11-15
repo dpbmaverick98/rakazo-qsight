@@ -54,7 +54,11 @@ describePostgres("canonical client setup (PostgreSQL)", () => {
     );
     source.findClient.mockResolvedValueOnce(null);
     source.createClient.mockResolvedValueOnce(null);
-    const missing = await setupClient(db.prisma, actor, source, client.name);
+    const [missing, concurrent] = await Promise.all([
+      setupClient(db.prisma, actor, source, client.name),
+      setupClient(db.prisma, actor, source, client.name),
+    ]);
+    expect(concurrent).toEqual(missing);
     expect(source.createClient).toHaveBeenCalledOnce();
     expect(missing.status).toBe("mcp_missing");
     expect(missing.spaceId).not.toBe(unrelated.id);
