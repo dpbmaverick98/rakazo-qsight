@@ -217,84 +217,115 @@ The full-stack E2E spec now captures the commercial panel on wide/narrow screens
 its execution and Electron E2E remain with CI. Native mobile and screen-reader
 speech were not exercised.
 
-## Automatic scoped project managers
+## Scoped project managers and finishing setup
 
-Web and Electron use `mcp.servers.provisionProjectManager`, available at
-`POST /rpc/mcp/servers/provisionProjectManager`, with
-`{ projectId, projectName, clientName }`. It requires the existing signed-in session
-and `x-rakazo-space-id` membership selection. The non-Personal immutable Space
-binding and client hierarchy are checked before minting. Canonical names from the
-hierarchy replace browser-supplied names. The response is `{ bot, server, created }`;
-`created` means this request created the bot. Neither bearer nor ciphertext appears
-in the response.
+Web and Electron use the authenticated `mcp.servers.provisionProjectManager` RPC.
+The selected Space must have current owner/admin membership, a non-Personal
+canonical client binding, and the project in its fresh hierarchy. Browser names
+never select authority. Pass `bindingRevision` to reject a stale form.
 
-The hierarchy adapter calls `POST /api/v2/agent/projects/{encoded-id}/manager-token`
-with `Authorization: Bearer <QSIGHT_AGENT_TOKEN>`, no request body, no redirects,
-a five-second deadline, and a 32,000-byte response limit. The expected JSON response
-is `{ "token": "<project-scoped-read-only-bearer>" }`; other upstream fields are
-ignored. Read-only project scoping is enforced by the upstream issuer, not inferred
-from the token text. `QSIGHT_AGENT_TOKEN` must have the upstream owner's write
-permission. `QSIGHT_MCP_ENDPOINT` optionally overrides the default
-`${QSIGHT_BASE_URL}/mcp`. Existing MCP endpoint and private-network security checks
-still apply; a local endpoint needs the deployment's standard private-endpoint
-opt-in. No provider-specific browser settings are introduced.
+The rail offers **Finish setup** when exactly one project exists. This explicit
+action passes `finishSetup: true`: it promotes the caller-owned setup PM in place,
+changes its spawn key to `pm:{projectId}`, replaces its instructions, disables
+inherited connections, and replaces all its assignments with the project-scoped
+connection in one local transaction. It never deletes the owner's shared server
+or another bot's assignment. Setup retries cannot reattach the broad connection
+after promotion. Multiple projects require an explicit product decision before
+promotion; this action refuses to guess. Native mobile has no hierarchy rail;
+it may call the same authorized RPC but has no automatic promotion or broad-access
+fallback. No new provider settings are required.
 
-`prepareMcpServer` validates the endpoint and encrypts the bearer; `insertMcpServer`
-creates a `streamable_http` server named `Vendor One PM — {projectName}` (120 characters
-maximum), scoped to the current space with `allBots: false`. A project-ID-derived
-SHA-256 slug keeps identity stable when names change. A matching legacy name can
-be adopted; projects sharing a display name keep separate slugs. A server shared
-with every bot or space is rejected. Reuse refreshes the credential, so a same-named owner credential
-cannot survive. No new server or bot IDs are created on repeated successful calls.
+The adapter mints through the project's `manager-token` endpoint and requires
+`{token, token_id, project_id}`. It checks the returned project ID, validates and
+encrypts the bearer with the normal MCP endpoint controls, and persists the opaque
+issuer ID as `McpServer.managedCredentialId`. It never returns credentials to the
+browser. The project-ID-derived slug and existing unique bot spawn key keep one
+connection and one PM. A duplicate attempt reuses the existing scoped secret and
+revokes its unused newly minted token instead of replacing active credentials.
+Conflicting broad/shared or legacy unproven connections fail closed. Generic MCP
+credential edits are rejected for managed project connections, so a stable slug
+cannot retain manually substituted broad credentials.
 
-The PM uses `spawnKey: pm:{projectId}` and an 80-character name. The bot-creation
-transaction's existing `seed` hook commits the bot, secret, server and sole
-`botMcpServer` assignment together. An existing PM is repaired in a transaction;
-previous assignments are replaced, including any owner-level server. The additive
-`bots.inheritMcpServers` setting defaults to true for existing bots and is set false
-for PMs. MCP discovery and execution both honor it, preventing implicit access to
-all-agent servers. Failed persistence rolls back product records and uses the
-existing prepared-secret cleanup. An already-issued upstream token cannot be
-revoked on database failure because no revocation API was supplied.
+Every handled failure after a known token ID is minted, including endpoint
+validation, binding changes, persistence and duplicate adoption, attempts owner-write
+`DELETE /api/v2/agent/tokens/{token_id}`. Cleanup retries briefly and logs failure.
+A malformed credential with a parseable token ID is also revoked. Issuer minting
+is deliberately not retried automatically: it has no receipt contract.
 
-Limits: upstream canonical IDs must be stable; API hierarchy reads always bypass the adapter cache; provisioning an existing bot owned by another member fails
-safely rather than replacing that member's credentials. Each provisioning request
-mints a scoped token, including retries and reuse. There is no token-refresh timer
-or automatic run. Deploy the migration and updated API/worker code together;
-already-running old workers do not learn the new inheritance setting. Native Expo
-has no hierarchy panel; the authenticated RPC is shared and available to it.
+### Residual crash window and operator reconciliation
 
-Offline tests cover minting, safe responses, endpoint validation, resource reuse,
-transaction rollback, assignment repair, inherited-server denial and web success
-and retry. The hierarchy E2E spec checks the unconfigured failure without leaving
-a PM behind; CI owns full web/Electron E2E. Local visual checks use the real
-commercial panel with synthetic data; captures are in `docs/screenshots/hierarchy/`.
-No live token issuer was exercised. The binding migration is verified against disposable PostgreSQL.
+This is **not atomic cleanup across services**. A process can crash after the
+issuer commits a mint and before the local credential transaction commits. A lost
+mint response, malformed response without a usable token ID, prolonged revocation
+outage, or ambiguous database commit can also require operator reconciliation.
+A crash during an unused-token revocation can leave that token active. No local
+record can reliably inventory a mint whose response was lost. Receipt-backed
+building/project writes do not close this separate token window.
 
-## Creating projects
+In the configured Rakazo operator environment, list retained issuer IDs:
 
-The web/Electron rail opens an inline name form under an expanded building.
-`POST /api/agent-plane/projects` accepts `{buildingId, name}` with the selected
-Space header and an authenticated session. Only a current Space owner/admin
-can create; Personal and unbound Spaces cannot. The API verifies building
-membership against a fresh hierarchy, rejects blank or duplicate names, and
-calls the server adapter. The adapter posts `{name}` to
-`/api/v2/agent/buildings/{building_id}/projects` using the existing server token,
-with a five-second deadline, bounded response validation and no redirects.
-The configured credential must have owner-level write access upstream.
+```sh
+pnpm exec tsx packages/adapters/src/cli/qsight-manager-token.ts retained
+```
 
-Successful creation invalidates the adapter cache, signals the Space through the
-existing live stream and refreshes the rail. Conflicts stay in the form for
-correction. There is no automatic write retry: a timeout or malformed response
-can happen after the upstream committed, so check the refreshed hierarchy before
-retrying. Concurrent duplicate creation ultimately depends on the upstream
-returning 409; the local name check alone cannot enforce uniqueness.
+In the issuer's authorized operator environment, inventory active project-scoped
+token IDs for the relevant owner from `agent_tokens` (select only `id`,
+`project_id`, `label`, and timestamps; never `token_hash` or bearer material).
+Compare against retained IDs across **all** consumers of that issuer, including
+older connections without a managed ID. An unretained token alone is not proof
+that it is safe to revoke. Stop in-flight provisioning and investigate issuance
+time and project ownership before choosing an orphan. Then revoke only the
+reviewed ID using the server-side owner connection:
 
-Space display names never select authority. Binding changes require the explicit
-reviewed command above.
+```sh
+pnpm exec tsx packages/adapters/src/cli/qsight-manager-token.ts revoke <token-id>
+```
 
-New client Spaces name their first bot `PM`, with instructions scoped to the client.
-Project bots remain `PM — {projectName}` (80 characters maximum); MCP server names
-remain capped at 120 characters including the `Vendor One PM — ` prefix. Existing
-bots are not renamed here; that is deferred to a migration. Personal onboarding
-keeps its existing name. Internal identifiers and `QSIGHT_*` configuration stay unchanged.
+Alternatively, the issuer's existing operator CLI supports
+`python -m server.agent_tokens revoke --id <token-id> --owner-email <owner-email>`.
+Use local operator values; do not put credentials, real owner data or inventories
+in public issues or PRs. Revocation cannot cancel an upstream request already
+authenticated before it ran. Legacy connections whose issuer ID was never saved
+require issuer-side review; no automatic same-name backfill is attempted.
+
+## Creating verified buildings and projects
+
+The web/Electron hierarchy rail offers **Add building** and **Add project** under
+each expanded building. Building setup searches an address/site, disables coarse
+candidates, requires explicit candidate selection, resolves its signed token, and
+shows the canonical address and attribution before **Confirm building**. A nickname
+is optional. The browser never supplies coordinates or client authority. The API
+derives the client ID exclusively from the current Space binding and checks
+membership and the binding revision around external reads/writes.
+
+The adapter uses the owner connection for agent `locations/search`,
+`locations/proof`, `buildings`, and the existing nested building/project endpoint.
+It validates bounded responses, uses deadlines, refuses redirects, and generates
+public links from canonical IDs. A building request sends only `client_id`,
+canonical `address`, `verification_token`, and optional `nickname`. The issuer
+validates proof authenticity, owner, precision and expiry. Project names are
+trimmed and limited to 200 characters. The API reads fresh ancestry and rejects
+a building outside the bound client; the adapter also checks the returned parent.
+
+Building and project writes send stable opaque SHA-256 `Idempotency-Key` values
+from their normalized effective payload (including parent ID) and the form's
+operation UUID. The UUID survives retries and resets for a new intended action,
+so recreating a deleted same-name record does not replay an earlier action.
+The exact confirmed
+building payload, including its proof, survives a failed response in the open form.
+A retry uses the same key; reselecting a location/proof starts a different write.
+The issuer returns its original 201 receipt even after proof expiry. A project
+already visible in a refreshed hierarchy is allowed through to receipt replay;
+local duplicate-name guards must not prevent recovery of a committed write.
+Closing the form loses its unsaved proof; inspect the refreshed hierarchy before
+starting another building operation after an uncertain result.
+
+Successful writes clear the adapter hierarchy cache, publish the existing Space
+live signal and refresh the rail. Clients never poll. No migration backfills
+locations or bindings. The managed-credential migration adds one nullable column
+and remains compatible with the previous API/worker release.
+
+Offline tests cover receipt-key reuse after response loss, canonical selection,
+wrong project parent, authority checks, one PM, removal of the setup owner's
+assignment, and revocation on validation, persistence and duplicate paths. No live
+issuer, production geocoder or native mobile UI conformance is claimed.

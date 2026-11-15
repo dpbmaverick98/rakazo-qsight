@@ -10,11 +10,15 @@ export function ProjectManagerAction({
   client,
   spaceId,
   onOpenBot,
+  finishSetup,
+  bindingRevision,
 }: {
-  project: ProjectCommercial["project"];
+  project: Pick<ProjectCommercial["project"], "id" | "name">;
   client: string;
   spaceId: string;
   onOpenBot?: (bot: Bot) => void;
+  finishSetup?: boolean;
+  bindingRevision?: number;
 }) {
   const { t } = useLingui();
   const navigate = useNavigate();
@@ -37,8 +41,10 @@ export function ProjectManagerAction({
     try {
       const { bot } = await rpc.mcp.servers.provisionProjectManager({
         projectId: project.id,
+        bindingRevision,
         projectName: project.name,
         clientName: client,
+        ...(finishSetup ? { finishSetup: true } : {}),
       });
       if (mounted.current) open(bot);
     } catch {
@@ -61,7 +67,7 @@ export function ProjectManagerAction({
         aria-busy={pending}
         onClick={() => void provision()}
       >
-        {pending ? t`Creating…` : t`Create project manager`}
+        {pending ? t`Creating…` : finishSetup ? t`Finish setup` : t`Create project manager`}
       </Button>
       {error ? (
         <p role="alert" className="text-body text-destructive">

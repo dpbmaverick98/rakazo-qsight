@@ -185,7 +185,13 @@ it("rejects upstream errors, wrong project, malformed and oversized commercial d
 });
 
 it("mints a project-scoped bearer server-side and uses the configured MCP endpoint", async () => {
-  const fetch = vi.fn().mockResolvedValue(Response.json({ token: "fake-read-only-token" }));
+  const fetch = vi.fn().mockResolvedValue(
+    Response.json({
+      project_id: "roof/survey",
+      token_id: "test-token-id",
+      token: "fake-read-only-token",
+    }),
+  );
   vi.stubGlobal("fetch", fetch);
   const source = qsightHierarchyFromEnv({
     ...config,
@@ -212,7 +218,9 @@ it("mints a project-scoped bearer server-side and uses the configured MCP endpoi
 it("caps the branded server name without changing project identity", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => Response.json({ token: "fake-scoped" })),
+    vi.fn(async () =>
+      Response.json({ project_id: "roof", token_id: "test-token-id", token: "fake-scoped" }),
+    ),
   );
   const source = qsightHierarchyFromEnv(config)!;
   const short = await source.managerServer("roof", "Roof");
@@ -222,7 +230,14 @@ it("caps the branded server name without changing project identity", async () =>
   expect(long.slug).toBe(short.slug);
 });
 it("defaults to the origin's MCP endpoint", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ token: "fake-scoped" })));
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ project_id: "roof", token_id: "test-token-id", token: "fake-scoped" }),
+      ),
+  );
   expect(await qsightHierarchyFromEnv(config)!.managerServer("roof", "Roof")).toHaveProperty(
     "endpoint",
     "https://hierarchy.example.test/mcp",
@@ -230,7 +245,14 @@ it("defaults to the origin's MCP endpoint", async () => {
 });
 it.each([
   () => Promise.resolve(new Response("fake-sensitive-body", { status: 403 })),
-  () => Promise.resolve(Response.json({ token: "fake-sensitive\r\nvalue" })),
+  () =>
+    Promise.resolve(
+      Response.json({
+        project_id: "roof",
+        token_id: "test-token-id",
+        token: "fake-sensitive\r\nvalue",
+      }),
+    ),
   () => Promise.resolve(Response.json({ access_token: "fake-sensitive" })),
   () => Promise.resolve(Response.json({ token: "x".repeat(33_000) })),
   () => Promise.reject(new Error("fake-sensitive-network-error")),
@@ -321,4 +343,106 @@ it("never writes invalid input and rejects conflicts, mismatches and malformed r
   await expect(source.createProject("1", "New")).rejects.toThrow("Project creation unavailable");
   fetch.mockResolvedValueOnce(Response.json({ token: "private" }));
   await expect(source.createProject("1", "New")).rejects.toThrow("Project creation unavailable");
+});
+
+it("reuses project receipt keys after a lost response and rejects the wrong returned parent", async () => {
+  const project = {
+    id: "p",
+    name: "Roof",
+    building_id: "b",
+    currency: "USD",
+    url: "https://hierarchy.example.test/projects/p",
+  };
+  const fetch = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("response lost"))
+    .mockResolvedValueOnce(Response.json(project))
+    .mockResolvedValueOnce(Response.json({ ...project, building_id: "other" }));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.createProject("b", "Roof")).rejects.toThrow();
+  await expect(source.createProject("b", " Roof ")).resolves.toMatchObject({ id: "p" });
+  expect(fetch.mock.calls[0]![1].headers["Idempotency-Key"]).toMatch(/^[a-f0-9]{64}$/);
+  expect(fetch.mock.calls[1]![1].headers["Idempotency-Key"]).toBe(
+    fetch.mock.calls[0]![1].headers["Idempotency-Key"],
+  );
+  await expect(source.createProject("b", "Roof")).rejects.toThrow("Project creation unavailable");
+});
+it("searches, proves the selected candidate, and replays the exact confirmed building payload", async () => {
+  const candidate = {
+    address: "10 Example Street",
+    latitude: 1,
+    longitude: 2,
+    attribution: "Example attribution",
+    selectable: true,
+    verification_token: "fake-candidate",
+  };
+  const proof = {
+    ...candidate,
+    verification_token: "fake-proof",
+    location_precision: "building",
+    expires_in: 1800,
+  };
+  const building = {
+    id: 8,
+    name: "Site",
+    address: candidate.address,
+    url: "https://untrusted.example.test",
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ items: [candidate], attribution: candidate.attribution }),
+    )
+    .mockResolvedValueOnce(Response.json(proof))
+    .mockRejectedValueOnce(new Error("lost response"))
+    .mockImplementation(async () => Response.json(building, { status: 201 }));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  expect(await source.searchLocations(" Example Street ")).toHaveProperty(
+    "items.0.selectable",
+    true,
+  );
+  expect(await source.proveLocation(candidate.verification_token)).toHaveProperty(
+    "verification_token",
+    "fake-proof",
+  );
+  const input = {
+    address: proof.address,
+    verification_token: proof.verification_token,
+    nickname: "Site",
+  };
+  await expect(source.createBuilding("7", input)).rejects.toThrow();
+  expect(await source.createBuilding("7", input)).toHaveProperty(
+    "url",
+    "https://hierarchy.example.test/buildings/8",
+  );
+  expect(fetch.mock.calls[2]![1].headers["Idempotency-Key"]).toBe(
+    fetch.mock.calls[3]![1].headers["Idempotency-Key"],
+  );
+  expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({ client_id: "7", ...input });
+  await source.createBuilding("other", input);
+  expect(fetch.mock.calls[4]![1].headers["Idempotency-Key"]).not.toBe(
+    fetch.mock.calls[3]![1].headers["Idempotency-Key"],
+  );
+});
+it("revokes tokens with owner authorization and sanitizes malformed scoped credentials", async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(
+      Response.json({ token_id: "minted", project_id: "wrong", token: "fake-bearer" }),
+    )
+    .mockResolvedValue(Response.json({ revoked: true }));
+  vi.stubGlobal("fetch", fetch);
+  const source = qsightHierarchyFromEnv(config)!;
+  await expect(source.managerServer("roof", "Roof")).rejects.toThrow(
+    "Project manager credentials unavailable",
+  );
+  expect(fetch.mock.calls[1]).toEqual([
+    new URL("https://hierarchy.example.test/api/v2/agent/tokens/minted"),
+    expect.objectContaining({
+      method: "DELETE",
+      headers: { Authorization: "Bearer fake-token", Accept: "application/json" },
+    }),
+  ]);
 });

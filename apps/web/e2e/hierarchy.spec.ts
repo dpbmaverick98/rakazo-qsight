@@ -8,6 +8,30 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await completeOnboarding(page);
   const space = await rpc<{ id: string }>(page, "spaces/create", { name: "Example Client" });
   const createdProjects: { id: string; name: string; url: string }[] = [];
+  const candidate = {
+    address: "10 Example Street",
+    latitude: 51.505,
+    longitude: -0.09,
+    attribution: "Synthetic map attribution",
+    selectable: true,
+    verification_token: "fake-candidate",
+  };
+  await page.route("**/api/agent-plane/locations/search", (route) =>
+    route.fulfill({ json: { items: [candidate], attribution: candidate.attribution } }),
+  );
+  await page.route("**/api/agent-plane/locations/proof", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      verification_token: candidate.verification_token,
+    });
+    await route.fulfill({
+      json: {
+        ...candidate,
+        verification_token: "fake-proof",
+        location_precision: "building",
+        expires_in: 1800,
+      },
+    });
+  });
   await page.route("**/api/agent-plane/projects", async (route) => {
     expect(route.request().postDataJSON()).toEqual({ buildingId: "north", name: "Window survey" });
     const project = {
@@ -75,10 +99,16 @@ test("client hierarchy shares the right region with chat details", async ({ page
   );
   const composer = page.getByTestId("composer-field").locator("textarea");
   await rail.getByRole("button", { name: "Add building", exact: true }).click();
-  await expect(composer).toHaveValue(
-    "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
-  );
-  await expect(composer).toBeFocused();
+  const buildingForm = rail.getByRole("form", { name: "Add building", exact: true });
+  await expect(buildingForm.getByRole("textbox", { name: "Address or site" })).toBeFocused();
+  await captureScreenshot(page, testInfo, "add-building-search");
+  await buildingForm.getByRole("textbox", { name: "Address or site" }).fill("Example Street");
+  await buildingForm.getByRole("button", { name: "Search", exact: true }).click();
+  await buildingForm.getByRole("radio", { name: candidate.address }).check();
+  await buildingForm.getByRole("button", { name: "Confirm location", exact: true }).click();
+  await expect(buildingForm.getByText(candidate.address, { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "add-building-confirmation");
+  await buildingForm.getByRole("button", { name: "Cancel", exact: true }).click();
   await rail.getByRole("button", { name: "Add project", exact: true }).click();
   const projectForm = rail.getByRole("form", { name: "Add project", exact: true });
   await expect(projectForm.getByRole("textbox", { name: "Project name" })).toBeFocused();
@@ -86,9 +116,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
   await projectForm.getByRole("textbox", { name: "Project name" }).fill("Window survey");
   await projectForm.getByRole("button", { name: "Create", exact: true }).click();
   await expect(rail.getByRole("button", { name: "Window survey", exact: true })).toBeVisible();
-  await expect(composer).toHaveValue(
-    "Add a building under Example Client. Ask me for the address, show verified choices, and wait for my approval before creating.",
-  );
+  await expect(composer).toHaveValue("");
   await captureScreenshot(page, testInfo, "add-project-created");
   await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
   const commercial = rail.getByRole("region", { name: "Commercial", exact: true });

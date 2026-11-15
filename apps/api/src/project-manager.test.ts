@@ -157,8 +157,14 @@ function setup() {
   const secrets = new EncryptedSecretStore("fake-encryption-key-for-offline-tests");
   const upstream = vi.fn(async (url: URL) =>
     String(url).includes("manager-token")
-      ? Response.json({ token: "fake-project-read-token" })
-      : Response.json(hierarchy),
+      ? Response.json({
+          project_id: "roof",
+          token_id: "test-token-id",
+          token: "fake-project-read-token",
+        })
+      : String(url).includes("/tokens/")
+        ? Response.json({ revoked: true })
+        : Response.json(hierarchy),
   );
   vi.stubGlobal("fetch", upstream);
   const source = qsightHierarchyFromEnv({
@@ -169,6 +175,7 @@ function setup() {
     prisma,
     secrets,
     projectManagers: source,
+    events: { publishRosterChange: vi.fn(async () => {}) },
     env: { mcpAllowPrivateEndpoint: false },
     remoteConnectors: { resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }] },
   };
@@ -244,7 +251,7 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
     "https://hierarchy.example.test/api/v2/agent/projects/roof/manager-token",
   );
 });
-it("reuses IDs, refreshes scoped credentials, and repairs an older PM's assignments", async () => {
+it("reuses scoped credentials and IDs, and repairs an older PM's assignments", async () => {
   const test = setup();
   const first = await provisionProjectManager(test.ctx, actor, input);
   test.state.assignments.push(
@@ -437,4 +444,124 @@ it("rejects stale binding revisions and ordinary members before PM minting", asy
   test.prisma.spaceMember.findUnique.mockResolvedValue({ role: "member" });
   await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow("forbidden");
   expect(test.upstream).not.toHaveBeenCalled();
+});
+
+it("promotes the setup PM in place and removes its owner connection", async () => {
+  const test = setup();
+  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  test.state.assignments.push({
+    botId: "setup",
+    serverId: "owner",
+    spaceId: "space",
+    userId: "user",
+  });
+  const result = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(result.bot).toMatchObject({ id: "setup", spawnKey: "pm:roof" });
+  expect(test.repos.createBot).not.toHaveBeenCalled();
+  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.assignments).toEqual([
+    expect.objectContaining({ botId: "setup", serverId: result.server.id }),
+  ]);
+  expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
+  await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.servers).toHaveLength(1);
+  expect(
+    test.upstream.mock.calls.some(([url]) => String(url).endsWith("/tokens/test-token-id")),
+  ).toBe(true);
+});
+it.each(["validation", "attachment", "duplicate"])(
+  "revokes the unused minted token after %s",
+  async (failure) => {
+    const test = setup();
+    if (failure === "duplicate") await provisionProjectManager(test.ctx, actor, input);
+    if (failure === "validation")
+      test.deps.remoteConnectors.resolveHostname = async () => [
+        { address: "127.0.0.1", family: 4 },
+      ];
+    if (failure === "attachment")
+      test.prisma.botMcpServer.create.mockRejectedValueOnce(new Error("offline failure"));
+    if (failure === "duplicate") await provisionProjectManager(test.ctx, actor, input);
+    else await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow();
+    expect(
+      test.upstream.mock.calls.filter(([url]) => String(url).endsWith("/tokens/test-token-id")),
+    ).toHaveLength(1);
+  },
+);
+it("does not promote setup when the hierarchy contains more than one project", async () => {
+  const test = setup();
+  test.upstream.mockResolvedValueOnce(
+    Response.json({
+      ...hierarchy,
+      buildings: [
+        {
+          ...hierarchy.buildings[0],
+          projects: [
+            ...hierarchy.buildings[0]!.projects,
+            { id: "second", name: "Second", url: "https://example.test/second" },
+          ],
+        },
+      ],
+    }),
+  );
+  await expect(
+    provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(test.upstream.mock.calls.some(([url]) => String(url).includes("manager-token"))).toBe(
+    false,
+  );
+});
+it("retries revocation without changing the surviving PM", async () => {
+  const test = setup();
+  await provisionProjectManager(test.ctx, actor, input);
+  const revoke = vi
+    .spyOn(test.deps.projectManagers, "revokeManagerToken")
+    .mockRejectedValueOnce(new Error("brief outage"))
+    .mockResolvedValueOnce();
+  await provisionProjectManager(test.ctx, actor, input);
+  expect(revoke).toHaveBeenCalledTimes(2);
+  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.servers).toHaveLength(1);
+});
+
+it("revokes only the duplicate mint and preserves the adopted issuer ID", async () => {
+  const test = setup();
+  const mint = test.deps.projectManagers.managerServer.bind(test.deps.projectManagers);
+  let sequence = 0;
+  vi.spyOn(test.deps.projectManagers, "managerServer").mockImplementation(async (id, name) => ({
+    ...(await mint(id, name)),
+    tokenId: `issued-${++sequence}`,
+  }));
+  const revoke = vi.spyOn(test.deps.projectManagers, "revokeManagerToken").mockResolvedValue();
+  await provisionProjectManager(test.ctx, actor, input);
+  const secret = test.state.secrets[0]!.id;
+  await provisionProjectManager(test.ctx, actor, input);
+  expect(revoke).toHaveBeenCalledExactlyOnceWith("issued-2");
+  expect(test.state.servers[0]).toMatchObject({
+    managedCredentialId: "issued-1",
+    secretId: secret,
+  });
+});
+
+it("rejects generic edits of managed project credentials", async () => {
+  const test = setup();
+  const result = await provisionProjectManager(test.ctx, actor, input);
+  test.prisma.mcpServer.findFirst.mockResolvedValueOnce(test.state.servers[0]!);
+  const context = createRouterContext(test.deps as never);
+  const client = createRouterClient(mcpRoutes(context), { context: { actor } });
+  await expect(
+    client.mcp.servers.update({ id: result.server.id, secret: "fake-owner-substitution" }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
+});
+
+it("keeps the committed credential if post-commit notification fails", async () => {
+  const test = setup();
+  test.deps.events.publishRosterChange.mockRejectedValueOnce(new Error("notification unavailable"));
+  const revoke = vi.spyOn(test.deps.projectManagers, "revokeManagerToken");
+  await expect(provisionProjectManager(test.ctx, actor, input)).rejects.toThrow(
+    "notification unavailable",
+  );
+  expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
+  expect(revoke).not.toHaveBeenCalled();
 });

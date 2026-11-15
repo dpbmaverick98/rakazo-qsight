@@ -8,13 +8,16 @@ export function CreateProject({
   buildingId,
   spaceId,
   refresh,
+  bindingRevision,
 }: {
   buildingId: string;
   spaceId: string | null;
   refresh: () => void;
+  bindingRevision?: number;
 }) {
   const { t } = useLingui();
   const id = useId();
+  const operationId = useRef(crypto.randomUUID());
   const trigger = useRef<HTMLButtonElement>(null);
   const pending = useRef(false);
   const [open, setOpen] = useState(false);
@@ -22,6 +25,7 @@ export function CreateProject({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   function close() {
+    operationId.current = crypto.randomUUID();
     setOpen(false);
     setName("");
     setError("");
@@ -53,7 +57,16 @@ export function CreateProject({
               const response = await fetch("/api/agent-plane/projects", {
                 method: "POST",
                 credentials: "include",
-                headers: withSpaceHeaders({ "Content-Type": "application/json" }, spaceId),
+                headers: withSpaceHeaders(
+                  {
+                    "Content-Type": "application/json",
+                    "Idempotency-Key": operationId.current,
+                    ...(bindingRevision
+                      ? { "x-rakazo-binding-revision": String(bindingRevision) }
+                      : {}),
+                  },
+                  spaceId,
+                ),
                 body: JSON.stringify({ buildingId, name: name.trim() }),
               });
               if (response.status === 409) {
@@ -79,7 +92,7 @@ export function CreateProject({
             id={id}
             autoFocus
             required
-            maxLength={500}
+            maxLength={200}
             value={name}
             disabled={loading}
             aria-invalid={!!error}

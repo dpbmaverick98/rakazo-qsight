@@ -2148,6 +2148,8 @@ model McpServer {
   env           Json              @default("{}")
   files         Json              @default("{}")
   headers       Json              @default("{}")
+  /// Opaque issuer ID for operator reconciliation; never a bearer.
+  managedCredentialId String?
   secretId      String?
   secret        Secret?           @relation(fields: [secretId], references: [id], onDelete: SetNull)
   installId     String?
