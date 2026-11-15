@@ -70,7 +70,8 @@ export { callMarkerClientNonce } from "./routes/threads.js";
 
 export interface RouterDeps {
   projectManagers?: {
-    read: (clientName?: string) => Promise<Hierarchy>;
+    ownerServerPrefix: string;
+    read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
     managerServer: (id: string, name: string) => Promise<McpServerConfigInput>;
   } | null;
   pushTokens: PushTokenStore;

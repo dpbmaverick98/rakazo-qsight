@@ -36,3 +36,11 @@ export const CreatedProjectSchema = z.object({
   url: z.url({ protocol: /^https?$/ }),
 });
 export type CreatedProject = z.infer<typeof CreatedProjectSchema>;
+
+/** Omit externalClientId to unbind. Revision zero is only valid before the first bind. */
+export const ChangeClientBindingSchema = z
+  .object({
+    revision: z.number().int().nonnegative(),
+    externalClientId: Id.trim().min(1).optional(),
+  })
+  .strict();
