@@ -3,12 +3,47 @@ import { PluginPartSchema } from "@rakazo/contracts";
 
 /** Named project tools selected by the project-manager provisioning action. */
 export const PROJECT_MANAGER_TOOLS = {
+  trustedTools: [
+    "search_clients",
+    "list_clients",
+    "search_locations",
+    "get_location_proof",
+    "get_client",
+    "get_building",
+    "list_buildings",
+    "get_project",
+    "list_projects",
+    "get_hierarchy",
+    "get_document",
+    "list_documents",
+    "get_work_package",
+    "list_work_packages",
+  ],
+  setupWriteTools: ["create_client", "create_building", "create_project", "create_work_package"],
   name: "Vendor One",
   legacyServerPrefix: "QSight",
   serverName: "Vendor One Pilot",
   legacyServerName: "QSight Pilot",
   managerServerPrefix: "Vendor One PM — ",
 } as const;
+
+/** Reprovisioning preserves explicit grants only for tools still in this catalog. */
+export function projectManagerToolPolicy(previousTrust: unknown = []) {
+  const allowedTools: string[] = [
+    ...PROJECT_MANAGER_TOOLS.trustedTools,
+    ...PROJECT_MANAGER_TOOLS.setupWriteTools,
+  ];
+  const saved = Array.isArray(previousTrust)
+    ? previousTrust.filter(
+        (tool): tool is string => typeof tool === "string" && allowedTools.includes(tool),
+      )
+    : [];
+  return {
+    allowAllTools: false,
+    allowedTools,
+    trustedTools: [...new Set([...PROJECT_MANAGER_TOOLS.trustedTools, ...saved])],
+  };
+}
 
 export const PLUGIN_CATEGORIES = [
   "productivity",

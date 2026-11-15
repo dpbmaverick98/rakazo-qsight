@@ -3,7 +3,7 @@ import { lockMcpOAuthMaterial } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import type { ClientSetup } from "@rakazo/contracts/hierarchy";
 import { CreateClientSchema } from "@rakazo/contracts/hierarchy";
-import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
+import { PROJECT_MANAGER_TOOLS, projectManagerToolPolicy } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   ClientSpaceConflictError,
@@ -184,6 +184,16 @@ async function performSetup(
             });
             const candidate =
               servers.find((item) => item.name === PROJECT_MANAGER_TOOLS.serverName) ?? servers[0];
+            const previousAssignment = candidate
+              ? await tx.botMcpServer.findFirst({
+                  where: {
+                    botId: bot.id,
+                    serverId: candidate.id,
+                    spaceId: target.spaceId,
+                    userId: target.userId,
+                  },
+                })
+              : null;
             await tx.botMcpServer.deleteMany({
               where: { botId: bot.id, spaceId: target.spaceId, userId: target.userId },
             });
@@ -207,8 +217,7 @@ async function performSetup(
                 serverId: server.id,
                 spaceId: target.spaceId,
                 userId: target.userId,
-                allowAllTools: true,
-                allowedTools: [],
+                ...projectManagerToolPolicy(previousAssignment?.trustedTools),
               },
             });
             return server.id;

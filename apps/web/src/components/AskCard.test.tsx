@@ -1044,3 +1044,50 @@ it("leaves plain questions to the composer and dims the question after answering
   ).toBe(true);
   expect(container.textContent).not.toContain("Paris");
 });
+
+it("preserves the business action label for MCP approvals", async () => {
+  const card: AskBlock = {
+    kind: "ask",
+    approvalEffectId: "effect",
+    text: "Create building?",
+    status: "pending",
+    detail: "Example Client · North Tower",
+    actions: [
+      { id: "allow", label: "Allow once" },
+      { id: "always", label: "Always allow this action" },
+      { id: "deny", label: "Deny" },
+    ],
+  };
+  await render(card);
+  expect([...container.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+    "Allow once",
+    "Always allow this action",
+    "Deny",
+  ]);
+});
+
+it("hides raw arguments on MCP approval cards saved before the business UI", async () => {
+  await render({
+    kind: "ask",
+    approvalEffectId: "effect",
+    status: "pending",
+    text: "Review before mcp__example__create_building",
+    detail:
+      "client_id: 12345678-1234-1234-1234-123456789abc\nverification_token: fake-private-token",
+    actions: [
+      { id: "allow", label: "Allow once" },
+      { id: "always", label: "Always allow this tool" },
+      { id: "deny", label: "Deny" },
+    ],
+  });
+  expect(container.textContent).toContain("Create building?");
+  expect(container.textContent).toContain("Always allow this action");
+  expect(container.textContent).not.toMatch(
+    /client_id|verification_token|12345678|fake-private|mcp__/,
+  );
+  expect([...container.querySelectorAll("button")].map((item) => item.textContent)).toEqual([
+    "Allow once",
+    "Always allow this action",
+    "Deny",
+  ]);
+});

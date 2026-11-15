@@ -33,6 +33,7 @@ import { contentEncryptionOf } from "./content-encryption.js";
 import { notifyCommittedEvent, notifyRealtime } from "./event-stream.js";
 import type { FinalizeRunResult } from "./events.js";
 import { appendEventInTransaction, transientRunEventsWhere } from "./events.js";
+import { mcpApprovalRoute, trustMcpApproval } from "./mcp-tool-trust.js";
 import { createThreadMessageInTransaction, loadMessageAuthor } from "./messages.js";
 import { deleteRunSecretsInTransaction } from "./run-secrets.js";
 import { RUN_TURN_CHECKPOINT_KIND } from "./run-turn-checkpoint.js";
@@ -388,7 +389,22 @@ async function commitAnswerRunInput(
     // reach, and on a batch allows each action in it, never every action the batch tool can run.
     const site = alwaysAllowedSite(approvalEffect!);
     const tools = storedBatchActions(approvalEffect!.batchActions) ?? [approvalEffect!.kind];
-    if (input.answer === "always" && (site || approvalEffect!.kind !== "web_fetch")) {
+    const mcpRoute = mcpApprovalRoute(approvalEffect!.request);
+    if (input.answer === "always" && mcpRoute) {
+      await trustMcpApproval(
+        tx,
+        {
+          spaceId: input.spaceId,
+          botId: run.botId,
+          userId: approvalUserId!,
+        },
+        mcpRoute,
+      );
+    } else if (
+      input.answer === "always" &&
+      !approvalEffect!.kind.startsWith("mcp__") &&
+      (site || approvalEffect!.kind !== "web_fetch")
+    ) {
       // Saved where the member's confirmations apply in this Space: the account or its override.
       for (const tool of site ? [site] : tools) {
         await saveApprovalRule(
