@@ -62,7 +62,11 @@ export async function setupClient(
       throw new ORPCError("CONFLICT", { message: "binding_stale" });
     const repos = createRepos(prisma);
     const spawnKey = `setup:${client.id}`;
-    const existing = (await repos.listBots(target)).find((bot) => bot.spawnKey === spawnKey);
+    // Resume the setup PM for any current Space owner/admin, not only its creator.
+    const existing = await prisma.bot.findFirst({
+      where: { spaceId: target.spaceId, spawnKey, archivedAt: null },
+      select: { id: true, name: true, spawnKey: true, userId: true },
+    });
     const bot =
       existing ??
       (await repos.createBot(target, {
@@ -88,7 +92,7 @@ export async function setupClient(
       await bindingAccess(tx, target, true);
       await resolveClientBinding(tx, target, binding.revision);
       const current = await tx.bot.findFirst({
-        where: { id: bot.id, spaceId: target.spaceId, userId: target.userId, archivedAt: null },
+        where: { id: bot.id, spaceId: target.spaceId, archivedAt: null },
       });
       if (!current) throw new ORPCError("CONFLICT", { message: "setup_unavailable" });
       await tx.bot.update({
