@@ -43,19 +43,33 @@ export function ProjectManagerAction({
     let bot = createdBot;
     try {
       if (!bot) {
-        const name = `PM — ${project.name}`;
+        const name = `PM — ${project.name}`.slice(0, 80);
+        const spawnKey = `pm:${project.id}`;
         const bots = await rpc.bots.list();
-        const existing = bots.find((bot) => bot.name === name && !bot.archivedAt);
+        const existing = bots.find(
+          (item) => !item.archivedAt && (item.name === name || item.spawnKey === spawnKey),
+        );
         if (existing) {
           if (mounted.current) open(existing);
           return;
         }
-        bot = await rpc.bots.create({
-          name,
-          instructions: projectManagerInstructions(project, client),
-          dailyCheckIns: false,
-          fleetManagement: false,
-        });
+        try {
+          bot = await rpc.bots.create({
+            name,
+            spawnKey,
+            instructions: projectManagerInstructions(project, client),
+            dailyCheckIns: false,
+            fleetManagement: false,
+          });
+        } catch (reason) {
+          // Another panel/tab won the unique (spaceId, spawnKey) create race.
+          const after = await rpc.bots.list();
+          const winner = after.find(
+            (item) => !item.archivedAt && (item.spawnKey === spawnKey || item.name === name),
+          );
+          if (!winner) throw reason;
+          bot = winner;
+        }
         if (mounted.current) setCreatedBot(bot);
       }
       const servers = await rpc.mcp.servers.list();

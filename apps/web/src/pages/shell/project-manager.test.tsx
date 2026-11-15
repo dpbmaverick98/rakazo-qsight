@@ -94,6 +94,7 @@ it("creates a persistent bot and appends without changing assignments for other 
   await view.click();
   expect(mocks.rpc.bots.create).toHaveBeenCalledExactlyOnceWith({
     name: "PM — Roof survey",
+    spawnKey: "pm:roof",
     instructions: expect.any(String),
     dailyCheckIns: false,
     fleetManagement: false,
