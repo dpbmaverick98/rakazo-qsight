@@ -69,7 +69,10 @@ function setup() {
               server.userId === where.userId &&
               ((where.id && where.id === server.id) ||
                 (where.slug && where.slug === server.slug) ||
-                (where.name && where.name === server.name)) &&
+                (where.name &&
+                  (typeof where.name === "string"
+                    ? where.name === server.name
+                    : server.name.startsWith(where.name.startsWith)))) &&
               (where.allBots === undefined || where.allBots === server.allBots) &&
               (where.endpoint === undefined || where.endpoint === server.endpoint),
           ) ?? null,
