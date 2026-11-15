@@ -3,7 +3,9 @@ import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { CommercialSelection } from "./project-commercial";
 
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery({
@@ -30,7 +32,9 @@ export function HierarchyRail({
   error,
   retry,
   collapse,
+  scope,
 }: {
+  scope?: { userId: string | null; spaceId: string | null };
   data?: Hierarchy | null;
   loading: boolean;
   error: boolean;
@@ -38,6 +42,11 @@ export function HierarchyRail({
   collapse: () => void;
 }) {
   const { t } = useLingui();
+  const selectionTrigger = useRef<HTMLButtonElement | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const selectedProject = data?.buildings
+    .flatMap((building) => building.projects)
+    .find((project) => project.id === selected);
   return (
     <section
       aria-label={t`Client hierarchy`}
@@ -67,7 +76,10 @@ export function HierarchyRail({
         </div>
       ) : null}
       {data ? (
-        <nav aria-label={t`Buildings and projects`}>
+        <nav
+          aria-label={t`Buildings and projects`}
+          className={selectedProject ? "max-h-48 overflow-y-auto" : undefined}
+        >
           {data.buildings.length === 0 ? (
             <p className="text-body text-muted-foreground">
               <Trans>No buildings</Trans>
@@ -88,15 +100,17 @@ export function HierarchyRail({
                       <ul className="border-s border-border ps-4">
                         {building.projects.map((project) => (
                           <li key={project.id}>
-                            <a
-                              href={project.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block rounded-md py-2 text-body underline decoration-border underline-offset-4 break-words hover:decoration-foreground focus-visible:outline focus-visible:outline-ring"
-                              aria-label={t`${project.name} (opens in new tab)`}
+                            <Button
+                              variant="ghost"
+                              className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-start break-words"
+                              aria-pressed={selected === project.id}
+                              onClick={(event) => {
+                                selectionTrigger.current = event.currentTarget;
+                                setSelected(project.id);
+                              }}
                             >
                               {project.name}
-                            </a>
+                            </Button>
                           </li>
                         ))}
                       </ul>
@@ -107,6 +121,17 @@ export function HierarchyRail({
             </ul>
           )}
         </nav>
+      ) : null}
+      {selectedProject && scope ? (
+        <CommercialSelection
+          key={selectedProject.id}
+          {...scope}
+          projectId={selectedProject.id}
+          back={() => {
+            setSelected(null);
+            selectionTrigger.current?.focus();
+          }}
+        />
       ) : null}
     </section>
   );

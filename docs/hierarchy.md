@@ -66,3 +66,70 @@ they show an isolated composition, not an authenticated full-stack Shell.
 The full-stack CI spec also covers coexistence with actual chat details. No
 upstream service, production credentials, native mobile, or live project target
 was exercised. No creation or write requests to the external service exist.
+
+## Scoped commercial panel
+
+Selecting a project now opens a read-only commercial view in the same right
+region, with the hierarchy retained above it and Back to hierarchy restoring
+focus to the project button. Web and Electron share this UI; native Expo remains
+outside this pilot. No chat messages, model calls, writes or commercial totals
+are introduced.
+
+`GET /api/agent-plane/projects/:id/commercial` uses the same authenticated
+session, membership selection and configured non-Personal space binding as the
+hierarchy. Before every commercial read (including cache hits), the project ID
+must appear in the configured client's hierarchy. All members of this configured
+space must be permitted to read all its mapped projects; mixed readership is not
+supported. The hierarchy's existing 15-second cache also bounds mapping freshness.
+
+The adapter calls only `GET /api/v2/agent/projects/{encoded-id}/commercial` with
+the existing server bearer, redirects disabled and a five-second deadline. It
+validates at most 256,000 decoded bytes against
+`packages/contracts/src/project-commercial.ts`, strips unknown fields, verifies
+the returned project ID and generates project/package links from the configured
+origin and canonical IDs. Those link routes still require upstream confirmation.
+Successes are cached for 15 seconds in a bounded 100-project process-local cache;
+HTTP responses are always no-store. Errors are generic and never cached.
+
+The v1 consumer contract follows the endpoint shape supplied for this feature:
+`project: {id, name, currency, url}` and
+`claims: [{id, name, sub_vendors: [{id, name, work_packages: [...]}]}]`.
+Packages require `id`, `title`, `status`, `document_count`, `document_state`,
+`proposed`, `breakdown`, `invoiced`, `remaining`, `position`, `issues_open`,
+`coverage_incomplete` and `url`. Amounts are finite JSON numbers or plain decimal
+strings, or null. Position is neutral upstream text or null; issue counts and
+coverage may also be null. Currency is an uppercase three-letter code or null.
+The synthetic fixture is exported as `@rakazo/contracts/project-commercial-fixture`.
+
+The consumer displays canonical amounts verbatim (preserving decimal strings),
+never sums or derives balances, and renders unavailable amounts as an accessible
+em dash. Issue counts and incomplete/unavailable checks are independent. It does
+not implement the design proposal's different paginated `groups`/qualified-money
+contract, snapshots, document metadata links, URL history, expanded tables or
+per-project permissions. Oversized responses fail explicitly rather than silently
+truncating the project. The current endpoint needs to supply a complete bounded
+response; pagination requires a separately agreed upstream contract.
+
+Selection is scoped to account and space, and only the selected project is read.
+Queries cancel on unmount/switch, use separate account/space/project keys, discard
+unused cache immediately, and hide figures during refresh or failure. Reads occur
+on entry, focus, retry and the existing roster stream signals, with no polling or
+offline persistence. Upstream-only changes still have no push bridge.
+
+Live wiring requires the QSight commercial endpoint PR to be merged with this
+shape and the deep-link routes confirmed. No live endpoint, real credentials,
+financial parity against live projections or upstream authorization was exercised;
+consumer checks use synthetic mocked responses only.
+
+Local verification for the commercial extension passed the focused proxy/adapter/
+panel tests, full web unit suite, API/web/E2E TypeScript checks, Biome, repository
+checks and the web production build. The existing build emits catalog extraction
+and chunk-size warnings. No translation catalogs were changed. Dependency install
+used the lockfile and the documented engine override for the available runtime.
+Inspected synthetic captures at 1500×1000 and 390×844 are in
+`docs/screenshots/commercial/`; these use the real rail and resizable region in a
+temporary isolated preview, not an authenticated full-stack shell. Back restores
+project-button focus; the narrow capture had no horizontal document overflow.
+The full-stack E2E spec now captures the commercial panel on wide/narrow screens;
+its execution and Electron E2E remain with CI. Native mobile and screen-reader
+speech were not exercised.

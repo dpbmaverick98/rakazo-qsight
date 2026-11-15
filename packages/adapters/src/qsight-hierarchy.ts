@@ -1,5 +1,6 @@
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
+import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
 import { deadlineSignal, readBoundedJsonResponse } from "@rakazo/core";
 import { z } from "zod";
 
@@ -52,8 +53,45 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     throw new Error("Hierarchy HTTP is allowed only for loopback/local Docker; use HTTPS");
   }
   let cached: { data: Hierarchy; expires: number } | undefined;
+  const commercialCache = new Map<
+    string,
+    { data: ReturnType<typeof ProjectCommercialSchema.parse>; expires: number }
+  >();
   return {
     spaceId,
+    async readCommercial(id: string) {
+      // The API verifies membership in this client hierarchy before every read.
+      const hit = commercialCache.get(id);
+      if (hit && hit.expires > Date.now()) return hit.data;
+      commercialCache.delete(id);
+      const signal = deadlineSignal(5000);
+      const response = await fetch(
+        new URL(`/api/v2/agent/projects/${encodeURIComponent(id)}/commercial`, origin),
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          redirect: "error",
+          signal,
+        },
+      );
+      if (!response.ok) throw new Error("Commercial upstream unavailable");
+      const data = ProjectCommercialSchema.parse(
+        await readBoundedJsonResponse(response, 256_000, signal),
+      );
+      if (data.project.id !== id) throw new Error("Commercial project mismatch");
+      // Generate links from canonical IDs; never trust content-supplied URLs.
+      data.project.url = new URL(`/projects/${encodeURIComponent(id)}`, origin).href;
+      for (const claim of data.claims)
+        for (const vendor of claim.sub_vendors)
+          for (const item of vendor.work_packages) {
+            item.url = new URL(
+              `/projects/${encodeURIComponent(id)}/packages/${encodeURIComponent(item.id)}`,
+              origin,
+            ).href;
+          }
+      if (commercialCache.size >= 100) commercialCache.delete(commercialCache.keys().next().value!);
+      commercialCache.set(id, { data, expires: Date.now() + 15_000 });
+      return data;
+    },
     async read(): Promise<Hierarchy> {
       if (cached && cached.expires > Date.now()) return cached.data;
       const url = new URL("/api/v2/agent/hierarchy", origin);
