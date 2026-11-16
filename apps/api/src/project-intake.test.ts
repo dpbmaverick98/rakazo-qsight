@@ -28,6 +28,7 @@ function setup() {
       createIntake: vi.fn<Parameters<typeof stageProjectIntake>[0]["source"]["createIntake"]>(
         async () => ({
           id: "intake",
+          revision: 7,
           files: [
             {
               id: "f1",
@@ -57,6 +58,7 @@ it("stages owned bytes with hashes, stable idempotency, per-file completion and 
   const result = await stageProjectIntake(deps, actor, input);
   expect(result).toEqual({
     intakeId: "intake",
+    intakeRevision: 7,
     files: [
       { id: "f1", status: "staged" },
       { id: "f2", status: "staged" },
@@ -220,6 +222,7 @@ it.each(["processing", "ready", "published", "pending", "failed"])(
     if (["processing", "ready", "published"].includes(status))
       expect(await result).toEqual({
         intakeId: "intake",
+        intakeRevision: 7,
         files: intake.files.map(({ id }) => ({ id, status })),
       });
     else await expect(result).rejects.toThrow(/^Intake staging unavailable$/);
@@ -236,6 +239,7 @@ it.each(["processing", "ready", "published"])(
     deps.source.createIntake.mockResolvedValue(intake);
     await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
       intakeId: "intake",
+      intakeRevision: 7,
       files: intake.files.map(({ id }) => ({ id, status })),
     });
     expect(deps.fetch).not.toHaveBeenCalled();
@@ -249,6 +253,7 @@ it("uploads and completes failed files with non-null upload URLs", async () => {
   deps.source.createIntake.mockResolvedValue(intake);
   await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
     intakeId: "intake",
+    intakeRevision: 7,
     files: intake.files.map(({ id }) => ({ id, status: "staged" })),
   });
   expect(deps.fetch).toHaveBeenCalledTimes(2);
@@ -266,6 +271,7 @@ it("preserves success when revocation fails", async () => {
   deps.source.revokeManagerToken.mockRejectedValue(new Error("secret-token https://private.test"));
   await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
     intakeId: "intake",
+    intakeRevision: 7,
     files: [
       { id: "f1", status: "staged" },
       { id: "f2", status: "staged" },
