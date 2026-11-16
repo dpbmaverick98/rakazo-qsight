@@ -1,7 +1,7 @@
 import type { PluginMarketplaceEntry, PluginPart } from "@rakazo/contracts";
 import { PluginPartSchema } from "@rakazo/contracts";
 
-/** server/mcp_pilot.py defines 19 tools; rename_project and delete_project are deliberately excluded. */
+/** server/mcp_pilot.py defines 20 tools; rename_project and delete_project are deliberately excluded. */
 export const PROJECT_MANAGER_TOOLS = {
   trustedTools: [
     "list_clients",
@@ -9,6 +9,7 @@ export const PROJECT_MANAGER_TOOLS = {
     "list_projects",
     "list_work_packages",
     "get_project_summary",
+    "get_intake",
     "get_claim_position",
     "list_issues",
     "search_documents",
