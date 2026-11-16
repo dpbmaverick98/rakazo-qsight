@@ -46,7 +46,6 @@ it("keeps an accessible fallback and navigation after a map import failure", asy
             ],
           }}
           loading={false}
-          error={false}
           retry={() => {}}
         />,
       ),
