@@ -66,9 +66,9 @@ it("shows authoritative claim totals and opens vendor/file tabs, closes to focus
     await view.click("Example Interiors");
     expect(view.button("Sub vendors").getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(view.button("Sub vendors"));
-    expect(view.container.textContent).toContain("proposal ready");
+    expect(view.container.textContent).toContain("Proposal Ready");
     await view.click("Invoices");
-    expect(view.container.textContent).toContain("invoice pending");
+    expect(view.container.textContent).toContain("Invoice");
     await view.click("Invoice.pdf");
     expect(view.container.textContent).toContain("Preview unavailable");
     expect(view.container.querySelector("iframe,object,input,textarea,form")).toBeNull();
@@ -170,3 +170,40 @@ it("inspection navigation performs no network write or run request", async () =>
     await view.close();
   }
 });
+
+it.each([
+  ["proposal", "ready", "Proposal", "Proposal Ready"],
+  ["breakdown", "ready", "Breakdown", "Breakdown Ready"],
+  ["invoice", "ready", "Invoices", "Invoice Ready"],
+  ["support", "ready", "Other", "Support Ready"],
+  ["change_order", "parsing", "Other", "Change order Processing"],
+  ["unknown_role", "unknown_status", "Other", "Document"],
+  ["support", "uploading", "Other", "Support Uploading"],
+  ["support", "failed", "Other", "Support Failed"],
+])(
+  "labels %s/%s consistently in document rows and the preview header",
+  async (role, status, category, label) => {
+    const view = await mount();
+    try {
+      const data = structuredClone(commercialDocumentsFixture);
+      const file = data.claims[0]!.sub_vendors[0]!.work_packages[0]!.documents![0]!;
+      file.role = role;
+      file.status = status;
+      await view.render({ data });
+      await view.click("Finishes");
+      await view.click("Example Interiors");
+      await view.click(category);
+      const row = view.button(file.filename).closest("li")!;
+      expect(row.querySelector("p")?.textContent).toBe(label);
+      expect(row.textContent).not.toContain(role);
+      expect(row.textContent).not.toContain(status);
+      await view.click(file.filename);
+      const header = view.container.querySelector("h2")!;
+      expect(header.nextElementSibling?.textContent).toBe(label);
+      expect(header.nextElementSibling?.textContent).not.toContain(role);
+      expect(header.nextElementSibling?.textContent).not.toContain(status);
+    } finally {
+      await view.close();
+    }
+  },
+);
