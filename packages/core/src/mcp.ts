@@ -41,6 +41,7 @@ const mcpActions: Record<string, string> = {
   get_project: "Read project",
   get_project_summary: "Read project summary",
   get_intake: "Read staged intake",
+  list_open_intakes: "List open intakes",
   get_claim_position: "Read claim position",
   list_issues: "Look up issues",
   get_invoice_register: "Read invoice register",
