@@ -13,14 +13,10 @@ import {
 } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { Building } from "lucide-react";
-import { Suspense, useRef, useState } from "react";
-import { ErrorBoundary } from "../../components/ErrorBoundary";
-import { lazyComponent } from "../../lib/preload-recovery";
+import { useRef, useState } from "react";
 import { withSpaceHeaders } from "../../lib/rpc";
 import { hierarchyRetry } from "./hierarchy-refresh";
 import { CommercialPanel, useProjectCommercial } from "./project-commercial";
-
-const BuildingMap = lazyComponent(() => import("./building-map").then((module) => module.default));
 
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery<Hierarchy | null>({
@@ -157,15 +153,8 @@ function ProjectStageContent({
         building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
           <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
         ) : null}
-        <div className="mb-4 h-40 overflow-hidden rounded-md border border-border bg-muted">
-          {building.latitude != null && building.longitude != null ? (
-            <ErrorBoundary fallback={null}>
-              <Suspense fallback={null}>
-                <BuildingMap buildings={[building]} />
-              </Suspense>
-            </ErrorBoundary>
-          ) : null}
-        </div>
+        {/* Keep the map neutral until the exact basemap is configured. */}
+        <div aria-hidden="true" className="mb-4 h-40 rounded-md border border-border bg-muted" />
         <ul>
           {building.projects.map((project) => (
             <li key={project.id}>

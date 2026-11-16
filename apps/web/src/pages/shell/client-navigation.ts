@@ -9,6 +9,8 @@ import type { sidebarGroupsForSpaces } from "./space-sidebar";
 type Groups = ReturnType<
   typeof sidebarGroupsForSpaces<Space["bots"][number], Space["groups"][number]>
 >;
+type BotItem = Extract<Groups[number]["bots"][number], { kind: "bot" }>;
+
 export type NavigationGroup = Groups[number] & {
   buildingId?: string;
   project?: { id: string; name: string };
@@ -16,6 +18,8 @@ export type NavigationGroup = Groups[number] & {
   depth?: number;
   defaultCollapsed?: boolean;
   forceOpen?: boolean;
+  unavailable?: boolean;
+  retryNavigation?: () => void;
 };
 
 export function useClientNavigations(userId: string | null, spaceIds: string[]) {
@@ -61,7 +65,6 @@ export function clientNavigationGroups(
   const assigned = new Set([
     ...navigation.setupBotIds,
     ...navigation.buildings.flatMap((building) => [
-      ...(building.botIds ?? []),
       ...building.projects.flatMap((project) => project.botIds),
     ]),
   ]);
@@ -94,44 +97,39 @@ export function clientNavigationGroups(
   const rootMatch = matches(navigation.client.name);
   const selected = (ids: string[], ancestorMatch: boolean) =>
     items.filter(
-      (item) =>
+      (item): item is BotItem =>
         item.kind === "bot" &&
         ids.includes(item.chat.id) &&
         (!needle || ancestorMatch || matches(item.chat.name) || matches(item.chat.preview ?? "")),
     );
-  result.push(make(root, navigation.client.name, [], selected(navigation.setupBotIds, rootMatch)));
+  result.push(
+    make(
+      root,
+      navigation.client.name,
+      [],
+      selected(navigation.setupBotIds, rootMatch || matches("Proj. Manager - Sam")).map((item) => ({
+        ...item,
+        chat: { ...item.chat, name: "Proj. Manager - Sam" },
+      })),
+    ),
+  );
   for (const building of navigation.buildings) {
     const key = `${prefix}:building:${building.id}`;
     const buildingMatch = rootMatch || matches(building.name);
-    const visibleIds = new Set([
-      ...selected(building.botIds ?? [], buildingMatch).map((item) => item.chat.id),
-      ...building.projects.flatMap((project) =>
-        selected(project.botIds, buildingMatch || matches(project.name)).map(
-          (item) => item.chat.id,
-        ),
-      ),
-    ]);
-    const bots = items.filter((item) => item.kind === "bot" && visibleIds.has(item.chat.id));
-    if (
-      !needle ||
-      buildingMatch ||
-      bots.length ||
-      building.projects.some((project) => matches(project.name))
-    )
+    const bots = building.projects.flatMap((project) => {
+      const botId = project.botIds[0];
+      if (!botId || !resolveProjectManager(navigation, botId)) return [];
+      return selected([botId], buildingMatch || matches(`${project.name} - PM`)).map((item) => ({
+        ...item,
+        chat: { ...item.chat, name: `${project.name} - PM` },
+      }));
+    });
+    if (!needle || buildingMatch || bots.length)
       result.push({
-        ...make(key, building.name, [root], selected(building.botIds ?? [], buildingMatch)),
+        ...make(key, building.name, [root], bots),
         buildingId: building.id,
-        canOpenSpaceSettings: true,
+        canOpenSpaceSettings: false,
       });
-    for (const project of building.projects) {
-      const projectBots = selected(project.botIds, buildingMatch || matches(project.name));
-      if (!needle || buildingMatch || matches(project.name) || projectBots.length)
-        result.push({
-          ...make(`${key}:project:${project.id}`, project.name, [root, key], projectBots),
-          project: { id: project.id, name: project.name },
-          canOpenSpaceSettings: true,
-        });
-    }
   }
   const unassigned = items
     .filter((item) => item.kind !== "bot" || !assigned.has(item.chat.id))
@@ -165,5 +163,63 @@ export function clientNavigationGroups(
     ...groups.slice(0, first),
     ...result,
     ...groups.slice(first).filter((group) => group.spaceId !== navigation.spaceId),
+  ];
+}
+
+/** Resolve routes and sidebar clicks through the same explicit assignment. */
+export function resolveProjectManager(
+  navigation: ClientNavigation | null | undefined,
+  botId: string | undefined,
+) {
+  if (!navigation || !botId) return null;
+  const matches = navigation.buildings.flatMap((building) =>
+    building.projects
+      .filter((project) => project.botIds.includes(botId))
+      .map((project) => ({ building, project })),
+  );
+  if (matches.length !== 1) return null;
+  const match = matches[0]!;
+  if (
+    match.project.botIds.length !== 1 ||
+    navigation.setupBotIds.includes(botId) ||
+    navigation.buildings.some((building) => building.botIds?.includes(botId)) ||
+    navigation.buildings.filter((building) => building.id === match.building.id).length !== 1 ||
+    navigation.buildings
+      .flatMap((building) => building.projects)
+      .filter((project) => project.id === match.project.id).length !== 1
+  )
+    return null;
+  return {
+    spaceId: navigation.spaceId,
+    bindingRevision: navigation.bindingRevision,
+    clientId: navigation.client.id,
+    buildingId: match.building.id,
+    projectId: match.project.id,
+    botId,
+  };
+}
+
+export function unavailableClientNavigation(
+  groups: Groups,
+  spaceId: string,
+  retryNavigation?: () => void,
+): NavigationGroup[] {
+  const template = groups.find((group) => group.spaceId === spaceId);
+  if (!template) return groups;
+  const index = groups.indexOf(template);
+  return [
+    ...groups.slice(0, index),
+    {
+      ...template,
+      key: `client:${spaceId}:unavailable`,
+      emptySpaceId: undefined,
+      sectionId: null,
+      title: template.spaceName,
+      subtitle: undefined,
+      bots: [],
+      unavailable: true,
+      retryNavigation,
+    },
+    ...groups.slice(index + 1).filter((group) => group.spaceId !== spaceId),
   ];
 }

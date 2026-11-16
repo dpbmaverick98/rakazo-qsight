@@ -41,6 +41,7 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
             name: "North Building",
             projects: [{ id: "roof", name: "Roof survey", botIds: [manager.id] }],
           },
+          { id: "south", name: "Empty Building", projects: [] },
         ],
       },
     });
@@ -66,30 +67,43 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
               { id: "roof", name: "Roof survey", url: "https://example.test/projects/roof" },
             ],
           },
+          { id: "south", name: "Empty Building", projects: [] },
         ],
       },
     });
   });
   await page.goto(`/app/${manager.id}`);
   const sidebar = page.locator("aside").first();
-  const building = sidebar.getByRole("button", { name: "Collapse North Building", exact: true });
-  const project = sidebar.getByRole("button", { name: "Collapse Roof survey", exact: true });
+  const building = sidebar.getByRole("heading", { name: "North Building", exact: true });
+  const client = sidebar.getByRole("button", { name: "Collapse Example Client", exact: true });
   const pm = sidebar.locator(`[data-roster-bot-id="${manager.id}"]`);
   await expect(building).toBeVisible();
-  await expect(project).toBeVisible();
+  await expect(sidebar.getByRole("heading", { name: "Empty Building", exact: true })).toBeVisible();
+  await expect(
+    sidebar.getByRole("button", { name: "Actions for North Building", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }),
+  ).toHaveCount(0);
+  await expect(pm).toContainText("Roof survey - PM");
   await expect(pm).toHaveCount(1);
   await expect(sidebar.locator(`[data-roster-bot-id="${legacy.id}"]`)).toHaveCount(0);
   await captureScreenshot(page, testInfo, "client-sidebar-grouped");
   await sidebar.getByRole("button", { name: "Actions for Example Client", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Settings", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: "Add building", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "New building", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Delete space", exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "client-space-actions");
-  await page.getByRole("menuitem", { name: "Add project", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New project", exact: true }).click();
   const addProject = page.getByRole("dialog", { name: "Add project", exact: true });
   await expect(addProject.getByRole("status")).toHaveText("Loading hierarchy…");
   releaseHierarchy();
-  await expect(addProject.getByLabel("Building", { exact: true })).toHaveValue("north");
+  await expect(addProject.getByLabel("Building", { exact: true })).toHaveValue("");
+  await expect(addProject.getByRole("textbox", { name: "Project name", exact: true })).toHaveCount(
+    0,
+  );
+  await captureScreenshot(page, testInfo, "client-space-choose-building");
+  await addProject.getByLabel("Building", { exact: true }).selectOption("north");
   await expect(addProject.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
   await expect(
     addProject.getByRole("textbox", { name: "Project name", exact: true }),
@@ -97,7 +111,7 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await captureScreenshot(page, testInfo, "client-space-add-project");
   await addProject.getByRole("button", { name: "Cancel", exact: true }).click();
   await sidebar.getByRole("button", { name: "Actions for Example Client", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Add building", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New building", exact: true }).click();
   const addBuilding = page.getByRole("dialog", { name: "Add building", exact: true });
   await expect(
     addBuilding.getByRole("textbox", { name: "Address or site", exact: true }),
@@ -105,52 +119,27 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await captureScreenshot(page, testInfo, "client-space-add-building");
   await addBuilding.getByRole("button", { name: "Cancel", exact: true }).click();
 
-  await sidebar.getByRole("button", { name: "Actions for North Building", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Add building", exact: true })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: "Delete space", exact: true })).toHaveCount(0);
-  await page.getByRole("menuitem", { name: "Add project", exact: true }).click();
-  await expect(addProject.getByLabel("Building", { exact: true })).toHaveValue("north");
-  await captureScreenshot(page, testInfo, "building-add-project");
-  await addProject.getByRole("button", { name: "Cancel", exact: true }).click();
-
-  await sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }).click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Rename", "Delete"]);
-  await page.getByRole("menuitem", { name: "Rename", exact: true }).click();
-  const rename = page.getByRole("dialog", { name: "Rename project", exact: true });
-  await expect(rename.getByRole("textbox", { name: "Project name", exact: true })).toHaveValue(
-    "Roof survey",
-  );
-  await captureScreenshot(page, testInfo, "project-rename");
-  await rename.getByRole("button", { name: "Cancel", exact: true }).click();
-  await sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
-  const remove = page.getByRole("dialog", { name: "Delete project", exact: true });
-  await expect(remove).toContainText("work packages and documents");
-  const confirm = remove.getByRole("button", { name: "Delete project", exact: true });
-  await expect(confirm).toBeDisabled();
-  await remove.getByRole("textbox").fill("roof survey");
-  await expect(confirm).toBeDisabled();
-  await remove.getByRole("textbox").fill("Roof survey ");
-  await expect(confirm).toBeDisabled();
-  await remove.getByRole("textbox").fill("Roof survey");
-  await expect(confirm).toBeEnabled();
-  await captureScreenshot(page, testInfo, "project-delete-confirmation");
-  await remove.getByRole("button", { name: "Cancel", exact: true }).click();
-
-  await building.click();
+  await client.click();
   await expect(pm).toHaveCount(0);
   await page.reload();
   await expect(
-    sidebar.getByRole("button", { name: "Expand North Building", exact: true }),
+    sidebar.getByRole("button", { name: "Expand Example Client", exact: true }),
   ).toBeVisible();
   await sidebar.getByRole("button", { name: "Search", exact: true }).click();
   await sidebar.getByRole("textbox", { name: "Search", exact: true }).fill("Roof survey");
-  await expect(project).toBeVisible();
+  await expect(building).toBeVisible();
+  await expect(
+    sidebar.getByRole("button", { name: "Actions for North Building", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    sidebar.getByRole("button", { name: "Actions for Roof survey", exact: true }),
+  ).toHaveCount(0);
+  await expect(pm).toContainText("Roof survey - PM");
   await expect(pm).toHaveCount(1);
   await captureScreenshot(page, testInfo, "client-sidebar-search-context");
   await sidebar.getByRole("textbox", { name: "Search", exact: true }).fill("");
   await expect(pm).toHaveCount(0);
-  await sidebar.getByRole("button", { name: "Expand North Building", exact: true }).click();
+  await sidebar.getByRole("button", { name: "Expand Example Client", exact: true }).click();
   await pm.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Archive", exact: true }).click();
   await expect(pm).toHaveCount(0);
@@ -159,6 +148,6 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
   await archived.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Restore", exact: true }).click();
   await expect(
-    sidebar.locator(`[data-sidebar-group$=":project:roof"] [data-roster-bot-id="${manager.id}"]`),
+    sidebar.locator(`[data-sidebar-group$=":building:north"] [data-roster-bot-id="${manager.id}"]`),
   ).toHaveCount(1);
 });

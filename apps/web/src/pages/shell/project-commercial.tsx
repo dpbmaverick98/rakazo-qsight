@@ -167,10 +167,12 @@ export function useProjectCommercial(
     refetchOnMount: true,
     refetchOnWindowFocus: true,
     queryFn: async ({ signal }) => {
+      const headers = withSpaceHeaders(undefined, spaceId);
+      if (revision !== undefined) headers.set("x-rakazo-binding-revision", String(revision));
       const response = await fetch(
         `/api/agent-plane/projects/${encodeURIComponent(projectId)}/commercial`,
         {
-          headers: withSpaceHeaders(undefined, spaceId),
+          headers,
           credentials: "include",
           signal,
         },

@@ -28,6 +28,8 @@ import { firstThreadRoute } from "./use-shell-navigation";
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
 export function ShellSidePanel({
   projectSelection,
+  navigationError,
+  retryNavigation,
   openProjectPanel,
   artifactStage,
   onSelectArtifact,
@@ -60,7 +62,16 @@ export function ShellSidePanel({
   discardChatAttachments,
 }: {
   openProjectPanel: (panel: `project:${string}`) => void;
-  projectSelection?: { botId: string; revision: number; buildingId: string; projectId: string };
+  projectSelection?: {
+    botId: string;
+    revision: number;
+    buildingId: string;
+    projectId: string;
+    spaceId: string;
+    clientId: string;
+  };
+  navigationError?: boolean;
+  retryNavigation?: () => void;
   artifactStage: ArtifactStageState;
   onSelectArtifact: (id: string) => void;
   hierarchyScope: { userId: string | null; spaceId: string | null; enabled: boolean };
@@ -98,6 +109,20 @@ export function ShellSidePanel({
     hierarchyScope.spaceId,
     hierarchyScope.enabled,
   );
+  const selectedHierarchy =
+    projectSelection &&
+    !navigationError &&
+    !hierarchy.isError &&
+    projectSelection.spaceId === hierarchyScope.spaceId &&
+    projectSelection.clientId === hierarchy.data?.client.id &&
+    projectSelection.revision === hierarchy.data.bindingRevision &&
+    hierarchy.data.buildings.some(
+      (building) =>
+        building.id === projectSelection.buildingId &&
+        building.projects.some((project) => project.id === projectSelection.projectId),
+    )
+      ? hierarchy.data
+      : undefined;
   const projectPrefix = projectSelection
     ? (`project:${projectSelection.botId}:${projectSelection.revision}:` as const)
     : null;
@@ -176,10 +201,15 @@ export function ShellSidePanel({
                 key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}:${projectPrefix}`}
                 selection={projectSelection}
                 scope={hierarchyScope}
-                data={hierarchy.isError ? undefined : hierarchy.data}
+                data={selectedHierarchy}
                 loading={hierarchy.isFetching}
-                error={hierarchy.isError}
+                error={
+                  !!navigationError ||
+                  hierarchy.isError ||
+                  !!(!hierarchy.isFetching && !selectedHierarchy)
+                }
                 retry={() => {
+                  retryNavigation?.();
                   void hierarchy.refetch();
                 }}
                 tab={panel?.endsWith(":claims") ? "claims" : "space"}

@@ -97,6 +97,11 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     "aria-expanded",
     "true",
   );
+  await expect(page.locator(".leaflet-container")).toHaveCount(0);
+  const sidebarBuilding = page.getByRole("heading", { name: "North Building", exact: true });
+  await expect(sidebarBuilding).toBeVisible();
+  await expect(sidebarBuilding.locator("button")).toHaveCount(0);
+  await expect(page.locator(`[data-roster-bot-id="${bot.id}"]`)).toContainText("Roof survey - PM");
   await captureScreenshot(page, testInfo, "project-space");
   await page.getByRole("button", { name: "Finishes", exact: true }).click();
   const commercial = page.getByRole("region", { name: "Commercial", exact: true });

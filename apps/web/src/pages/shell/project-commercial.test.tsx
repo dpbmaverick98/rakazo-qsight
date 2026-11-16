@@ -13,12 +13,14 @@ function CommercialSelection({
   userId,
   spaceId,
   projectId,
+  revision = 1,
 }: {
   userId: string;
   spaceId: string;
   projectId: string;
+  revision?: number;
 }) {
-  const query = useProjectCommercial(userId, spaceId, projectId, 1, "pm");
+  const query = useProjectCommercial(userId, spaceId, projectId, revision, "pm");
   return (
     <CommercialPanel
       data={query.isError ? undefined : (query.data ?? undefined)}
@@ -222,5 +224,48 @@ it("stops reads after bounded transient retries until an existing refresh signal
     await act(async () => root.unmount());
     client.clear();
     vi.useRealTimers();
+  }
+});
+
+it("sends the selected revision and never caches a newer binding under an older selection", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  let finish: (response: Response) => void = () => {};
+  const fetch = vi.fn((_url: string, init: RequestInit) => {
+    const revision = new Headers(init.headers).get("x-rakazo-binding-revision");
+    if (revision === "1")
+      return Promise.resolve(Response.json({ status: "binding_stale" }, { status: 409 }));
+    return new Promise<Response>((resolve) => {
+      finish = resolve;
+    });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const render = (revision: number) =>
+    root.render(
+      <QueryClientProvider client={client}>
+        <CommercialSelection userId="user" spaceId="space" projectId="roof" revision={revision} />
+      </QueryClientProvider>,
+    );
+  try {
+    await act(async () => render(2));
+    await act(async () => render(1));
+    await act(async () => {
+      finish(Response.json(commercialFixture));
+    });
+    await vi.waitFor(() => expect(container.textContent).toContain("Commercial view unavailable"));
+    expect(container.textContent).not.toContain("Finishes");
+    expect(
+      client.getQueryData(["project-commercial", "user", "space", "roof", 1, "pm"]),
+    ).toBeUndefined();
+    expect(
+      fetch.mock.calls.map(([, init]) =>
+        new Headers(init.headers).get("x-rakazo-binding-revision"),
+      ),
+    ).toEqual(["2", "1"]);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
   }
 });

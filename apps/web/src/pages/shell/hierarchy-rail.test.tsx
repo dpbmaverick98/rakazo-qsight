@@ -197,6 +197,8 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
       {
         ...data.buildings[0]!,
         address: "  north building  ",
+        latitude: 51.5,
+        longitude: -0.1,
         projects: [
           ...data.buildings[0]!.projects,
           { id: "sibling", name: "Other project", url: "https://example.test/sibling" },
@@ -228,6 +230,9 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
     expect(container.querySelector("h2")?.textContent).toBe("Example Client");
     expect(container.querySelector(".lucide-building")).not.toBeNull();
+    expect(container.querySelector(".bg-muted[aria-hidden=true]")).not.toBeNull();
+    expect(container.querySelector(".leaflet-container")).toBeNull();
+    expect(container.textContent).not.toContain("OpenStreetMap");
     const sibling = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Other project",
     )!;

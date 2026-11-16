@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { artifactStageFixture } from "./artifact-stage.fixture";
 import { ShellSidePanel } from "./side-panel";
 
@@ -12,9 +12,16 @@ vi.mock("../ResizableSidePanel", () => ({
   ResizableSidePanel: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <aside>{children}</aside> : null,
 }));
+const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, stage: vi.fn() }));
+beforeEach(() => {
+  hierarchyMock.stage.mockClear();
+});
 vi.mock("./hierarchy-rail", () => ({
-  useHierarchy: () => ({ data: {}, isFetching: false, isError: false }),
-  ProjectStage: () => <div>project-stage</div>,
+  useHierarchy: () => ({ data: hierarchyMock.data, isFetching: false, isError: false }),
+  ProjectStage: (props: unknown) => {
+    hierarchyMock.stage(props);
+    return <div>project-stage</div>;
+  },
 }));
 vi.mock("./bot-panel", () => ({
   BotSettings: ({ tab }: { tab: string }) => <div>bot-tab:{tab}</div>,
@@ -34,12 +41,20 @@ function render(
   panel: ComponentProps<typeof ShellSidePanel>["panel"],
   group = false,
   hierarchy = false,
+  overrides: Partial<ComponentProps<typeof ShellSidePanel>> = {},
 ) {
   const props = {
     hierarchyScope: { userId: null, spaceId: null, enabled: hierarchy },
     panel,
     projectSelection: hierarchy
-      ? { botId: "bot", revision: 1, buildingId: "north", projectId: "roof" }
+      ? {
+          botId: "bot",
+          revision: 1,
+          spaceId: "space",
+          clientId: "client",
+          buildingId: "north",
+          projectId: "roof",
+        }
       : undefined,
     openProjectPanel: () => undefined,
     setPanel: () => undefined,
@@ -50,6 +65,7 @@ function render(
     artifactStage: artifactStageFixture,
     onSelectArtifact: () => undefined,
     routineEditorProps: {},
+    ...overrides,
   } as unknown as ComponentProps<typeof ShellSidePanel>;
   return renderToStaticMarkup(<ShellSidePanel {...props} />);
 }
@@ -85,4 +101,26 @@ describe("shell panel dispatch", () => {
     expect(render("artifact-stage")).not.toContain("bot-tab:");
     expect(render(null)).toBe("");
   });
+});
+
+it("keeps sibling projects while rejecting mismatched hierarchy scope and errors", () => {
+  const building = { id: "north", projects: [{ id: "roof" }, { id: "sibling" }] };
+  hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
+  const props = { hierarchyScope: { userId: "user", spaceId: "space", enabled: true } };
+  render("project:bot:1:space", false, true, props);
+  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
+    data: { buildings: [building] },
+    error: false,
+  });
+  for (const data of [
+    { bindingRevision: 2, client: { id: "client" }, buildings: [building] },
+    { bindingRevision: 1, client: { id: "other" }, buildings: [building] },
+    { bindingRevision: 1, client: { id: "client" }, buildings: [] },
+  ]) {
+    hierarchyMock.data = data;
+    render("project:bot:1:space", false, true, props);
+    expect(hierarchyMock.stage.mock.lastCall?.[0].error).toBe(true);
+  }
+  render("project:bot:1:space", false, true, { ...props, navigationError: true });
+  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
 });

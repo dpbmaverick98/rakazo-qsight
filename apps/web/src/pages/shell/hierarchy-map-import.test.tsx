@@ -15,15 +15,12 @@ vi.mock("@lingui/react/macro", () => ({
 vi.mock("./building-map", () => {
   throw new Error("Failed to fetch dynamically imported module");
 });
-vi.mock("./create-project", () => ({ CreateProject: () => null }));
 vi.mock("./project-commercial", () => ({
   useProjectCommercial: () => ({ isPending: false, isError: false, data: null }),
   CommercialPanel: () => null,
 }));
-vi.mock("./project-manager", () => ({ ProjectManagerAction: () => null }));
-it("keeps building navigation when the lazy map module cannot load", async () => {
+it("keeps a neutral map placeholder and navigation without loading the unverified map", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const errors = vi.spyOn(console, "error").mockImplementation(() => {});
   const container = document.createElement("div");
   const root = createRoot(container);
   try {
@@ -53,15 +50,12 @@ it("keeps building navigation when the lazy map module cannot load", async () =>
         />,
       ),
     );
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
     expect(container.textContent).toContain("North Building");
+    expect(container.querySelector(".bg-muted[aria-hidden=true]")).not.toBeNull();
     expect(container.querySelector('[aria-label="Building map"]')).toBeNull();
     expect(container.querySelector("[aria-expanded]")).not.toBeNull();
   } finally {
     await act(async () => root.unmount());
-    errors.mockRestore();
     vi.unstubAllGlobals();
   }
 });
