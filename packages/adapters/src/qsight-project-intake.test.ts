@@ -56,7 +56,7 @@ it("reads, completes files and saves reviews on the intake routes", async () => 
   vi.stubGlobal("fetch", fetch);
   const source = client();
   await expect(source.readIntake("i/x", token)).resolves.toEqual(view);
-  await expect(source.completeIntakeFile("i", "f/x", { generation: "1" }, token)).resolves.toEqual({
+  await expect(source.completeIntakeFile("i", "f/x", { generation: 1 }, token)).resolves.toEqual({
     status: "complete",
   });
   await expect(source.saveIntakeReview("i", { revision: 1 }, token)).resolves.toEqual(view);
@@ -67,8 +67,26 @@ it("reads, completes files and saves reviews on the intake routes", async () => 
   ]);
   for (const [, init] of fetch.mock.calls)
     expect(init.headers.Authorization).toBe(`Bearer ${token}`);
-  expect(JSON.parse(fetch.mock.calls[1]![1].body)).toEqual({ generation: "1" });
+  expect(JSON.parse(fetch.mock.calls[1]![1].body)).toEqual({ generation: 1 });
   expect(JSON.parse(fetch.mock.calls[2]![1].body)).toEqual({ revision: 1 });
+});
+
+it("rejects an invalid completion hash before fetching without exposing input", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    client().completeIntakeFile("i", "f", { expected_source_sha256: token }, token),
+  ).rejects.toThrow(/^Invalid intake completion input$/);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("rejects an invalid manifest before fetching without exposing input", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  await expect(
+    client().createIntake("p", [{ ...files[0]!, expected_source_sha256: token }], "key", token),
+  ).rejects.toThrow(/^Invalid intake manifest$/);
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 it("rejects a mismatched project", async () => {
@@ -87,11 +105,15 @@ it.each([
   [403, "authorization"],
   [500, "upstream unavailable"],
 ])("maps HTTP %s without exposing upstream content", async (status, message) => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(token, { status })));
+  const response = new Response(token, { status });
+  const cancel = vi.spyOn(response.body!, "cancel");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
   try {
     await client().readIntake("i", token);
     expect.fail("must reject");
   } catch (error) {
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(response.bodyUsed).toBe(true);
     expect(String(error)).toContain(message);
     expect(String(error)).not.toContain(token);
     expect(String(error)).not.toContain("https:");

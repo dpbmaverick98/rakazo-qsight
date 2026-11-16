@@ -17,6 +17,14 @@ export const ProjectIntakeManifestFileSchema = z.object({
   expected_source_sha256: Sha256.optional(),
 });
 
+export const ProjectIntakeManifestFilesSchema = z.array(ProjectIntakeManifestFileSchema);
+
+export const CompleteIntakeFileBodySchema = z.object({
+  generation: z.number().int().min(1).optional(),
+  reconfirm_source: z.boolean().optional(),
+  expected_source_sha256: Sha256.optional(),
+});
+
 export const ProjectIntakeFileSchema = z
   .object({
     id: Id,
@@ -54,9 +62,5 @@ export type ProjectIntakeManifestFile = z.infer<typeof ProjectIntakeManifestFile
 export type ProjectIntakeFile = z.infer<typeof ProjectIntakeFileSchema>;
 export type ProjectIntakeView = z.infer<typeof ProjectIntakeViewSchema>;
 export type CompletionResponse = z.infer<typeof CompletionResponseSchema>;
-export type CompleteIntakeFileBody = {
-  generation?: string;
-  reconfirm_source?: boolean;
-  expected_source_sha256?: string;
-};
+export type CompleteIntakeFileBody = z.infer<typeof CompleteIntakeFileBodySchema>;
 export type IntakeReviewBody = Record<string, unknown>;

@@ -20,10 +20,13 @@ import type {
   ProjectIntakeManifestFile,
 } from "@rakazo/contracts/project-intake";
 import {
+  CompleteIntakeFileBodySchema,
   CompletionResponseSchema,
+  ProjectIntakeManifestFilesSchema,
   ProjectIntakeViewSchema,
 } from "@rakazo/contracts/project-intake";
 import {
+  cancelResponseBody,
   deadlineSignal,
   PROJECT_MANAGER_TOOLS,
   readBoundedJsonResponse,
@@ -104,7 +107,10 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const response = await fetch(url, { ...init, headers });
       fields.httpStatus = response.status;
       fields.status = response.ok ? "ok" : "error";
-      if (!response.ok) fields.errorCode = "upstream_http_error";
+      if (!response.ok) {
+        cancelResponseBody(response);
+        fields.errorCode = "upstream_http_error";
+      }
       return response;
     });
   }
@@ -177,30 +183,34 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       idempotencyKey: string,
       token: string,
     ) {
+      const manifest = ProjectIntakeManifestFilesSchema.safeParse(files);
+      if (!manifest.success) throw new Error("Invalid intake manifest");
       const project_id = Id.parse(projectId);
       const view = await intakeRequest(
         `/api/v2/agent/projects/${encodeURIComponent(project_id)}/intakes`,
         "POST",
         token,
         ProjectIntakeViewSchema,
-        { project_id, files },
+        { project_id, files: manifest.data },
         idempotencyKey,
       );
       if (view.project_id !== project_id) throw new Error("Intake upstream unavailable");
       return view;
     },
-    completeIntakeFile(
+    async completeIntakeFile(
       intakeId: string,
       fileId: string,
       body: CompleteIntakeFileBody,
       token: string,
     ) {
+      const completion = CompleteIntakeFileBodySchema.safeParse(body);
+      if (!completion.success) throw new Error("Invalid intake completion input");
       return intakeRequest(
         `/api/v2/agent/intakes/${encodeURIComponent(Id.parse(intakeId))}/files/${encodeURIComponent(Id.parse(fileId))}/complete`,
         "POST",
         token,
         CompletionResponseSchema,
-        body,
+        completion.data,
       );
     },
     readIntake(intakeId: string, token: string) {
