@@ -1,7 +1,10 @@
+import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { artifactStageFixture } from "./artifact-stage.fixture";
+import { resolveProjectManager } from "./client-navigation";
 import { ShellSidePanel } from "./side-panel";
 
 vi.mock("@lingui/react/macro", () => ({
@@ -12,12 +15,17 @@ vi.mock("../ResizableSidePanel", () => ({
   ResizableSidePanel: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <aside>{children}</aside> : null,
 }));
-const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, stage: vi.fn() }));
+const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, isError: false, stage: vi.fn() }));
 beforeEach(() => {
   hierarchyMock.stage.mockClear();
+  hierarchyMock.isError = false;
 });
 vi.mock("./hierarchy-rail", () => ({
-  useHierarchy: () => ({ data: hierarchyMock.data, isFetching: false, isError: false }),
+  useHierarchy: () => ({
+    data: hierarchyMock.data,
+    isFetching: false,
+    isError: hierarchyMock.isError,
+  }),
   ProjectStage: (props: unknown) => {
     hierarchyMock.stage(props);
     return <div>project-stage</div>;
@@ -103,11 +111,14 @@ describe("shell panel dispatch", () => {
   });
 });
 
-it("keeps sibling projects while rejecting mismatched hierarchy scope and errors", () => {
+it("renders valid hierarchy despite navigation errors and rejects invalid hierarchy", () => {
   const building = { id: "north", projects: [{ id: "roof" }, { id: "sibling" }] };
   hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
-  const props = { hierarchyScope: { userId: "user", spaceId: "space", enabled: true } };
-  render("project:bot:1:space", false, true, props);
+  const props = {
+    hierarchyScope: { userId: "user", spaceId: "space", enabled: true },
+    navigationError: true,
+  };
+  expect(render("project:bot:1:space", false, true, props)).toContain("project-stage");
   expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
     data: { buildings: [building] },
     error: false,
@@ -116,11 +127,62 @@ it("keeps sibling projects while rejecting mismatched hierarchy scope and errors
     { bindingRevision: 2, client: { id: "client" }, buildings: [building] },
     { bindingRevision: 1, client: { id: "other" }, buildings: [building] },
     { bindingRevision: 1, client: { id: "client" }, buildings: [] },
+    { bindingRevision: 1, client: { id: "client" }, buildings: [{ id: "north", projects: [] }] },
+    undefined,
   ]) {
     hierarchyMock.data = data;
     render("project:bot:1:space", false, true, props);
-    expect(hierarchyMock.stage.mock.lastCall?.[0].error).toBe(true);
+    expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
   }
-  render("project:bot:1:space", false, true, { ...props, navigationError: true });
+  hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
+  hierarchyMock.isError = true;
+  render("project:bot:1:space", false, true, props);
   expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
 });
+
+it.each([true, false])(
+  "resolves the project stage after a navigation error only with retained data (%s)",
+  async (retained) => {
+    const navigation: ClientNavigation = {
+      spaceId: "space",
+      bindingRevision: 1,
+      client: { id: "client", name: "Client" },
+      setupBotIds: [],
+      buildings: [
+        { id: "north", name: "North", projects: [{ id: "roof", name: "Roof", botIds: ["bot"] }] },
+      ],
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    const queryKey = ["client-navigation", "space"];
+    if (retained) client.setQueryData(queryKey, navigation);
+    const observer = new QueryObserver<ClientNavigation>(client, {
+      queryKey,
+      queryFn: async () => {
+        throw new Error("Navigation unavailable");
+      },
+    });
+    try {
+      await observer.refetch();
+      const query = observer.getCurrentResult();
+      expect(query.isError).toBe(true);
+      expect(query.isStale).toBe(true);
+      expect(query.data).toEqual(retained ? navigation : undefined);
+      const resolvedProject = resolveProjectManager(query.data, "bot");
+      const projectSelection = resolvedProject
+        ? { ...resolvedProject, revision: resolvedProject.bindingRevision }
+        : undefined;
+      expect(projectSelection?.projectId).toBe(retained ? "roof" : undefined);
+      hierarchyMock.data = navigation;
+      const html = render("project:bot:1:space", false, true, {
+        hierarchyScope: { userId: "user", spaceId: "space", enabled: true },
+        navigationError: query.isError,
+        projectSelection,
+      });
+      expect(html.includes("project-stage")).toBe(retained);
+      expect(hierarchyMock.stage).toHaveBeenCalledTimes(retained ? 1 : 0);
+    } finally {
+      observer.destroy();
+      client.clear();
+    }
+  },
+);
