@@ -89,9 +89,34 @@ describe("describeToolActivity", () => {
     );
   });
 
-  it("names MCP server and remote tool", () => {
-    expect(describeToolActivity("mcp__brex__list_expenses", {})).toBe("Using brex: list_expenses");
-    expect(describeToolActivity("mcp__demo-oauth__greet", {})).toBe("Using demo-oauth: greet");
+  it.each([
+    ["search_locations", "Checking address"],
+    ["get_location_proof", "Confirming address"],
+    ["search_documents", "Checking documents"],
+    ["get_document_evidence", "Reading document evidence"],
+    ["list_clients", "Looking up clients"],
+    ["list_buildings", "Looking up buildings"],
+    ["list_projects", "Looking up projects"],
+    ["create_client", "Creating client"],
+    ["create_building", "Creating building"],
+    ["create_project", "Creating project"],
+    ["create_work_package", "Creating work package"],
+    ["get_project", "Reading project"],
+    ["list_work_packages", "Looking up work packages"],
+    ["rename_project", "Renaming project"],
+    ["delete_project", "Deleting project"],
+    ["unknown_action", "Using connected tool"],
+  ])("describes MCP action %s without exposing internals", (action, expected) => {
+    const line = describeToolActivity(`mcp__vendor-one-pilot__${action}`, {});
+    expect(line).toBe(expected);
+    expect(line).not.toContain("mcp__");
+    expect(line).not.toContain("vendor-one-pilot");
+    expect(line).not.toContain(action);
+  });
+
+  it("uses the same labels and fallback for other MCP servers", () => {
+    expect(describeToolActivity("mcp__demo-oauth__search_locations", {})).toBe("Checking address");
+    expect(describeToolActivity("mcp__demo-oauth__greet", {})).toBe("Using connected tool");
   });
 
   it("truncates long details and collapses whitespace", () => {

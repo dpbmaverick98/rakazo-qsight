@@ -191,6 +191,24 @@ export function normalizeAgentToolName(name: string): string {
   return (normalized || FALLBACK_AGENT_TOOL_NAME).slice(0, MAX_AGENT_TOOL_NAME_LENGTH);
 }
 
+const MCP_ACTIVITY_LABELS = new Map([
+  ["search_locations", "Checking address"],
+  ["get_location_proof", "Confirming address"],
+  ["search_documents", "Checking documents"],
+  ["get_document_evidence", "Reading document evidence"],
+  ["list_clients", "Looking up clients"],
+  ["list_buildings", "Looking up buildings"],
+  ["list_projects", "Looking up projects"],
+  ["create_client", "Creating client"],
+  ["create_building", "Creating building"],
+  ["create_project", "Creating project"],
+  ["create_work_package", "Creating work package"],
+  ["get_project", "Reading project"],
+  ["list_work_packages", "Looking up work packages"],
+  ["rename_project", "Renaming project"],
+  ["delete_project", "Deleting project"],
+]);
+
 const ACTIVITY_DETAIL_LIMIT = 90;
 
 const MAX_STEP_ACTIONS = 3;
@@ -282,7 +300,7 @@ export function describeToolActivity(
   if (toolName === "skill_delete")
     return `Deleting skill: ${detail(record.name ?? record.skillId)}`;
   const mcp = toolName.match(/^mcp__(.+?)__(.+)$/);
-  if (mcp) return `Using ${mcp[1]}: ${mcp[2]}`;
+  if (mcp) return MCP_ACTIVITY_LABELS.get(mcp[2] ?? "") ?? "Using connected tool";
   return `Using ${toolName}`;
 }
 
