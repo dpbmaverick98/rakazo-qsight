@@ -14,7 +14,7 @@ vi.mock("../ResizableSidePanel", () => ({
 }));
 vi.mock("./hierarchy-rail", () => ({
   useHierarchy: () => ({ data: {}, isFetching: false, isError: false }),
-  HierarchyRail: () => <div>hierarchy-rail</div>,
+  ProjectStage: () => <div>project-stage</div>,
 }));
 vi.mock("./bot-panel", () => ({
   BotSettings: ({ tab }: { tab: string }) => <div>bot-tab:{tab}</div>,
@@ -38,6 +38,10 @@ function render(
   const props = {
     hierarchyScope: { userId: null, spaceId: null, enabled: hierarchy },
     panel,
+    projectSelection: hierarchy
+      ? { botId: "bot", revision: 1, buildingId: "north", projectId: "roof" }
+      : undefined,
+    openProjectPanel: () => undefined,
     setPanel: () => undefined,
     active: group ? undefined : { id: "bot" },
     activeGroup: group ? { id: "group" } : undefined,
@@ -66,11 +70,14 @@ describe("shell panel dispatch", () => {
   ] as const)("preserves %s", (panel, marker) => {
     expect(render(panel, true)).toContain(marker);
   });
-  it("preserves the hierarchy rail beside the stage and after close", () => {
-    expect(render("artifact-stage", false, true)).toContain("hierarchy-rail");
+  it("uses a mutually exclusive project stage alongside existing panels", () => {
+    expect(render("project:bot:1:space", false, true)).toContain("project-stage");
+    for (const panel of ["artifact-stage", "computer", "routines", "settings"] as const) {
+      expect(render(panel, false, true)).not.toContain("project-stage");
+    }
     expect(render("artifact-stage", false, true)).toContain("Project brief");
-    expect(render(null, false, true)).toContain("hierarchy-rail");
-    expect(render(null, false, true)).not.toContain("Project brief");
+    expect(render(null, false, true)).not.toContain("project-stage");
+    expect(render("project:other:1:claims", false, true)).not.toContain("project-stage");
   });
   it("shows the artifact instead of bot settings, and closes completely", () => {
     expect(render("artifact-stage")).toContain("Project brief");

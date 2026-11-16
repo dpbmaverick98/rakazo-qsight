@@ -70,6 +70,18 @@ export function useRightPanel({
           : current,
       ),
     panel,
+    openProjectPanel: (defaultPanel: `project:${string}`) => {
+      const saved = panelStorageKeyRef.current
+        ? readRightPanelState(panelStorageKeyRef.current).projectPanel
+        : undefined;
+      setPanel(
+        saved &&
+          saved.slice(0, saved.lastIndexOf(":")) ===
+            defaultPanel.slice(0, defaultPanel.lastIndexOf(":"))
+          ? saved
+          : defaultPanel,
+      );
+    },
     setPanel,
     setPanelState,
     openPanelInChat,
@@ -101,7 +113,11 @@ export function useRightPanelRestore({
   editingRoutineId,
   restoreRoutine,
   leaveRoutine,
+  projectPanel,
+  projectResolutionPending = false,
 }: {
+  projectResolutionPending?: boolean;
+  projectPanel?: `project:${string}`;
   rightPanel: RightPanel;
   userId: string | undefined;
   spaceId: string | undefined;
@@ -140,6 +156,16 @@ export function useRightPanelRestore({
 
   useEffect(() => {
     if (!panelStorageKey) return;
+    if (
+      projectResolutionPending &&
+      observedPanelKey.current !== panelStorageKey &&
+      !pendingExplicitPanel.current &&
+      explicitPanelTarget.current !== panelStorageKey
+    ) {
+      rightPanel.clearStage();
+      setPanelState(null);
+      return;
+    }
     if (observedPanelKey.current !== panelStorageKey) {
       observedPanelKey.current = panelStorageKey;
       rightPanel.clearStage();
@@ -152,7 +178,7 @@ export function useRightPanelRestore({
       }
       explicitPanelTarget.current = null;
       // Each chat opens with its own saved panel, closed unless the user left it open there.
-      pendingPanelRestore.current = readRightPanelState(panelStorageKey);
+      pendingPanelRestore.current = readRightPanelState(panelStorageKey, projectPanel ?? null);
     }
     const saved = pendingPanelRestore.current;
     if (!saved) return;
@@ -163,6 +189,11 @@ export function useRightPanelRestore({
     }
     if (saved.panel === "routine" && saved.routineId && routinesBotId !== activeId) return;
     let next = saved.panel;
+    if (
+      next?.startsWith("project:") &&
+      next.split(":").slice(0, -1).join(":") !== projectPanel?.split(":").slice(0, -1).join(":")
+    )
+      next = null;
     if (next === "routine") {
       const routine = saved.routineId
         ? routines.find((item) => item.id === saved.routineId)
@@ -173,7 +204,15 @@ export function useRightPanelRestore({
     pendingPanelRestore.current = null;
     setPanelState(next);
     setRestoredPanelKey(panelStorageKey);
-  }, [panelStorageKey, activeId, routinesBotId, routines, searchParams]);
+  }, [
+    panelStorageKey,
+    activeId,
+    routinesBotId,
+    routines,
+    searchParams,
+    projectPanel,
+    projectResolutionPending,
+  ]);
 
   useEffect(() => {
     // Do not gate writes on ?routine= staying in the URL — a stuck/failed routine

@@ -1,7 +1,16 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
-import { Button, Disclosure, SectionHeading } from "@rakazo/ui-web";
+import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
+import {
+  Button,
+  Disclosure,
+  SectionHeading,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { Building } from "lucide-react";
 import { Suspense, useRef, useState } from "react";
@@ -9,7 +18,7 @@ import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { lazyComponent } from "../../lib/preload-recovery";
 import { withSpaceHeaders } from "../../lib/rpc";
 import { hierarchyRetry } from "./hierarchy-refresh";
-import { CommercialSelection, ProjectActivity } from "./project-commercial";
+import { CommercialPanel, useProjectCommercial } from "./project-commercial";
 
 const BuildingMap = lazyComponent(() => import("./building-map").then((module) => module.default));
 
@@ -35,146 +44,265 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
   });
 }
 
-export function HierarchyRail({
+export type ProjectSelection = {
+  botId: string;
+  revision: number;
+  buildingId: string;
+  projectId: string;
+};
+
+export function ProjectStage({
   data,
   loading,
+  error,
+  retry,
   scope,
+  selection,
+  tab,
+  onTabChange,
 }: {
-  scope?: { userId: string | null; spaceId: string | null };
   data?: Hierarchy | null;
   loading: boolean;
   error: boolean;
   retry: () => void;
-  collapse: () => void;
+  scope: { userId: string | null; spaceId: string | null };
+  selection: ProjectSelection;
+  tab: "space" | "claims";
+  onTabChange: (tab: "space" | "claims") => void;
 }) {
   const { t } = useLingui();
-  const [closed, setClosed] = useState<Set<string>>(() => new Set());
-  const selectionTrigger = useRef<HTMLButtonElement | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const selectedProject = data?.buildings
-    .flatMap((building) => building.projects)
-    .find((project) => project.id === selected);
+  const claimsTab = useRef<HTMLButtonElement>(null);
+  const building =
+    data?.bindingRevision === selection.revision
+      ? data.buildings.find(
+          (item) =>
+            item.id === selection.buildingId &&
+            item.projects.some((project) => project.id === selection.projectId),
+        )
+      : undefined;
   return (
-    <section
-      aria-label={t`Client hierarchy`}
-      className="@container rk-scroll min-h-0 overflow-y-auto px-5 py-4"
-    >
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <SectionHeading variant="label" className="min-w-0 break-words">
-          <Trans>Workspace artifacts</Trans>
+    <Tabs value={tab} onValueChange={(value) => onTabChange(value as "space" | "claims")}>
+      <TabsList aria-label={t`Project views`} variant="line">
+        <TabsTrigger value="space">
+          <Trans>Project space</Trans>
+        </TabsTrigger>
+        <TabsTrigger value="claims" ref={claimsTab}>
+          <Trans>Claims</Trans>
+        </TabsTrigger>
+      </TabsList>
+      {error ? (
+        <div role="alert">
+          <Trans>Project space unavailable</Trans>
+          <Button variant="ghost" onClick={retry}>
+            <Trans>Retry</Trans>
+          </Button>
+        </div>
+      ) : !building ? (
+        <p role="status">{loading ? t`Loading project space…` : t`Project unavailable`}</p>
+      ) : (
+        <ProjectStageContent
+          data={data!}
+          building={building}
+          scope={scope}
+          selection={selection}
+          tab={tab}
+          onClaims={() => {
+            onTabChange("claims");
+            claimsTab.current?.focus();
+          }}
+        />
+      )}
+    </Tabs>
+  );
+}
+
+function ProjectStageContent({
+  data,
+  building,
+  scope,
+  selection,
+  tab,
+  onClaims,
+}: {
+  data: Hierarchy;
+  building: Hierarchy["buildings"][number];
+  scope: { userId: string | null; spaceId: string | null };
+  selection: ProjectSelection;
+  tab: "space" | "claims";
+  onClaims: () => void;
+}) {
+  const query = useProjectCommercial(
+    scope.userId,
+    scope.spaceId,
+    selection.projectId,
+    selection.revision,
+    selection.botId,
+  );
+  const commercial = query.isError ? undefined : (query.data ?? undefined);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([selection.projectId]));
+  return (
+    <>
+      <TabsContent value="space">
+        <SectionHeading variant="label" className="mt-4">
+          <Trans>Project space</Trans>
         </SectionHeading>
-      </div>
-      {data ? (
-        <h2 className="mb-4 text-heading1 font-semibold tracking-tight break-words">
+        <h2 className="my-4 text-heading1 font-semibold tracking-tight break-words">
           {data.client.name}
         </h2>
-      ) : null}
-      {!data?.buildings.length ? (
-        <p className="text-body text-muted-foreground">
-          <Trans>Quick access to building and project details</Trans>
-        </p>
-      ) : null}
-      {loading && !data?.buildings.length ? (
-        <p role="status" className="text-body text-muted-foreground">
-          <Trans>Loading hierarchy…</Trans>
-        </p>
-      ) : null}
-      {data ? (
-        <nav
-          aria-label={t`Buildings and projects`}
-          className={selectedProject ? "max-h-48 overflow-y-auto" : undefined}
-        >
-          {data.buildings.some(
-            (building) => building.latitude != null && building.longitude != null,
-          ) ? (
+        <div className="mb-3 flex items-center gap-2">
+          <Building aria-hidden="true" className="size-4 shrink-0" />
+          <span>{building.name}</span>
+        </div>
+        {building.address?.trim() &&
+        building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
+          <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
+        ) : null}
+        <div className="mb-4 h-40 overflow-hidden rounded-md border border-border bg-muted">
+          {building.latitude != null && building.longitude != null ? (
             <ErrorBoundary fallback={null}>
               <Suspense fallback={null}>
-                <div className="mb-3 h-40 overflow-hidden rounded-md border border-border @min-[300px]:h-48">
-                  <BuildingMap buildings={data.buildings} />
-                </div>
+                <BuildingMap buildings={[building]} />
               </Suspense>
             </ErrorBoundary>
           ) : null}
-          {data.buildings.length > 0 ? (
-            <ul className="flex flex-col gap-5">
-              {data.buildings.map((building) => (
-                <li key={building.id}>
-                  <Disclosure
-                    open={!closed.has(building.id)}
-                    onOpenChange={(expanded) =>
-                      setClosed((previous) => {
-                        const next = new Set(previous);
-                        if (expanded) next.delete(building.id);
-                        else next.add(building.id);
-                        return next;
-                      })
-                    }
-                    summary={
-                      <span className="flex min-w-0 items-start gap-2">
-                        <Building
-                          aria-hidden="true"
-                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                        />
-                        <span className="min-w-0 break-words">{building.name}</span>
-                      </span>
-                    }
-                    summaryClassName="min-h-10 w-full justify-between gap-2 text-start text-body font-medium"
-                  >
-                    {building.address?.trim() &&
-                    building.address.trim().toLocaleLowerCase() !==
-                      building.name.trim().toLocaleLowerCase() ? (
-                      <p className="mb-2 ps-6 text-caption text-muted-foreground break-words">
-                        {building.address}
-                      </p>
-                    ) : null}
-                    {building.projects.length === 0 ? (
-                      <p className="ps-4 text-body text-muted-foreground">
-                        <Trans>No projects</Trans>
-                      </p>
-                    ) : (
-                      <ul className="ms-2 border-s border-border ps-3">
-                        {building.projects.map((project) => (
-                          <li key={project.id}>
-                            <Button
-                              variant="ghost"
-                              className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-start break-words"
-                              aria-pressed={selected === project.id}
-                              onClick={(event) => {
-                                selectionTrigger.current = event.currentTarget;
-                                setSelected(project.id);
-                              }}
-                            >
-                              {project.name}
-                            </Button>
-                            {scope?.userId && scope.spaceId ? (
-                              <ProjectActivity
-                                userId={scope.userId}
-                                spaceId={scope.spaceId}
-                                projectId={project.id}
-                              />
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Disclosure>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </nav>
-      ) : null}
-      {selectedProject && scope ? (
-        <CommercialSelection
-          key={selectedProject.id}
-          {...scope}
-          projectId={selectedProject.id}
-          back={() => {
-            setSelected(null);
-            selectionTrigger.current?.focus();
-          }}
-        />
-      ) : null}
-    </section>
+        </div>
+        <ul>
+          {building.projects.map((project) => (
+            <li key={project.id}>
+              <Disclosure
+                open={expanded.has(project.id)}
+                onOpenChange={(open) =>
+                  setExpanded((previous) => {
+                    const next = new Set(previous);
+                    if (open) next.add(project.id);
+                    else next.delete(project.id);
+                    return next;
+                  })
+                }
+                summary={project.name}
+                summaryClassName="min-h-10 w-full justify-between text-start text-body"
+              >
+                {project.id === selection.projectId ? (
+                  <>
+                    <CommercialStatus
+                      loading={query.isPending}
+                      unavailable={!query.data}
+                      error={query.isError}
+                      retry={() => {
+                        void query.refetch();
+                      }}
+                    />
+                    {commercial ? <ClaimLinks data={commercial} onClaims={onClaims} /> : null}
+                  </>
+                ) : expanded.has(project.id) ? (
+                  <ProjectPreview scope={scope} selection={selection} projectId={project.id} />
+                ) : null}
+              </Disclosure>
+            </li>
+          ))}
+        </ul>
+      </TabsContent>
+      <TabsContent value="claims">
+        {tab === "claims" ? (
+          <CommercialPanel
+            data={commercial}
+            loading={query.isPending}
+            error={query.isError}
+            retry={() => {
+              void query.refetch();
+            }}
+          />
+        ) : null}
+      </TabsContent>
+    </>
+  );
+}
+
+function CommercialStatus({
+  loading,
+  error,
+  retry,
+  unavailable = false,
+}: {
+  unavailable?: boolean;
+  loading: boolean;
+  error: boolean;
+  retry: () => void;
+}) {
+  return error ? (
+    <div role="alert">
+      <Trans>Commercial view unavailable</Trans>
+      <Button variant="ghost" onClick={retry}>
+        <Trans>Retry</Trans>
+      </Button>
+    </div>
+  ) : loading ? (
+    <p role="status">
+      <Trans>Loading commercial view…</Trans>
+    </p>
+  ) : unavailable ? (
+    <p className="text-body text-muted-foreground">
+      <Trans>Commercial view unavailable</Trans>
+    </p>
+  ) : null;
+}
+
+function ClaimLinks({ data, onClaims }: { data: ProjectCommercial; onClaims?: () => void }) {
+  return data.claims.length ? (
+    <ul className="ps-3">
+      {data.claims.map((claim) => (
+        <li key={claim.id}>
+          {onClaims ? (
+            <Button variant="link" onClick={onClaims}>
+              {claim.name}
+            </Button>
+          ) : (
+            <a
+              className="text-body underline"
+              href={data.project.url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {claim.name}
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p className="text-body text-muted-foreground">
+      <Trans>No claims</Trans>
+    </p>
+  );
+}
+
+function ProjectPreview({
+  scope,
+  selection,
+  projectId,
+}: {
+  scope: { userId: string | null; spaceId: string | null };
+  selection: ProjectSelection;
+  projectId: string;
+}) {
+  const query = useProjectCommercial(
+    scope.userId,
+    scope.spaceId,
+    projectId,
+    selection.revision,
+    selection.botId,
+  );
+  return (
+    <>
+      <CommercialStatus
+        loading={query.isPending}
+        unavailable={!query.data}
+        error={query.isError}
+        retry={() => {
+          void query.refetch();
+        }}
+      />
+      {!query.isError && query.data ? <ClaimLinks data={query.data} /> : null}
+    </>
   );
 }

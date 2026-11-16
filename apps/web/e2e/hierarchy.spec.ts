@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
 import { captureScreenshot, completeOnboarding, openBotPanelTab, rpc, signup } from "./helpers";
 
-test("client hierarchy shares the right region with chat details", async ({ page }, testInfo) => {
+test("PM project tabs share one right-panel controller", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1500, height: 1000 });
   await signup(page, `hierarchy-${Date.now()}@rakazo.test`, "password12", "Test User");
   await completeOnboarding(page);
@@ -30,6 +30,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
       return route.fulfill({ status: 204 });
     await route.fulfill({
       json: {
+        bindingRevision: 1,
         client: { id: "example", name: "Example Client" },
         buildings: [
           {
@@ -68,68 +69,63 @@ test("client hierarchy shares the right region with chat details", async ({ page
   });
   expect(botResponse.ok()).toBeTruthy();
   const { json: bot } = (await botResponse.json()) as { json: { id: string } };
-  await page.goto(`/app/${bot.id}`);
-  const rail = page.getByRole("region", { name: "Client hierarchy" });
-  const building = rail
-    .getByRole("button", { name: "North Building", exact: true })
-    .and(rail.locator("[aria-expanded]"));
-  await expect(rail).toBeVisible();
-  await expect(rail.getByText("Workspace artifacts", { exact: true })).toBeVisible();
-  await expect(rail.getByText(candidate.address, { exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "live-hierarchy-stage");
-  await expect(rail.getByRole("region", { name: "Building map" })).toBeVisible();
-  await expect(rail.locator(".leaflet-tile-pane")).toHaveCSS(
-    "filter",
-    "saturate(0.12) brightness(1.16) contrast(0.72)",
+  await page.route("**/api/agent-plane/navigation", (route) =>
+    route.request().headers()["x-rakazo-space-id"] === space.id
+      ? route.fulfill({
+          json: {
+            spaceId: space.id,
+            bindingRevision: 1,
+            client: { id: "example", name: "Example Client" },
+            setupBotIds: [],
+            buildings: [
+              {
+                id: "north",
+                name: "North Building",
+                projects: [{ id: "roof", name: "Roof survey", botIds: [bot.id] }],
+              },
+            ],
+          },
+        })
+      : route.fulfill({ status: 204 }),
   );
-  await expect(rail.locator(".leaflet-control-attribution")).toContainText("OpenStreetMap");
-  await expect(rail.locator(".leaflet-control-zoom")).toHaveCount(0);
-  await expect(rail.locator(".leaflet-marker-icon")).not.toHaveAttribute("tabindex");
-  await expect(building.locator(".lucide-building")).toBeVisible();
-  await expect(building).toHaveAttribute("aria-expanded", "true");
-  await expect(
-    rail.getByRole("button", {
-      name: /Add project|Add building|Create project manager|Finish setup/,
-    }),
-  ).toHaveCount(0);
-  await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
-  const commercial = rail.getByRole("region", { name: "Commercial", exact: true });
-  await expect(commercial.getByRole("heading", { name: "Roof survey" })).toBeVisible();
-  await expect(
-    rail.getByRole("button", {
-      name: /Add project|Add building|Create project manager|Finish setup/,
-    }),
-  ).toHaveCount(0);
+  await page.goto(`/app/${bot.id}`);
+  const tabs = page.getByRole("tablist", { name: "Project views" });
+  await expect(tabs).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Example Client", exact: true })).toBeVisible();
+  await expect(page.getByText("North Building", { exact: true }).last()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Roof survey", exact: true })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await captureScreenshot(page, testInfo, "project-space");
+  await page.getByRole("button", { name: "Finishes", exact: true }).click();
+  const commercial = page.getByRole("region", { name: "Commercial", exact: true });
+  await expect(tabs.getByRole("tab", { name: "Claims", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
   await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "project-commercial");
-  await commercial.getByRole("button", { name: "Back to hierarchy" }).click();
-
-  await captureScreenshot(page, testInfo, "client-hierarchy-expanded");
+  await expect(commercial.locator("input,textarea,form")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "project-claims");
+  await page.reload();
+  await expect(tabs.getByRole("tab", { name: "Claims", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await openBotPanelTab(page, "Computer");
-  await expect(rail).toBeVisible();
+  await expect(tabs).toHaveCount(0);
   await expect(page.getByTestId("bot-settings")).toBeVisible();
-  await captureScreenshot(page, testInfo, "client-hierarchy-with-details");
-  await page.getByRole("button", { name: "Close panel", exact: true }).click();
+  await page.getByRole("button", { name: "Project space", exact: true }).click();
+  await expect(tabs.getByRole("tab", { name: "Claims", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
-  await expect(rail).toBeVisible();
-  await captureScreenshot(page, testInfo, "client-hierarchy-narrow");
-  await rail.getByRole("button", { name: "Roof survey", exact: true }).click();
-  await rail.getByRole("button", { name: "Finishes", exact: true }).click();
-  await rail.getByRole("button", { name: "Example Interiors", exact: true }).click();
-  await captureScreenshot(page, testInfo, "project-commercial-narrow");
-  await page.route("https://tile.openstreetmap.org/**", (route) => route.fulfill({ status: 503 }));
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.url().startsWith("https://tile.openstreetmap.org/") && response.status() === 503,
-    ),
-    page.reload(),
-  ]);
-  await expect(rail.getByRole("button", { name: "North Building", exact: true })).toBeVisible();
-  await expect(rail.getByRole("region", { name: "Building map" })).toHaveCount(0);
-  await expect(rail.getByRole("button", { name: "Roof survey", exact: true })).toBeVisible();
-  await captureScreenshot(page, testInfo, "hierarchy-map-fallback");
+  await expect(tabs).toBeVisible();
+  await captureScreenshot(page, testInfo, "project-claims-narrow");
+  await tabs.getByRole("tab", { name: "Project space", exact: true }).click();
+  await captureScreenshot(page, testInfo, "project-space-narrow");
 });

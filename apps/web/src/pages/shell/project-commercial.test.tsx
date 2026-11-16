@@ -7,7 +7,29 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { CommercialPanel, CommercialSelection } from "./project-commercial";
+import { CommercialPanel, useProjectCommercial } from "./project-commercial";
+
+function CommercialSelection({
+  userId,
+  spaceId,
+  projectId,
+}: {
+  userId: string;
+  spaceId: string;
+  projectId: string;
+}) {
+  const query = useProjectCommercial(userId, spaceId, projectId, 1, "pm");
+  return (
+    <CommercialPanel
+      data={query.isError ? undefined : (query.data ?? undefined)}
+      loading={query.isFetching}
+      error={query.isError}
+      retry={() => {
+        void query.refetch();
+      }}
+    />
+  );
+}
 
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({
@@ -28,7 +50,6 @@ async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}
   document.body.append(container);
   const root = createRoot(container);
   const retry = vi.fn();
-  const back = vi.fn();
   await act(async () =>
     root.render(
       <MemoryRouter initialEntries={[route]}>
@@ -37,7 +58,6 @@ async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}
           loading={false}
           error={false}
           retry={retry}
-          back={back}
           {...props}
         />
       </MemoryRouter>,
@@ -46,7 +66,6 @@ async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}
   return {
     container,
     retry,
-    back,
     close: async () => {
       await act(async () => root.unmount());
       container.remove();
@@ -78,7 +97,7 @@ it("groups packages behind claim and vendor disclosures and preserves canonical 
     await view.close();
   }
 });
-it("supports loading, empty, error/retry and back without write actions", async () => {
+it("supports loading, empty, error/retry without write actions", async () => {
   for (const [props, text] of [
     [{ data: undefined, loading: true }, "Loading commercial view…"],
     [{ data: { ...commercialFixture, claims: [] } }, "No active work packages yet"],
@@ -95,12 +114,7 @@ it("supports loading, empty, error/retry and back without write actions", async 
         );
         expect(view.retry).toHaveBeenCalledOnce();
       }
-      await act(async () =>
-        [...view.container.querySelectorAll("button")]
-          .find((b) => b.textContent === "Back to hierarchy")!
-          .click(),
-      );
-      expect(view.back).toHaveBeenCalledOnce();
+      expect(view.container.querySelectorAll("form,input,textarea")).toHaveLength(0);
     } finally {
       await view.close();
     }
@@ -125,12 +139,7 @@ it("isolates late responses across project and space changes and clears data on 
   const render = (spaceId: string, projectId: string) =>
     root.render(
       <QueryClientProvider client={client}>
-        <CommercialSelection
-          userId="user"
-          spaceId={spaceId}
-          projectId={projectId}
-          back={() => {}}
-        />
+        <CommercialSelection userId="user" spaceId={spaceId} projectId={projectId} />
       </QueryClientProvider>,
     );
   try {
@@ -150,22 +159,20 @@ it("isolates late responses across project and space changes and clears data on 
   }
 });
 
-it("shows package activity live and shares one request with the project detail", async () => {
+it("refreshes the active project from existing hierarchy signals", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const fetch = vi.fn().mockImplementation(async () => Response.json(commercialFixture));
   vi.stubGlobal("fetch", fetch);
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
   const container = document.createElement("div");
   const root = createRoot(container);
-  const { ProjectActivity } = await import("./project-commercial");
   const { refreshHierarchy } = await import("./hierarchy-refresh");
   try {
     await act(async () =>
       root.render(
         <QueryClientProvider client={client}>
           <MemoryRouter>
-            <ProjectActivity userId="user" spaceId="space" projectId="roof" />
-            <CommercialSelection userId="user" spaceId="space" projectId="roof" back={() => {}} />
+            <CommercialSelection userId="user" spaceId="space" projectId="roof" />
           </MemoryRouter>
         </QueryClientProvider>,
       ),
@@ -173,17 +180,47 @@ it("shows package activity live and shares one request with the project detail",
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    expect(container.textContent).toContain("Drywall");
+    expect(container.textContent).toContain("Finishes");
     expect(fetch).toHaveBeenCalledTimes(1);
     fetch.mockImplementation(async () => Response.json({ ...commercialFixture, claims: [] }));
     await act(async () => {
       await refreshHierarchy(client, "user", "space");
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    expect(container.textContent).not.toContain("Drywall");
+    expect(container.textContent).not.toContain("Finishes");
     expect(fetch).toHaveBeenCalledTimes(2);
   } finally {
     await act(async () => root.unmount());
     client.clear();
+  }
+});
+
+it("stops reads after bounded transient retries until an existing refresh signal", async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const fetch = vi.fn(async () => new Response(null, { status: 503 }));
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient();
+  const root = createRoot(document.createElement("div"));
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <CommercialSelection userId="user" spaceId="space" projectId="roof" />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(4);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+    expect(fetch).toHaveBeenCalledTimes(4);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    vi.useRealTimers();
   }
 });

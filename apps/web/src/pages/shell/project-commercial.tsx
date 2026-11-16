@@ -6,43 +6,16 @@ import { useQuery } from "@tanstack/react-query";
 import { withSpaceHeaders } from "../../lib/rpc";
 import { hierarchyRetry } from "./hierarchy-refresh";
 
-export function CommercialSelection({
-  userId,
-  spaceId,
-  projectId,
-  back,
-}: {
-  userId: string | null;
-  spaceId: string | null;
-  projectId: string;
-  back: () => void;
-}) {
-  const query = useProjectCommercial(userId, spaceId, projectId);
-  return (
-    <CommercialPanel
-      data={query.isError ? undefined : (query.data ?? undefined)}
-      loading={query.isFetching}
-      error={query.isError}
-      retry={() => {
-        void query.refetch();
-      }}
-      back={back}
-    />
-  );
-}
-
 export function CommercialPanel({
   data,
   loading,
   error,
   retry,
-  back,
 }: {
   data?: ProjectCommercial;
   loading: boolean;
   error: boolean;
   retry: () => void;
-  back: () => void;
 }) {
   const { t } = useLingui();
   const labels = {
@@ -52,14 +25,7 @@ export function CommercialPanel({
     remaining: t`Remaining`,
   };
   return (
-    <section
-      aria-label={t`Commercial`}
-      aria-busy={loading}
-      className="min-w-0 border-t border-border py-4"
-    >
-      <Button variant="ghost" size="sm" onClick={back}>
-        <Trans>Back to hierarchy</Trans>
-      </Button>
+    <section aria-label={t`Commercial`} aria-busy={loading} className="min-w-0 py-4">
       {loading ? (
         <p role="status">
           <Trans>Loading commercial view…</Trans>
@@ -75,13 +41,14 @@ export function CommercialPanel({
           </Button>
         </div>
       ) : null}
+      {!data && !loading && !error ? (
+        <p className="text-body text-muted-foreground">
+          <Trans>Commercial view unavailable</Trans>
+        </p>
+      ) : null}
       {data ? (
         <>
           <SectionHeading className="break-words">{data.project.name}</SectionHeading>
-          <p className="text-body text-muted-foreground">
-            <Trans>Read-only</Trans>
-            {data.project.currency ? <span className="ms-2">{data.project.currency}</span> : null}
-          </p>
           <a
             className="text-body underline"
             href={data.project.url}
@@ -190,15 +157,15 @@ export function useProjectCommercial(
   userId: string | null,
   spaceId: string | null,
   projectId: string,
+  revision?: number,
+  botId?: string,
 ) {
   return useQuery<ProjectCommercial | null>({
-    queryKey: ["project-commercial", userId, spaceId, projectId],
+    queryKey: ["project-commercial", userId, spaceId, projectId, revision, botId],
     enabled: !!userId && !!spaceId,
     retry: hierarchyRetry,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    refetchInterval: (query) =>
-      query.state.error && hierarchyRetry(0, query.state.error) ? 5_000 : false,
     queryFn: async ({ signal }) => {
       const response = await fetch(
         `/api/agent-plane/projects/${encodeURIComponent(projectId)}/commercial`,
@@ -216,31 +183,4 @@ export function useProjectCommercial(
       return data;
     },
   });
-}
-
-export function ProjectActivity({
-  userId,
-  spaceId,
-  projectId,
-}: {
-  userId: string;
-  spaceId: string;
-  projectId: string;
-}) {
-  const query = useProjectCommercial(userId, spaceId, projectId);
-  const data = query.isError && !hierarchyRetry(0, query.error) ? undefined : query.data;
-  const packages =
-    data?.claims.flatMap((claim) => claim.sub_vendors.flatMap((vendor) => vendor.work_packages)) ??
-    [];
-  if (!packages.length) return null;
-  return (
-    <ul className="space-y-1 ps-4 text-body">
-      {packages.map((item) => (
-        <li key={item.id} className="break-words">
-          <span>{item.title}</span>
-          <span className="ms-2 text-muted-foreground">{item.status}</span>
-        </li>
-      ))}
-    </ul>
-  );
 }

@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import { HierarchyRail } from "./hierarchy-rail";
+import { ProjectStage } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({
@@ -17,8 +17,8 @@ vi.mock("./building-map", () => {
 });
 vi.mock("./create-project", () => ({ CreateProject: () => null }));
 vi.mock("./project-commercial", () => ({
-  ProjectActivity: () => null,
-  CommercialSelection: () => null,
+  useProjectCommercial: () => ({ isPending: false, isError: false, data: null }),
+  CommercialPanel: () => null,
 }));
 vi.mock("./project-manager", () => ({ ProjectManagerAction: () => null }));
 it("keeps building navigation when the lazy map module cannot load", async () => {
@@ -29,17 +29,27 @@ it("keeps building navigation when the lazy map module cannot load", async () =>
   try {
     await act(async () =>
       root.render(
-        <HierarchyRail
+        <ProjectStage
+          scope={{ userId: "user", spaceId: "space" }}
+          selection={{ botId: "pm", revision: 1, buildingId: "north", projectId: "roof" }}
+          tab="space"
+          onTabChange={() => {}}
           data={{
+            bindingRevision: 1,
             client: { id: "client", name: "Example" },
             buildings: [
-              { id: "north", name: "North Building", latitude: 0, longitude: 0, projects: [] },
+              {
+                id: "north",
+                name: "North Building",
+                latitude: 0,
+                longitude: 0,
+                projects: [{ id: "roof", name: "Roof survey", url: "https://example.test/roof" }],
+              },
             ],
           }}
           loading={false}
           error={false}
           retry={() => {}}
-          collapse={() => {}}
         />,
       ),
     );

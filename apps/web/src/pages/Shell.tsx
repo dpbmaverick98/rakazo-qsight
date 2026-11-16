@@ -593,6 +593,31 @@ function SpaceShell() {
   const clientNavigation = clientNavigations.find(
     (entry) => entry.data?.spaceId === (shellSpaceId ?? bootstrapMe?.spaceId),
   );
+  const projectAssignments = clientNavigation?.isError
+    ? []
+    : (clientNavigation?.data?.buildings.flatMap((building) =>
+        building.projects
+          .filter((project) => active && project.botIds.includes(active.id))
+          .map((project) => ({
+            buildingId: building.id,
+            projectId: project.id,
+            unambiguous: project.botIds.length === 1,
+          })),
+      ) ?? []);
+  const projectSelection =
+    !inGroup &&
+    projectAssignments.length === 1 &&
+    projectAssignments[0]?.unambiguous &&
+    clientNavigation?.data
+      ? {
+          ...projectAssignments[0]!,
+          botId: active!.id,
+          revision: clientNavigation.data.bindingRevision,
+        }
+      : undefined;
+  const projectPanel = projectSelection
+    ? (`project:${projectSelection.botId}:${projectSelection.revision}:space` as const)
+    : undefined;
   const sidebarGroups = useMemo(
     () =>
       clientNavigations.reduce(
@@ -798,8 +823,10 @@ function SpaceShell() {
     : undefined;
   useRightPanelRestore({
     rightPanel,
+    projectPanel,
+    projectResolutionPending: clientNavigations.some((query) => query.isPending),
     userId,
-    spaceId: bootstrapMe?.spaceId,
+    spaceId: shellSpaceId ?? bootstrapMe?.spaceId,
     inGroup,
     panelTarget: inGroup ? activeGroup?.id : active?.id,
     activeId: active?.id,
@@ -1268,6 +1295,8 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
+        openProjectPanel={rightPanel.openProjectPanel}
+        projectSelection={projectSelection}
         artifactStage={rightPanel.artifactStage}
         onSelectArtifact={rightPanel.selectArtifact}
         hierarchyScope={{
