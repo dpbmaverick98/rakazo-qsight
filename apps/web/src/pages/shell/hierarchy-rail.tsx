@@ -164,13 +164,11 @@ function ProjectStageContent({
           <BuildingMap building={building} />
         </Suspense>
       </ErrorBoundary>
-      <div className="mb-3 flex items-center gap-2">
-        <Building aria-hidden="true" className="size-4 shrink-0" />
-        <span>{building.name}</span>
-      </div>
-      {building.address?.trim() &&
-      building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
-        <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
+      {building.address?.trim() ? (
+        <div className="mb-3 flex items-start gap-2 break-words">
+          <Building aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span className="min-w-0">{building.address}</span>
+        </div>
       ) : null}
       <ul>
         {building.projects.map((project) => (

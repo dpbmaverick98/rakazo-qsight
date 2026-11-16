@@ -65,6 +65,7 @@ it.each(["missing key", "missing coordinates", "image error", "ready"])(
           "https://www.openstreetmap.org/copyright",
           "https://openmaptiles.org/",
         ]);
+        expect(container.querySelector("a")?.parentElement?.className).toBe("sr-only");
         // Changing buildings must discard the previous image's loaded state.
         await act(async () =>
           root.render(<BuildingMap building={{ ...building, longitude: 1 }} />),
