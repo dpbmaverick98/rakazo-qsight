@@ -482,9 +482,13 @@ export function mountHierarchyRoute(
         revision === undefined ? undefined : Number(revision),
       );
       await finishSingleProject(actor, hierarchy, binding);
+      const setupBotId = (await deps.navigationBots?.(actor))?.find(
+        (bot) => bot.spawnKey === `setup:${binding.externalClientId}`,
+      )?.id;
       c.header("x-rakazo-binding-revision", String(binding.revision));
       return c.json({
         ...hierarchy,
+        ...(setupBotId ? { setupBotId } : {}),
         bindingRevision: binding.revision,
         canManage: (await deps.canCreateProject?.(actor)) === true,
       });

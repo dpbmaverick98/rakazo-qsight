@@ -71,11 +71,33 @@ it("requires a session before reading any external data", async () => {
 it("uses the bound ID despite display names and rechecks revision after reading", async () => {
   const { app, deps } = setup();
   const response = await app.request(paths[0]!);
-  expect(await response.json()).toEqual({ ...data, bindingRevision: 1, canManage: true });
+  expect(await response.json()).toEqual({
+    ...data,
+    setupBotId: "setup",
+    bindingRevision: 1,
+    canManage: true,
+  });
+  expect(deps.source.read).toHaveBeenCalledOnce();
   expect(deps.source.read).toHaveBeenCalledWith("client", true);
   expect(deps.resolveBinding).toHaveBeenLastCalledWith(actor, 1);
   expect(response.headers.get("cache-control")).toBe("no-store");
 });
+it.each(["no match", "unavailable"])(
+  "omits setupBotId when navigation bots are %s",
+  async (mode) => {
+    const { deps } = setup();
+    deps.navigationBots.mockResolvedValue([{ id: "foreign", spawnKey: "setup:other-client" }]);
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      ...deps,
+      navigationBots: mode === "unavailable" ? undefined : deps.navigationBots,
+    });
+    const response = await app.request(paths[0]!);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ...data, bindingRevision: 1, canManage: true });
+    expect(deps.source.read).toHaveBeenCalledOnce();
+  },
+);
 it("reports read-only hierarchy access without enabling construction actions", async () => {
   const { app, deps } = setup();
   deps.canCreateProject.mockResolvedValue(false);

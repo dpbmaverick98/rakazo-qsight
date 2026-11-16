@@ -160,7 +160,8 @@ export function ShellSidePanel({
   return (
     <>
       {hierarchy.data?.canManage &&
-      active?.spawnKey === `setup:${hierarchy.data.client.id}` &&
+      active &&
+      hierarchy.data?.setupBotId === active?.id &&
       hierarchy.data.buildings.flatMap((building) => building.projects).length > 1 &&
       hierarchyScope.spaceId ? (
         <div className="absolute end-3 top-14 z-10">

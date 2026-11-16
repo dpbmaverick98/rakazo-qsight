@@ -48,6 +48,10 @@ vi.mock("../../components/ComputerMaintenanceActions", () => ({
   ComputerMaintenanceActions: () => null,
 }));
 
+vi.mock("./project-manager", () => ({
+  FinishSetupAction: () => <button type="button">Finish setup</button>,
+}));
+
 function render(
   panel: ComponentProps<typeof ShellSidePanel>["panel"],
   group = false,
@@ -193,5 +197,34 @@ it.each([true, false])(
       observer.destroy();
       client.clear();
     }
+  },
+);
+
+it.each([
+  ["bot", true, 2, true],
+  ["other", true, 2, false],
+  [undefined, true, 2, false],
+  ["bot", false, 2, false],
+  ["bot", true, 1, false],
+  ["bot", true, 0, false],
+] as const)(
+  "shows finish setup for setup bot %s with canManage=%s and %s projects",
+  (setupBotId, canManage, projectCount, visible) => {
+    hierarchyMock.data = {
+      setupBotId,
+      canManage,
+      bindingRevision: 1,
+      client: { id: "client" },
+      buildings: [
+        {
+          id: "north",
+          projects: Array.from({ length: projectCount }, (_, id) => ({ id: String(id) })),
+        },
+      ],
+    };
+    const html = render(null, false, true, {
+      hierarchyScope: { userId: "user", spaceId: "space", enabled: true },
+    });
+    expect(html.includes("Finish setup")).toBe(visible);
   },
 );
