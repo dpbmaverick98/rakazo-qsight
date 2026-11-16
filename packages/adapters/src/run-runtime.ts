@@ -6,7 +6,9 @@ import type {
   MessagingSurface,
   SecretStore,
 } from "@rakazo/adapter-kit";
+import { createAdapterContext } from "@rakazo/adapter-kit";
 import type { LabFeature } from "@rakazo/contracts";
+import { isStepScreenshotMimeType } from "@rakazo/contracts";
 import { phoneCallSettings, resolveEncryptionKey, uploadSizeFromEnv } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { createSecurityEventPruner, securityEventRetentionDays } from "@rakazo/db";
@@ -41,7 +43,9 @@ import {
   PipedreamConnector,
   pipedreamConfigFromEnv,
 } from "./pipedream-connector.js";
+import { stageProjectIntake } from "./project-intake-staging.js";
 import { reconcilePurchases } from "./purchase-poll.js";
+import { qsightHierarchyFromEnv } from "./qsight-hierarchy.js";
 import { createStrategicInitiativeReconciler } from "./strategic-initiative.js";
 import { T3CodeConnections } from "./t3code-connections.js";
 import { TeamChat } from "./team-chat.js";
@@ -270,7 +274,87 @@ export function createRunRuntime(
     messagingDelivery,
     web: createWebProvider(),
   });
+  const hierarchySource = qsightHierarchyFromEnv(process.env);
   const jobHandlers = createBackgroundJobHandlers({
+    projectIntakeStage: hierarchySource
+      ? async (payload) => {
+          const { spaceId, userId } = payload;
+          const user = await deps.prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+          if (!user) throw new Error("forbidden");
+          const actor = { spaceId, userId, email: user.email, isDeploymentOwner: false };
+          const binding = await deps.prisma.spaceClientBinding.findUnique({ where: { spaceId } });
+          const checkBinding = async () => {
+            const member = await deps.prisma.spaceMember.findUnique({
+              where: { spaceId_userId: { spaceId, userId } },
+            });
+            if (!member) throw new Error("forbidden");
+            const space = await deps.prisma.space.findUnique({ where: { id: spaceId } });
+            if (!space || space.deletingAt) throw new Error("space_unavailable");
+            if (space.isDefault) throw new Error("personal");
+            const current = await deps.prisma.spaceClientBinding.findUnique({ where: { spaceId } });
+            if (!current?.active) throw new Error("binding_missing");
+            if (current.revision !== binding?.revision) throw new Error("binding_stale");
+          };
+          await checkBinding();
+          const hierarchy = await hierarchySource.read(binding!.externalClientId, true);
+          if (hierarchy.client.id !== binding!.externalClientId) throw new Error("binding_stale");
+          if (
+            !hierarchy.buildings.some((building) =>
+              building.projects.some((project) => project.id === payload.projectId),
+            )
+          )
+            throw new Error("project_unavailable");
+          await checkBinding();
+          const result = await stageProjectIntake(
+            {
+              source: {
+                revokeManagerToken: hierarchySource.revokeManagerToken,
+                managerServer: async (id, name) => {
+                  await checkBinding();
+                  const config = await hierarchySource.managerServer(id, name);
+                  return {
+                    tokenId: config.tokenId,
+                    token: config.headers.Authorization.slice("Bearer ".length),
+                  };
+                },
+                createIntake: async (...args) => {
+                  await checkBinding();
+                  return hierarchySource.createIntake(...args);
+                },
+                completeIntakeFile: async (...args) => {
+                  await checkBinding();
+                  return hierarchySource.completeIntakeFile(...args);
+                },
+              },
+              readArtifact: async (owner, { botId, artifactId }) => {
+                const row = await deps.prisma.artifact.findFirst({
+                  where: { id: artifactId, botId, groupId: null, spaceId: owner.spaceId },
+                });
+                if (!row || isStepScreenshotMimeType(row.mimeType)) throw new Error("forbidden");
+                const bytes = await deps.artifacts.get(
+                  row.storageKey,
+                  createAdapterContext(owner, botId, `artifact-get:${row.id}`),
+                );
+                return {
+                  name: row.name,
+                  mimeType: row.mimeType,
+                  contentBase64: Buffer.from(bytes).toString("base64"),
+                };
+              },
+            },
+            actor,
+            payload,
+          ).catch(async (error: unknown) => {
+            await checkBinding();
+            throw error;
+          });
+          await checkBinding();
+          return result;
+        }
+      : undefined,
     executor,
     prisma: deps.prisma,
     sandbox: deps.sandbox,

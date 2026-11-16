@@ -2,6 +2,7 @@ import type {
   AgentHomeStore,
   AgentRuntime,
   ArtifactStore,
+  BackgroundJobAttempt,
   BackgroundJobExecution,
   BackgroundJobHandlers,
   BackgroundJobPayloads,
@@ -19,7 +20,12 @@ import {
   SandboxUnresponsiveError,
 } from "@rakazo/adapter-kit";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
-import { runAsSystem, runAsTenant } from "@rakazo/db";
+import {
+  appendEventInTransaction,
+  createThreadMessageInTransaction,
+  runAsSystem,
+  runAsTenant,
+} from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
 import { settleCallRequest } from "./call-request.js";
 import type { CloudAgentConnection, UserCloudAgents } from "./cloud-agent-factory.js";
@@ -58,13 +64,18 @@ function asOwner<Key, P extends Key>(
     payload: P,
     execution: BackgroundJobExecution | undefined,
     tenant: Tenant,
+    attempt?: BackgroundJobAttempt,
   ) => Promise<void>,
-): (payload: P, execution?: BackgroundJobExecution) => Promise<void> {
-  return async (payload, execution) => {
+): (
+  payload: P,
+  execution?: BackgroundJobExecution,
+  attempt?: BackgroundJobAttempt,
+) => Promise<void> {
+  return async (payload, execution, attempt) => {
     const tenant = await runAsSystem("find the tenant a background job acts for", () =>
       owner(payload),
     );
-    if (tenant) await runAsTenant(tenant, () => handler(payload, execution, tenant));
+    if (tenant) await runAsTenant(tenant, () => handler(payload, execution, tenant, attempt));
   };
 }
 
@@ -100,6 +111,9 @@ export function createBackgroundJobHandlers(deps: {
   notifications?: ExpoPushProvider;
   mediaGeneration?: MediaGenerationProvider;
   maxUploadSizeBytes?: number;
+  projectIntakeStage?: (
+    payload: BackgroundJobPayloads["project.intake.stage"],
+  ) => Promise<{ intakeId: string; files: { id: string; status: string }[] }>;
 }): BackgroundJobHandlers {
   const delivery = deps.messagingDelivery;
   const cleanupDeps = { prisma: deps.prisma, secrets: deps.secretStore };
@@ -133,6 +147,79 @@ export function createBackgroundJobHandlers(deps: {
     )?.computer ?? null;
 
   return {
+    "project.intake.stage": asOwner(thread, async (payload, _execution, tenant, attempt) => {
+      if (tenant.spaceId !== payload.spaceId) return;
+      const target = await deps.prisma.thread.findFirst({
+        where: {
+          id: payload.threadId,
+          spaceId: tenant.spaceId,
+          botId: payload.botId,
+          bot: { spaceId: tenant.spaceId, spawnKey: `pm:${payload.projectId}`, archivedAt: null },
+        },
+        select: { id: true },
+      });
+      if (!target) return;
+      const clientNonce = `project.intake.stage:${payload.idempotencyKey}`;
+      // The thread lock serializes completion notices across retries and duplicate deliveries.
+      if (
+        await deps.prisma.message.findUnique({
+          where: { threadId_clientNonce: { threadId: payload.threadId, clientNonce } },
+          select: { id: true },
+        })
+      )
+        return;
+      let text: string;
+      try {
+        if (!deps.projectIntakeStage) throw new Error("disabled");
+        const result = await deps.projectIntakeStage(payload);
+        text = `Files received for Vendor One review (${result.files.length} files). I will review them and come back with questions.`;
+      } catch (error) {
+        const category = error instanceof Error ? error.message : "";
+        const guidance: Record<string, string> = {
+          forbidden: "Access denied. Ask the client administrator to restore access.",
+          personal: "Choose a bound client workspace before sending project files.",
+          unbound: "Choose a bound client workspace before sending project files.",
+          binding_missing:
+            "The client binding is missing. Ask the client administrator to bind this workspace.",
+          binding_stale: "The client binding changed. Refresh the project and try again.",
+          project_unavailable: "The project is unavailable. Refresh the project and try again.",
+          disabled: "File staging is unavailable. Please try again later.",
+        };
+        const advice = Object.hasOwn(guidance, category) ? guidance[category] : undefined;
+        if (!advice && attempt && attempt.number < attempt.max) throw error;
+        text = `Files could not be staged. ${advice ?? "Please retry sending the files."} The files are not ready; do not claim review.`;
+      }
+      const committed = await deps.prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM threads WHERE id = ${payload.threadId} FOR UPDATE`;
+        if (
+          await tx.message.findUnique({
+            where: { threadId_clientNonce: { threadId: payload.threadId, clientNonce } },
+            select: { id: true },
+          })
+        )
+          return false;
+        const blocks = [{ kind: "text" as const, text }];
+        const message = await createThreadMessageInTransaction(tx, {
+          threadId: payload.threadId,
+          botId: payload.botId,
+          role: "bot",
+          blocks,
+          clientNonce,
+        });
+        const event = await appendEventInTransaction(tx, {
+          spaceId: tenant.spaceId,
+          threadId: payload.threadId,
+          botId: payload.botId,
+          type: "thread.message.created",
+          payload: { messageId: message.id, seq: message.seq, role: "bot", blocks },
+        });
+        return event;
+      });
+      if (committed) {
+        await deps.events.notify(payload.threadId, committed.seq);
+        await deps.events.publishSpaceChange?.(tenant.spaceId, "runs");
+      }
+    }),
     "run.continue": asOwner(run, async (payload, execution, { spaceId }) => {
       try {
         if (execution)

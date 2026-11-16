@@ -9,6 +9,16 @@ import type {
 } from "./types.js";
 
 const payloadSchemas = {
+  "project.intake.stage": z.object({
+    spaceId: z.string().min(1),
+    userId: z.string().min(1),
+    botId: z.string().min(1),
+    threadId: z.string().min(1),
+    artifactIds: z.array(z.string().min(1)).min(1),
+    projectId: z.string().min(1),
+    projectName: z.string(),
+    idempotencyKey: z.string().min(1),
+  }),
   "run.continue": z.object({ runId: z.string().min(1) }),
   "routine.wakeup": z.object({
     routineId: z.string().min(1),
@@ -375,5 +385,16 @@ export function mediaPollJob(jobId: string, availableAt?: Date): BackgroundJob {
     payload: { jobId },
     replaceKey: `media.poll:${jobId}`,
     ...(availableAt ? { availableAt } : {}),
+  };
+}
+
+export function projectIntakeStageJob(
+  payload: BackgroundJobPayloads["project.intake.stage"],
+): BackgroundJob {
+  return {
+    name: "project.intake.stage",
+    payload,
+    replaceKey: `project.intake.stage:${payload.threadId}:${payload.idempotencyKey}`,
+    maxAttempts: 8,
   };
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
+import { stageProjectIntake } from "@rakazo/adapters";
 import { expect, it, vi } from "vitest";
-import { stageProjectIntake } from "./project-intake.js";
 
 const actor = {
   userId: "user",

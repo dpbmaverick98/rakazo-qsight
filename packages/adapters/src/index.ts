@@ -204,6 +204,7 @@ export * from "./plan-limits.js";
 export * from "./plugin-connectors.js";
 export * from "./plugin-marketplace.js";
 export * from "./product-analytics.js";
+export * from "./project-intake-staging.js";
 export * from "./purchase-poll.js";
 export * from "./purchase-service.js";
 export * from "./push-token-store.js";

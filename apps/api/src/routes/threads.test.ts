@@ -3,9 +3,14 @@ import type { Actor } from "@rakazo/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { answerComputerRequest } from "../computer-control.js";
 import type { RouterDeps } from "../router.js";
+import type * as TaughtModule from "../taught-skills.js";
 import { purgeClearedThreadMemory } from "../thread-memory.js";
+import type * as ThreadTargetModule from "../thread-target.js";
 import type { ThreadTarget } from "../thread-target.js";
-import { takeoverReleaser } from "./threads.js";
+import { resolveThreadTarget, sendThreadMessage } from "../thread-target.js";
+import type { RouterContext } from "./context.js";
+import type * as SharedModule from "./shared.js";
+import { takeoverReleaser, threadsRoutes } from "./threads.js";
 
 vi.mock("../computer-control.js", () => ({
   answerComputerRequest: vi.fn().mockResolvedValue(null),
@@ -180,5 +185,138 @@ describe("purgeClearedThreadMemory", () => {
         },
       }),
     );
+  });
+});
+
+vi.mock("./shared.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SharedModule>()),
+  modelSetup: vi.fn(async () => ({ needsModel: false, hasDeployment: false })),
+}));
+vi.mock("../taught-skills.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TaughtModule>()),
+  assertTeachingSendAllowed: vi.fn(),
+}));
+vi.mock("../thread-target.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ThreadTargetModule>()),
+  resolveThreadTarget: vi.fn(),
+  sendThreadMessage: vi.fn(),
+}));
+
+describe("PM attachment staging on send", () => {
+  const note =
+    "Attachments were received and are being staged in Vendor One. Acknowledge and say you will review them once ready. Do not claim publication or approval.";
+  function fixture(spawnKey: string | null = "pm:project") {
+    vi.mocked(resolveThreadTarget).mockResolvedValue({
+      kind: "bot",
+      botId: "bot",
+      threadId: "thread",
+      bot: { name: "Roof - PM", spawnKey },
+    } as ThreadTarget);
+    vi.mocked(sendThreadMessage)
+      .mockReset()
+      .mockResolvedValue({ runId: "run" } as never);
+    const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
+    const procedure = { handler: (handler: unknown) => handler };
+    const authed = new Proxy({}, { get: () => new Proxy({}, { get: () => procedure }) });
+    const routes = threadsRoutes({
+      deps: { jobs, env: {}, prisma: {} },
+      authed,
+      callsEnabled: authed,
+    } as unknown as RouterContext);
+    const send = routes.threads.send as unknown as (args: {
+      context: { actor: Actor };
+      input: { text: string; botId: string; artifactIds?: string[]; clientNonce?: string };
+    }) => Promise<unknown>;
+    return {
+      jobs,
+      send: (input: { artifactIds?: string[]; clientNonce?: string } = {}) =>
+        send({
+          context: { actor },
+          input: { text: "Please review", botId: "bot", ...input },
+        }),
+    };
+  }
+  it("enqueues after a successful send and supplies the static note", async () => {
+    const { send, jobs } = fixture();
+    vi.mocked(sendThreadMessage).mockImplementationOnce(async () => {
+      expect(jobs.enqueue).not.toHaveBeenCalled();
+      return { runId: "run" } as never;
+    });
+    await expect(send({ artifactIds: ["file"], clientNonce: "nonce" })).resolves.toEqual({
+      runId: "run",
+    });
+    expect(sendThreadMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      actor,
+      expect.anything(),
+      expect.objectContaining({ stagingNote: note }),
+      expect.any(Function),
+      undefined,
+    );
+    expect(jobs.enqueue).toHaveBeenCalledWith({
+      name: "project.intake.stage",
+      payload: {
+        spaceId: actor.spaceId,
+        userId: actor.userId,
+        botId: "bot",
+        threadId: "thread",
+        artifactIds: ["file"],
+        projectId: "project",
+        projectName: "Roof - PM",
+        idempotencyKey: "nonce",
+      },
+      replaceKey: "project.intake.stage:thread:nonce",
+      maxAttempts: 8,
+    });
+  });
+  it("replays use the same deduplication key", async () => {
+    const { send, jobs } = fixture();
+    await send({ artifactIds: ["file"], clientNonce: "nonce" });
+    await send({ artifactIds: ["file"], clientNonce: "nonce" });
+    expect(jobs.enqueue.mock.calls[0]).toEqual(jobs.enqueue.mock.calls[1]);
+  });
+  it("generates a submission key when the caller has no nonce", async () => {
+    const { send, jobs } = fixture();
+    await send({ artifactIds: ["file"] });
+    expect(jobs.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/),
+        }),
+      }),
+    );
+  });
+  it.each([null, "setup:client", "pm:"])("skips bots without a project: %s", async (spawnKey) => {
+    const { send, jobs } = fixture(spawnKey);
+    await send({ artifactIds: ["file"] });
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+    expect(vi.mocked(sendThreadMessage).mock.calls[0]?.[3].stagingNote).toBeUndefined();
+  });
+  it("skips messages without attachments", async () => {
+    const { send, jobs } = fixture();
+    await send();
+    await send({ artifactIds: [] });
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+  it("skips group sends", async () => {
+    const { send, jobs } = fixture();
+    vi.mocked(resolveThreadTarget).mockResolvedValue({
+      kind: "group",
+      threadId: "thread",
+      memberBotIds: [],
+    } as unknown as ThreadTarget);
+    await send({ artifactIds: ["file"] });
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+  it("does not enqueue after a failed send", async () => {
+    const { send, jobs } = fixture();
+    vi.mocked(sendThreadMessage).mockRejectedValueOnce(new Error("send failed"));
+    await expect(send({ artifactIds: ["file"] })).rejects.toThrow("send failed");
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+  });
+  it("keeps a successful send successful when enqueue fails", async () => {
+    const { send, jobs } = fixture();
+    jobs.enqueue.mockRejectedValueOnce(new Error("queue unavailable"));
+    await expect(send({ artifactIds: ["file"] })).resolves.toEqual({ runId: "run" });
   });
 });
