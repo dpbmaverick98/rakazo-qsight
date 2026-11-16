@@ -41,7 +41,8 @@ Threats: injected documents/model output, forged cards, guessed IDs, cross-Space
 receipts, changed bytes/reviews/destinations, double clicks, concurrent QSight edits, lost responses and
 revoked membership. Trust the session service, fork API signer, configured verifier and product transaction;
 compromise of those or the human's authenticated browser is outside this boundary. No protocol can prove
-physical intent against a compromised browser.
+physical intent against a compromised browser. Compromise of the fork signer/admission service is outside
+the receipt boundary.
 
 | Option | Authority and member mapping | Audit/replay | Failures and operating cost |
 | --- | --- | --- | --- |
@@ -68,7 +69,7 @@ Use compact JWS, Ed25519 only: protected header exactly
 | `v`, `iss`, `aud`, `action` | `1`, configured stable issuer ID, configured product-instance ID, `intake.publish` |
 | `jti`, `operation_id` | Independent random UUIDs; receipt identity and human-click operation identity |
 | `iat`, `exp` | Integer Unix seconds; `exp = iat + 120`; at most 30 seconds clock skew |
-| `actor` | `{subject: string, space_id: string, membership_revision: integer, policy: "owner-v1" or "space-member-v1", delegation_id: string}` |
+| `actor` | `{subject: string, space_id: string, membership_incarnation: string, policy: "owner-v1" or "space-member-v1", delegation_id: string}` |
 | `binding` | `{id: string, revision: integer, client_id: string, building_id: string, project_id: string}` |
 | `thread_id`, `bot_id`, `intake_id` | Nonempty canonical IDs resolved by fork API |
 | `intake_revision`, `review_revision` | Integers ≥1 and ≥0 respectively |
@@ -80,13 +81,21 @@ signature over the JWS signing input. No Unicode normalization or coercion; comp
 `payload_sha256 = SHA256(JCS(snapshot))`. Snapshot v1 has exactly `{v:1,
 publish:{expected_revision,expected_review_revision,file_ids}, review, files, destinations,
 context_fingerprint}`: `review` is the full saved review JSON; `files` is sorted by ID and contains each
-selected file's `{id,generation, interpretation_revision,source_sha256,facts_sha256}`; `destinations` is
-sorted by file ID and contains `{file_id,decision,group,package_revision_id}` (`group` is null for direct
-package assignments; package revision is null only for explicitly new destinations). `decision` and `group`
-are the saved review entries. `facts_sha256` hashes JCS of the saved role-specific extraction artifact;
+selected file's `{id,generation,interpretation_revision,source_sha256,facts_sha256,suggestion_metadata}`;
+`suggestion_metadata` is the saved `{document_kind,issuer,recipient}` published into document metadata,
+including nulls. `destinations` is sorted by file ID and contains
+`{file_id,decision,group,package_id,package_revision_id,context_version,display_path,labels}`. `group` is null
+for direct package assignments; `decision` and `group` are saved review entries. Canonical `package_id`
+distinguishes an existing package from an explicitly new destination (`package_id: null`). For an existing
+package, `package_revision_id: null` means no current revision; it does not mean a new destination. Existing
+packages carry their `context_version` and authoritative display path/labels; new destinations carry their
+authoritative proposed path/labels and null package revision/context version. `facts_sha256` hashes JCS of
+the saved role-specific extraction artifact;
 `file_ids` is a sorted unique nonempty list. Freeze those artifact schemas in the seam; missing
 source/facts/revision fences block publication. QSight produces the snapshot/digest from locked authoritative
-rows; the fork stores and displays that snapshot, and QSight recomputes it before any side effect.
+rows; the fork stores and displays that snapshot. QSight recomputes all destination fields, including
+context versions and authoritative display paths/labels, under publication locks before any side effect.
+A rename/retitle bumps `context_version` even when `current_revision_id` is unchanged and invalidates the card.
 
 Private signing keys live only in fork API secret custody, separate from PM/tool credentials; product holds
 pinned public keys, issuer/audience and delegation policy. No HMAC: shared verifier secrets would let the
@@ -107,21 +116,29 @@ No publish tool is registered; generic tool approval and model network execution
    operation_id`, using a separate broker credential with only receipt submission authority. Reject all
    existing PM read/scaffold/write tokens. Verify signature/claims, project ownership and delegated actor
    policy, then ask fork `POST /api/internal/publish-operations/{operation_id}/admit` to confirm the
-   operation, receipt digest and current binding/membership. Authenticate callbacks with pinned service
-   identity, not a receipt-controlled URL. Outage/revocation fails closed. Admission is the authorization
-   linearization point: later revocation does not undo an admitted command. Persist its timestamp/version in
-   QSight audit.
-4. In one product transaction, serialize by intake and unique `(iss,jti)` and `(iss,operation_id)`; check
+   operation, receipt digest and current binding/membership on first admission. Authenticate callbacks with
+   pinned service identity, not a receipt-controlled URL. First admission fails closed on outage/revocation.
+   Atomically persist an immutable admission keyed by `(operation_id, receipt digest)`, including audited
+   timestamp/version and authorization evidence. Exact retries return that original admission even after
+   membership changes; conflicting digests fail. Admission is the authorization linearization point: later
+   revocation does not undo an admitted command. QSight persists the original evidence in its audit.
+4. Use the existing owner `write_lock` from the `server/intake.py` route, in the same order before its
+   package/file locks, authoritative snapshot recomputation and publish; do not add a parallel locking scheme.
+   In one product transaction, serialize by intake and unique `(iss,jti)` and `(iss,operation_id)`; check
    snapshot hash and current fences, invoke existing `publish_review` as the resolved resource owner while
    auditing the distinct human, and store consumption/result. Rollback leaves no consumption or partial
-   publish. Concurrent identical requests return the same result; changed digest/key is 409. This wrapper must
-   not bypass readiness, destination or existing revision checks.
+   publish; the fork admission survives rollback. Concurrent identical requests return the same result;
+   changed digest/key is 409. This wrapper must not bypass readiness, destination or existing revision checks.
 5. Exact authenticated retries may retrieve a committed result after expiry (and without reauthorizing a new
-   effect); an expired unconsumed receipt fails. Timeout means unknown: use session-only fork `GET
+   effect); an expired unconsumed receipt fails, including after product rollback. Admission does not extend
+   receipt expiry: after rollback, retry the same operation while valid; after expiry require a new card/click.
+   Retain immutable admissions for the product audit lifetime, at least as long as consumption tombstones;
+   never reuse operation IDs or recreate expired evidence. Timeout means unknown: first use session-only fork
+   `GET
    /api/publish-operations/{operation_id}` and broker-only agent `GET
-   /api/v2/agent/publish-operations/{operation_id}` (both enforce actor/binding access), or retry the same
-   bytes/key; never mint replacement authority automatically. Work starts directly after durable fork
-   admission; use the existing durable backup pattern, not a new queue service.
+   /api/v2/agent/publish-operations/{operation_id}` (both enforce actor/binding access), then retry the same
+   bytes/key only if unresolved/retryable; never mint replacement authority automatically. Work starts directly
+   after durable fork admission; use the existing durable backup pattern, not a new queue service.
 
 QSight records issuer/key ID, receipt digest and claims, admission evidence, delegating owner, actual actor
 subject, policy version, canonical binding/context, snapshot/hash, command key, prior/result revisions,
@@ -143,19 +160,25 @@ tool-approval fallback.
 PM may describe staged proposals and ask for corrections; it cannot treat “yes” in chat, a tool approval or
 its own message as publication consent. Before success it may say “Ready to review”; after authoritative
 success it may say “Published”. Lost responses stay pending/unknown. QSight edits to review, sources, facts,
-destination or package revisions invalidate the card/digest; refresh and require a fresh click, never silently
-rebase approval. Signals and reconnect/focus re-reads refresh cards through the existing live stream, without
+saved suggestion metadata, destination context (including rename/retitle) or package revisions invalidate
+the card/digest; refresh and require a fresh click, never silently rebase approval. Signals and reconnect/focus re-reads refresh cards through the existing live stream, without
 polling. QSight-side publication appears as authoritative state, not as a fabricated chat approval.
 
 1. **Policy/seam PR:** approve owner mapping and delegation semantics first. Keep agent-intake v1.0.0 bytes
    compatible; propose v1.1.0 for additive review-request, snapshot and receipt/publish/status schemas and
    synthetic fixtures, registered in `contracts/seams.json`. Breaking existing envelopes require v2.0.0.
-   Specify all nested artifact fields, JCS vectors and error envelopes before implementation.
+   Specify all nested artifact fields, JCS vectors and error envelopes before implementation. The current
+   membership schema has no `membership_revision`: deploy an immutable membership incarnation ID before
+   enabling the signer. Removal retires it permanently; rejoin creates a fresh ID, so old evidence can never
+   appear current. Receipts and admission checks bind this ID; no inferred timestamp/display-name substitute.
 2. **Product/agent PR:** receipt verifier, broker-only credential, admission callback, atomic
    audit/consumption and existing publisher reuse. Producer tests in
    `tests/seams/test_agent_intake_producer.py`; independent consumer fixtures in
    `tests/seams/test_agent_intake_consumer.py`, sockets blocked. Disposable DB tests cover races, rollback,
-   changed bytes/facts, foreign project, replay and lost reply.
+   changed bytes/facts, foreign project, replay and lost reply. Fixtures include an existing empty package
+   (canonical package ID, null revision) versus a new destination; unchanged revision with renamed package;
+   changed saved document_kind/issuer/recipient with equal extraction facts; rollback/admission replay after
+   membership removal; and removal/rejoin rejecting old incarnation evidence.
 3. **Fork API/adapter PR:** shared provider-neutral receipt/card contracts in `packages/contracts`, external
    translation in adapter only; session routes, signer, operation recovery and narrow content-free signals.
    Consumer tests in `packages/adapters/src/qsight-project-intake.test.ts` validate frozen fixtures; API tests
@@ -166,11 +189,23 @@ polling. QSight-side publication appears as authoritative state, not as a fabric
    pass before enabling. Unknown protocol/key/policy versions fail closed; deploy verifier first, then
    producer, keeping publication unavailable on older peers.
 
-Wire errors: 400 `invalid_receipt`/`unsupported_version`; 401 `unauthenticated`; 403
-`actor_forbidden`/`receipt_required`/`delegation_revoked`; 404 `not_found` for inaccessible resources; 409
-`binding_stale`/`revision_stale`/`context_changed`/ `payload_changed`/`key_conflict`; 410 `receipt_expired`;
-422 `not_ready`/ `destination_incomplete`; 503 `authority_unavailable`. Return typed safe errors; 409/410
-require review and new click, 503 retries only the existing operation.
+Keep fork/session states separate from product receipt errors. Preserve staging states `disabled`,
+`personal`, `binding_missing`, `binding_revision` (and existing `unbound`, `binding_stale`, `forbidden`,
+`project_unavailable`, `space_unavailable`); never collapse them into empty or receipt failures. Disabled
+requires enablement, personal requires a Space, missing/unbound requires binding setup, revision/stale
+requires context refresh and a new card, forbidden requires access, and unavailable permits retry on recovery.
+Fork 401 `unauthenticated` requires sign-in; inaccessible 404 `not_found` requires access/context resolution.
+Product receipt errors use typed safe envelopes with per-code recovery:
+
+| Status / code | Recovery |
+| --- | --- |
+| 400 `invalid_receipt` / `unsupported_version` | Stop; repair signer/protocol compatibility before requesting a new card |
+| 403 `actor_forbidden` / `receipt_required` / `delegation_revoked` | Restore authorized policy/access, then new card/click; no automatic replacement |
+| 409 `key_conflict` | Reconcile via operation status first; never blindly retry with a new key |
+| 409 `binding_stale` / `revision_stale` / `context_changed` / `payload_changed` | Refresh, review a new card and click again |
+| 410 `receipt_expired` | New card and explicit click after resolving any unknown outcome via status |
+| 422 `not_ready` / `destination_incomplete` | Review and correct saved decisions/readiness, then new card/click |
+| 503 `authority_unavailable` | Resolve unknown outcome via status first; retry the same operation/bytes/key |
 
 Non-goals: implementing this design here, deployment, financial/change approval, marking review complete,
 broad member RBAC, automatic publication, new document storage, cleanup guarantees, hierarchy changes or
