@@ -41,6 +41,7 @@ import { readSeenRunErrorIds, rememberSeenRunErrorId } from "../../lib/run-error
 import { clearActiveThreadRuns, threadRunError } from "../../lib/thread-events";
 import { errorText } from "../../lib/user-error";
 import type { PendingAttachment } from "./chat-shared";
+import { inspectionForSend } from "./inspection-storage";
 import type { useShellNavigation } from "./use-shell-navigation";
 
 type ThreadRefresh = RefObject<(id: string) => Promise<ThreadSnapshot>>;
@@ -52,6 +53,7 @@ type ThreadRefresh = RefObject<(id: string) => Promise<ThreadSnapshot>>;
 export function useComposerActions({
   rpc,
   pageSession,
+  inspection,
   activeId,
   inGroup,
   groupId,
@@ -72,6 +74,7 @@ export function useComposerActions({
   flushPendingBrowserNotifications,
 }: {
   rpc: ReturnType<typeof createSpaceRpc>;
+  inspection?: { scope: string; projectId: string; bindingRevision: number; botId: string };
   /** The chat's open page, whose card a message sent from it replies to. */
   pageSession: PageSession;
   activeId: string | undefined;
@@ -468,6 +471,15 @@ export function useComposerActions({
         const payload = {
           ...(groupTarget ? { groupId: groupTarget } : { botId: botTarget! }),
           clientNonce,
+          ...(!groupTarget && inspection && inspection.botId === botTarget
+            ? {
+                commercialInspection: inspectionForSend(
+                  inspection.scope,
+                  inspection.projectId,
+                  inspection.bindingRevision,
+                ),
+              }
+            : {}),
           imageHandling: imageHandling ?? "confirm",
           text: trimmed || undefined,
           mentions: plan.mentionPayload.length ? plan.mentionPayload : undefined,
@@ -541,6 +553,7 @@ export function useComposerActions({
       }
     },
     [
+      inspection,
       activeSnapshot?.messages,
       pageSession,
       clearSentReply,

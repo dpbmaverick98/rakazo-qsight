@@ -12,7 +12,9 @@ export function CommercialPanel({
   error,
   retry,
   onVendor,
+  onClaim,
 }: {
+  onClaim?: (claimId: string) => void;
   onVendor?: (claimId: string, vendorId: string) => void;
   data?: ProjectCommercial;
   loading: boolean;
@@ -71,6 +73,9 @@ export function CommercialPanel({
             {data.claims.map((claim) => (
               <li key={claim.id}>
                 <Disclosure
+                  onOpenChange={(open) => {
+                    if (open) onClaim?.(claim.id);
+                  }}
                   summary={claim.name}
                   summaryClassName="min-h-10 w-full justify-between break-words text-body"
                 >

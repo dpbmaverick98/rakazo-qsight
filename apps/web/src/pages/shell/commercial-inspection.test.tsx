@@ -125,3 +125,32 @@ it("clears saved inspection on denied reads and removed files", async () => {
     await view.close();
   }
 });
+
+it("renders current package amounts in each category, preserving null and both forms of zero", async () => {
+  const view = await mount();
+  try {
+    const data = structuredClone(commercialDocumentsFixture);
+    const item = data.claims[0]!.sub_vendors[0]!.work_packages[0]!;
+    item.proposed = null;
+    item.breakdown = 0;
+    item.invoiced = "0";
+    await view.render({ data });
+    await view.click("Finishes");
+    await view.click("Example Interiors");
+    const panel = () =>
+      view.container.querySelector(
+        '[role="tabpanel"][data-state="active"] [role="tabpanel"][data-state="active"]',
+      )?.textContent ?? view.container.textContent;
+    expect(panel()).toContain("Not available");
+    await view.click("Breakdown");
+    expect(panel()).toContain("0 USD");
+    await view.click("Invoices");
+    expect(panel()).toContain("0 USD");
+    expect(panel()).toContain("Invoice.pdf");
+    item.invoiced = "987.65";
+    await view.render({ data: structuredClone(data) });
+    expect(panel()).toContain("987.65 USD");
+  } finally {
+    await view.close();
+  }
+});

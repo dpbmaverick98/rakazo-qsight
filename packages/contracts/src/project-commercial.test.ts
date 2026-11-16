@@ -1,6 +1,9 @@
 import { expect, it } from "vitest";
 import { commercialFixture } from "./project-commercial.fixture.js";
-import { ProjectCommercialSchema } from "./project-commercial.js";
+import {
+  CommercialInspectionSelectionSchema,
+  ProjectCommercialSchema,
+} from "./project-commercial.js";
 
 it("keeps old payloads and decimal, zero and null claim totals without summing packages", () => {
   expect(ProjectCommercialSchema.parse(commercialFixture)).toEqual(commercialFixture);
@@ -38,4 +41,27 @@ it("allowlists active document metadata and strips secrets", () => {
   expect(parsed.claims[0]!.sub_vendors[0]!.work_packages[0]!.documents?.[0]?.size_bytes).toBe(0);
   document.url = "javascript:alert(1)";
   expect(ProjectCommercialSchema.safeParse(data).success).toBe(false);
+});
+
+it("carries only typed inspection identities and rejects missing ancestry", () => {
+  const selection = {
+    projectId: "roof",
+    bindingRevision: 1,
+    claimId: "claim",
+    vendorId: "vendor",
+    packageId: "drywall",
+    fileId: "invoice",
+  };
+  expect(
+    CommercialInspectionSelectionSchema.parse({ ...selection, url: "https://example.test" }),
+  ).toEqual(selection);
+  expect(
+    CommercialInspectionSelectionSchema.safeParse({ ...selection, vendorId: undefined }).success,
+  ).toBe(false);
+  expect(
+    CommercialInspectionSelectionSchema.safeParse({ ...selection, packageId: undefined }).success,
+  ).toBe(false);
+  expect(
+    CommercialInspectionSelectionSchema.safeParse({ ...selection, bindingRevision: 0 }).success,
+  ).toBe(false);
 });

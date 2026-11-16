@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createAdapterContext, runJobKey } from "@rakazo/adapter-kit";
 import { getActiveTeachingSession, settleCallRequest, wakeRun } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import type { CommercialInspectionSelection } from "@rakazo/contracts/project-commercial";
 import {
   AttachmentValidationError,
   CALL_CLIENT_NONCE_PREFIX,
@@ -112,9 +113,21 @@ export function threadsRoutes(ctx: RouterContext) {
         )?.botId ?? target.memberBotIds[0]!);
   const send = async (
     actor: Actor,
-    input: Parameters<typeof sendThreadMessage>[3] & { botId?: string; groupId?: string },
+    input: Parameters<typeof sendThreadMessage>[3] & {
+      botId?: string;
+      groupId?: string;
+      commercialInspection?: CommercialInspectionSelection;
+    },
     startRoutines?: Parameters<typeof sendThreadMessage>[5],
   ) => {
+    // Fail closed: never silently drop inspection identities or trust them as model context.
+    // Ancestry/authorization resolution and injection for new, steering and waiting runs remain pending.
+    if (input.commercialInspection) {
+      throw new ORPCError("NOT_IMPLEMENTED", {
+        message:
+          "Inspection context is not available yet. Return to Project space to send without it.",
+      });
+    }
     const setup = await modelSetup(deps, actor);
     const target = await resolveThreadTarget(deps.prisma, actor, input);
     // A bot with its own runnable model needs no main model, and stopping work needs none.

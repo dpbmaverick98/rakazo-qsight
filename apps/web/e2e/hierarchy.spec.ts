@@ -116,7 +116,12 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     "true",
   );
   await expect(page.getByText("Drywall", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not available", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "project-sub-vendors");
+  await page.getByRole("tab", { name: "Breakdown", exact: true }).click();
+  await expect(page.getByText("1234.50 USD", { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "project-sub-vendor-breakdown");
+  await page.getByRole("tab", { name: "Proposal", exact: true }).click();
   await page.getByRole("button", { name: "Proposal.pdf", exact: true }).click();
   await expect(page.getByText("Preview unavailable", { exact: true })).toBeVisible();
   await captureScreenshot(page, testInfo, "project-file-preview");

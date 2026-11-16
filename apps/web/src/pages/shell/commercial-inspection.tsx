@@ -2,29 +2,13 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from "@rakazo/ui-web";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { z } from "zod";
+import type { InspectionSelection as Selection } from "./inspection-storage";
+import { inspectionStorageKey, restoreInspection } from "./inspection-storage";
 import { CommercialPanel } from "./project-commercial";
 
-const Selection = z.object({
-  claimId: z.string(),
-  vendorId: z.string(),
-  packageId: z.string().optional(),
-  fileId: z.string().optional(),
-  tab: z.enum(["space", "claims", "vendor", "file"]).optional(),
-});
-type Selection = z.infer<typeof Selection>;
+export { inspectionStorageKey } from "./inspection-storage";
 
-export function inspectionStorageKey(scope: string) {
-  return `commercial-inspection:${scope}`;
-}
-
-function restore(key: string): Selection | null {
-  try {
-    return Selection.parse(JSON.parse(sessionStorage.getItem(key) ?? "null"));
-  } catch {
-    return null;
-  }
-}
+const amountFields = { proposal: "proposed", breakdown: "breakdown", invoice: "invoiced" } as const;
 
 /** Only identities are remembered. Every render resolves them against an authorized fresh read. */
 export function CommercialInspection({
@@ -43,8 +27,8 @@ export function CommercialInspection({
 }) {
   const { t } = useLingui();
   const key = inspectionStorageKey(scope);
-  const [selection, setSelection] = useState<Selection | null>(() => restore(key));
-  const [tab, setTab] = useState(() => restore(key)?.tab ?? "claims");
+  const [selection, setSelection] = useState<Selection | null>(() => restoreInspection(key));
+  const [tab, setTab] = useState(() => restoreInspection(key)?.tab ?? "claims");
   const [role, setRole] = useState("proposal");
   const vendorTab = useRef<HTMLButtonElement>(null);
   const fileTab = useRef<HTMLButtonElement>(null);
@@ -56,14 +40,22 @@ export function CommercialInspection({
   const vendor = claim?.sub_vendors.find((item) => item.id === selection?.vendorId);
   const workPackage = vendor?.work_packages.find((item) => item.id === selection?.packageId);
   const file = workPackage?.documents?.find((item) => item.id === selection?.fileId);
-  const valid = !!vendor && (!selection?.fileId || !!file);
+  const valid =
+    !!claim &&
+    (!selection?.vendorId || !!vendor) &&
+    (!selection?.packageId || !!workPackage) &&
+    (!selection?.fileId || !!file);
   useEffect(() => {
     if (!ready) return;
     if (!valid || !selection) {
       sessionStorage.removeItem(key);
       setSelection(null);
-    } else sessionStorage.setItem(key, JSON.stringify({ ...selection, tab }));
-  }, [ready, valid, selection, key, tab]);
+    } else
+      sessionStorage.setItem(
+        key,
+        JSON.stringify({ ...selection, tab: projectTab === "space" ? "space" : tab }),
+      );
+  }, [ready, valid, selection, key, tab, projectTab]);
   useEffect(() => {
     if (projectTab !== "claims") return;
     if (tab === "file" && file) fileTab.current?.focus();
@@ -106,7 +98,7 @@ export function CommercialInspection({
         <TabsTrigger value="claims" ref={claimsTab}>
           <Trans>Claims</Trans>
         </TabsTrigger>
-        {valid ? (
+        {valid && vendor ? (
           <TabsTrigger value="vendor" ref={vendorTab}>
             <Trans>Sub vendors</Trans>
           </TabsTrigger>
@@ -126,6 +118,7 @@ export function CommercialInspection({
       <TabsContent value="claims">
         <CommercialPanel
           {...props}
+          onClaim={(claimId) => setSelection({ claimId })}
           onVendor={(claimId, vendorId) => {
             setSelection({ claimId, vendorId });
             setTab("vendor");
@@ -164,7 +157,27 @@ export function CommercialInspection({
                   <ul className="flex flex-col gap-3 py-3">
                     {vendor.work_packages.map((item) => (
                       <li key={item.id}>
-                        <h3 className="font-medium break-words">{item.title}</h3>
+                        <h3 className="font-medium break-words">
+                          <Button
+                            variant="link"
+                            onClick={() =>
+                              setSelection({
+                                claimId: claim.id,
+                                vendorId: vendor.id,
+                                packageId: item.id,
+                              })
+                            }
+                          >
+                            {item.title}
+                          </Button>
+                        </h3>
+                        {category !== "other" ? (
+                          <p className="tabular-nums">
+                            {item[amountFields[category]] === null
+                              ? t`Not available`
+                              : `${item[amountFields[category]]} ${props.data?.project.currency ?? ""}`}
+                          </p>
+                        ) : null}
                         {item.documents === undefined ? (
                           <p className="text-muted-foreground">
                             <Trans>Document metadata unavailable</Trans>

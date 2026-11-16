@@ -91,3 +91,21 @@ export const ProjectCommercialSchema = z.object({
     .max(500),
 });
 export type ProjectCommercial = z.infer<typeof ProjectCommercialSchema>;
+
+/** Identities only: the server must authorize and resolve these before model use. */
+export const CommercialInspectionSelectionSchema = z
+  .object({
+    projectId: Id,
+    bindingRevision: z.number().int().positive(),
+    claimId: Id,
+    vendorId: Id.optional(),
+    packageId: Id.optional(),
+    fileId: Id.optional(),
+  })
+  .refine(
+    (value) => (!value.packageId || !!value.vendorId) && (!value.fileId || !!value.packageId),
+    {
+      message: "Inspection ancestry is required",
+    },
+  );
+export type CommercialInspectionSelection = z.infer<typeof CommercialInspectionSelectionSchema>;
