@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
+import { commercialDocumentsFixture as commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
 import { captureScreenshot, completeOnboarding, openBotPanelTab, rpc, signup } from "./helpers";
 
 test("PM project tabs share one right-panel controller", async ({ page }, testInfo) => {
@@ -111,7 +111,18 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
   );
   await commercial.getByRole("button", { name: "Finishes", exact: true }).click();
   await commercial.getByRole("button", { name: "Example Interiors", exact: true }).click();
-  await expect(commercial.getByText("Drywall", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Sub vendors", exact: true })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByText("Drywall", { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "project-sub-vendors");
+  await page.getByRole("button", { name: "Proposal.pdf", exact: true }).click();
+  await expect(page.getByText("Preview unavailable", { exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "project-file-preview");
+  await page.getByRole("button", { name: "Close file", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Sub vendors", exact: true })).toBeFocused();
+  await tabs.getByRole("tab", { name: "Claims", exact: true }).click();
   await expect(commercial.locator("input,textarea,form")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "project-claims");
   await page.reload();

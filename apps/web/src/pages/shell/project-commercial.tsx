@@ -11,7 +11,9 @@ export function CommercialPanel({
   loading,
   error,
   retry,
+  onVendor,
 }: {
+  onVendor?: (claimId: string, vendorId: string) => void;
   data?: ProjectCommercial;
   loading: boolean;
   error: boolean;
@@ -72,74 +74,96 @@ export function CommercialPanel({
                   summary={claim.name}
                   summaryClassName="min-h-10 w-full justify-between break-words text-body"
                 >
+                  {claim.totals ? (
+                    <dl className="my-2 grid grid-cols-2 gap-3 tabular-nums">
+                      {(["proposed", "breakdown", "invoiced", "remaining"] as const).map(
+                        (field) => (
+                          <div key={field}>
+                            <dt className="text-muted-foreground">{labels[field]}</dt>
+                            <dd>
+                              {claim.totals![field] === null
+                                ? t`Not available`
+                                : `${claim.totals![field]} ${data.project.currency ?? ""}`}
+                            </dd>
+                          </div>
+                        ),
+                      )}
+                    </dl>
+                  ) : null}
                   <ul className="border-s border-border ps-3">
                     {claim.sub_vendors.map((vendor) => (
                       <li key={vendor.id}>
-                        <Disclosure
-                          summary={vendor.name}
-                          summaryClassName="min-h-10 w-full justify-between break-words text-body"
-                        >
-                          <ul className="space-y-3">
-                            {vendor.work_packages.map((item) => (
-                              <li
-                                key={item.id}
-                                className="rounded-md border border-border p-3 text-body break-words"
-                              >
-                                <h3 className="font-medium">{item.title}</h3>
-                                <p className="text-muted-foreground">{item.status}</p>
-                                <p className="text-muted-foreground">
-                                  <Trans>{item.document_count} documents</Trans>
-                                </p>
-                                <p className="text-muted-foreground">{item.document_state}</p>
-                                <dl className="my-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
-                                  {(
-                                    ["proposed", "breakdown", "invoiced", "remaining"] as const
-                                  ).map((field) => (
-                                    <div key={field} className="min-w-0">
-                                      <dt className="text-muted-foreground">{labels[field]}</dt>
-                                      <dd>
-                                        {item[field] === null ? (
-                                          <>
-                                            <span aria-hidden="true">—</span>
-                                            <span className="sr-only">
-                                              <Trans>Not available</Trans>
-                                            </span>
-                                          </>
-                                        ) : (
-                                          <>
-                                            {item[field]} {data.project.currency}
-                                          </>
-                                        )}
-                                      </dd>
-                                    </div>
-                                  ))}
-                                </dl>
-                                {item.position ? <p>{item.position}</p> : null}
-                                <p className="text-muted-foreground">
-                                  {item.issues_open === null
-                                    ? t`Issues unavailable`
-                                    : t`${item.issues_open} open issues`}
-                                </p>
-                                {item.coverage_incomplete !== false ? (
-                                  <p className="text-muted-foreground">
-                                    {item.coverage_incomplete === null
-                                      ? t`Checks unavailable`
-                                      : t`Checks incomplete`}
-                                  </p>
-                                ) : null}
-                                <a
-                                  className="underline"
-                                  href={item.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  aria-label={t`Open ${item.title} (opens in new tab)`}
+                        {onVendor ? (
+                          <Button variant="link" onClick={() => onVendor(claim.id, vendor.id)}>
+                            {vendor.name}
+                          </Button>
+                        ) : (
+                          <Disclosure
+                            summary={vendor.name}
+                            summaryClassName="min-h-10 w-full justify-between break-words text-body"
+                          >
+                            <ul className="space-y-3">
+                              {vendor.work_packages.map((item) => (
+                                <li
+                                  key={item.id}
+                                  className="rounded-md border border-border p-3 text-body break-words"
                                 >
-                                  <Trans>Open work package</Trans> ↗
-                                </a>
-                              </li>
-                            ))}
-                          </ul>
-                        </Disclosure>
+                                  <h3 className="font-medium">{item.title}</h3>
+                                  <p className="text-muted-foreground">{item.status}</p>
+                                  <p className="text-muted-foreground">
+                                    <Trans>{item.document_count} documents</Trans>
+                                  </p>
+                                  <p className="text-muted-foreground">{item.document_state}</p>
+                                  <dl className="my-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums">
+                                    {(
+                                      ["proposed", "breakdown", "invoiced", "remaining"] as const
+                                    ).map((field) => (
+                                      <div key={field} className="min-w-0">
+                                        <dt className="text-muted-foreground">{labels[field]}</dt>
+                                        <dd>
+                                          {item[field] === null ? (
+                                            <>
+                                              <span aria-hidden="true">—</span>
+                                              <span className="sr-only">
+                                                <Trans>Not available</Trans>
+                                              </span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              {item[field]} {data.project.currency}
+                                            </>
+                                          )}
+                                        </dd>
+                                      </div>
+                                    ))}
+                                  </dl>
+                                  {item.position ? <p>{item.position}</p> : null}
+                                  <p className="text-muted-foreground">
+                                    {item.issues_open === null
+                                      ? t`Issues unavailable`
+                                      : t`${item.issues_open} open issues`}
+                                  </p>
+                                  {item.coverage_incomplete !== false ? (
+                                    <p className="text-muted-foreground">
+                                      {item.coverage_incomplete === null
+                                        ? t`Checks unavailable`
+                                        : t`Checks incomplete`}
+                                    </p>
+                                  ) : null}
+                                  <a
+                                    className="underline"
+                                    href={item.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={t`Open ${item.title} (opens in new tab)`}
+                                  >
+                                    <Trans>Open work package</Trans> ↗
+                                  </a>
+                                </li>
+                              ))}
+                            </ul>
+                          </Disclosure>
+                        )}
                       </li>
                     ))}
                   </ul>

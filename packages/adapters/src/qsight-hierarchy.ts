@@ -433,6 +433,12 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
               `/projects/${encodeURIComponent(id)}/packages/${encodeURIComponent(item.id)}`,
               origin,
             ).href;
+            for (const document of item.documents ?? []) {
+              document.package_url = item.url;
+              const record = new URL(item.url);
+              record.searchParams.set("document", document.id);
+              document.url = record.href;
+            }
           }
       if (commercialCache.size >= 100) commercialCache.delete(commercialCache.keys().next().value!);
       commercialCache.set(id, { data, expires: Date.now() + 15_000 });

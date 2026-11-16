@@ -1,4 +1,7 @@
-import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
+import {
+  commercialDocumentsFixture,
+  commercialFixture,
+} from "@rakazo/contracts/project-commercial-fixture";
 import {
   createLogger,
   createTestSink,
@@ -550,4 +553,23 @@ it("renames and deletes canonical projects with bounded input and sanitized erro
   }
   await expect(source.renameProject("roof", "x".repeat(201), "1")).rejects.toThrow();
   expect(fetch).toHaveBeenCalledTimes(4);
+});
+
+it("preserves additive metadata and totals while rebuilding document links without secrets", async () => {
+  const payload = structuredClone(commercialDocumentsFixture);
+  const document = payload.claims[0]!.sub_vendors[0]!.work_packages[0]!.documents![0]!;
+  document.url = "https://untrusted.example.test/file?token=fake-secret";
+  document.package_url = "https://untrusted.example.test/package";
+  Object.assign(document, {
+    storage_key: "fake-secret",
+    signed_url: "fake-secret",
+    text: "fake-secret",
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(payload)),
+  );
+  const result = await qsightHierarchyFromEnv(config)!.readCommercial("roof");
+  expect(result).toEqual(commercialDocumentsFixture);
+  expect(JSON.stringify(result)).not.toContain("fake-secret");
 });
