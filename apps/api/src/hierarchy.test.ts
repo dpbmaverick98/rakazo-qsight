@@ -411,7 +411,7 @@ it("provisions the project manager on the server before signaling roster changes
     deps.changed.mock.invocationCallOrder[0]!,
   );
 });
-it("returns the building default agent and retains the operation key for safe retries", async () => {
+it("creates only the building without a manager dependency and retains the operation key", async () => {
   const { deps } = setup();
   const building = {
     id: "south",
@@ -420,12 +420,10 @@ it("returns the building default agent and retains the operation key for safe re
     url: "https://example.test/south",
   };
   const createBuilding = vi.fn(async () => building);
-  const manager = vi.fn(async () => "building-manager");
   const app = new Hono();
   mountHierarchyRoute(app, {
     ...deps,
     source: { ...deps.source, createBuilding },
-    buildingManager: manager,
   });
   const key = "00000000-0000-4000-8000-000000000001";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -439,14 +437,15 @@ it("returns the building default agent and retains the operation key for safe re
       }),
     });
     expect(response.status).toBe(201);
-    expect((await response.json()).botId).toBe("building-manager");
+    const body = await response.json();
+    expect(body).toEqual(building);
+    expect(body).not.toHaveProperty("botId");
   }
   expect(createBuilding).toHaveBeenLastCalledWith(
     "client",
     expect.objectContaining({ nickname: "South" }),
     key,
   );
-  expect(manager).toHaveBeenLastCalledWith(actor, building, 1);
 });
 
 it("authorizes project mutations through the current binding and exact confirmation", async () => {
