@@ -138,7 +138,7 @@ import { mountAccountExportRoute } from "./account-export.js";
 import { mountAccountImportRoute } from "./account-import.js";
 import { settleDirectoryChange } from "./account-status.js";
 import { mountAppAssociation, nativePasskeys } from "./app-association.js";
-import { storeInboundAttachment } from "./artifacts.js";
+import { getOwnedArtifact, storeInboundAttachment } from "./artifacts.js";
 import { mountAuditExportRoute } from "./audit-export.js";
 import { createBillingService } from "./billing.js";
 import { mountBillingRoutes } from "./billing-webhook.js";
@@ -169,6 +169,7 @@ import { moveMcpArgsIntoSecrets } from "./mcp-args-migration.js";
 import { startMessagingRuntime } from "./messaging-runtime.js";
 import { monitoringRoutes } from "./monitoring.js";
 import { pluginSubmissionRoutes } from "./plugin-submissions.js";
+import { stageProjectIntake } from "./project-intake.js";
 import { sendReferralEmails } from "./referral-email.js";
 import { mountApiRequestBodyLimits, rpcBodyLimit } from "./request-body-limit.js";
 import { auditProjectMutation, retireProject } from "./retire-project.js";
@@ -1016,6 +1017,31 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
   const hierarchySource = qsightHierarchyFromEnv();
   mountHierarchyRoute(app, {
+    stageProjectIntake: hierarchySource
+      ? (actor, input) =>
+          runAsTenant(actor, () =>
+            stageProjectIntake(
+              {
+                source: {
+                  createIntake: hierarchySource.createIntake,
+                  completeIntakeFile: hierarchySource.completeIntakeFile,
+                  revokeManagerToken: hierarchySource.revokeManagerToken,
+                  managerServer: async (id, name) => {
+                    const config = await hierarchySource.managerServer(id, name);
+                    return {
+                      tokenId: config.tokenId,
+                      token: config.headers.Authorization.slice("Bearer ".length),
+                    };
+                  },
+                },
+                readArtifact: (owner, artifact) =>
+                  getOwnedArtifact({ prisma, artifacts }, owner, artifact),
+              },
+              actor,
+              input,
+            ),
+          )
+      : undefined,
     authorizePreview: (actor, botId, selection) =>
       runAsTenant(actor, async () => {
         const target = await resolveThreadTarget(prisma, actor, { botId });

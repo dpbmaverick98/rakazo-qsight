@@ -28,6 +28,7 @@ export const CompleteIntakeFileBodySchema = z.object({
 export const ProjectIntakeFileSchema = z
   .object({
     id: Id,
+    client_id: Id.optional(),
     filename: DisplayName,
     status: Status,
     upload_url: z.string().nullable(),
