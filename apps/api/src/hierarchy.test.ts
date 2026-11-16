@@ -1,8 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
+import type { Prisma } from "@rakazo/db";
 import { Hono } from "hono";
 import { expect, it, vi } from "vitest";
 import { mountHierarchyRoute } from "./hierarchy.js";
+import { canManageClientBinding } from "./space-client-binding.js";
 
 const actor = {
   userId: "user",
@@ -649,3 +651,25 @@ it("finishes setup after creating the first project", async () => {
     true,
   );
 });
+
+it.each(["member", "owner", "admin"])(
+  "uses production binding permissions for %s navigation and hierarchy reconciliation",
+  async (role) => {
+    for (const path of ["navigation", "hierarchy"]) {
+      const promote = vi.fn(async () => "setup");
+      const { app, deps } = setup(promote);
+      const db = {
+        spaceMember: { findUnique: vi.fn(async () => ({ role })) },
+        space: { findUnique: vi.fn(async () => ({ id: "space", isDefault: false })) },
+      } as unknown as Prisma.TransactionClient;
+      deps.canCreateProject.mockImplementation(() => canManageClientBinding(db, actor));
+      deps.navigationBots.mockResolvedValue([{ id: "setup", spawnKey: "setup:client" }]);
+      const response = await app.request(`/api/agent-plane/${path}`);
+      expect(response.status).toBe(200);
+      if (path === "hierarchy")
+        expect(await response.json()).toMatchObject({ canManage: role !== "member" });
+      expect(promote).toHaveBeenCalledTimes(role === "member" ? 0 : 1);
+      expect(deps.changed).toHaveBeenCalledTimes(role === "member" ? 0 : 1);
+    }
+  },
+);

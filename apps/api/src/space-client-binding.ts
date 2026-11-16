@@ -26,6 +26,17 @@ export async function bindingAccess(db: Db, actor: Actor, manage = false) {
   return space;
 }
 
+/** Capability probe; mutation paths must still enforce bindingAccess with manage=true. */
+export async function canManageClientBinding(db: Db, actor: Actor): Promise<boolean> {
+  try {
+    await bindingAccess(db, actor, true);
+    return true;
+  } catch (error) {
+    if (error instanceof ORPCError && error.code === "FORBIDDEN") return false;
+    throw error;
+  }
+}
+
 export async function resolveClientBinding(
   db: Db,
   actor: Actor,
