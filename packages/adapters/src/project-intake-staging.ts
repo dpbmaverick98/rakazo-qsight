@@ -11,9 +11,14 @@ export type ProjectIntakeInput = {
   botId: string;
   artifactIds: string[];
 };
-export type ProjectIntakeSummary = { intakeId: string; files: { id: string; status: string }[] };
+export type ProjectIntakeSummary = {
+  intakeId: string;
+  intakeRevision: number;
+  files: { id: string; status: string }[];
+};
 type Intake = {
   id: string;
+  revision: number;
   files: {
     id: string;
     client_id?: string;
@@ -124,7 +129,7 @@ export async function stageProjectIntake(
         );
         completed.push({ id: file.id, status: result.status });
       }
-      return { intakeId: intake.id, files: completed };
+      return { intakeId: intake.id, intakeRevision: intake.revision, files: completed };
     } finally {
       try {
         await deps.source.revokeManagerToken(tokenId);

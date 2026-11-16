@@ -45,6 +45,7 @@ import { compactHistory } from "./history-compaction.js";
 import { pollMediaVideo } from "./media-video-poll.js";
 import type { MemoryProviderResolver } from "./memory-provider-factory.js";
 import type { MessagingDelivery } from "./messaging-delivery.js";
+import type { ProjectIntakeSummary } from "./project-intake-staging.js";
 import { pollPurchase } from "./purchase-poll.js";
 import { retrySecretCleanup } from "./secret-cleanup.js";
 import { expireTaughtSkillTeaching } from "./teaching-session.js";
@@ -113,7 +114,7 @@ export function createBackgroundJobHandlers(deps: {
   maxUploadSizeBytes?: number;
   projectIntakeStage?: (
     payload: BackgroundJobPayloads["project.intake.stage"],
-  ) => Promise<{ intakeId: string; files: { id: string; status: string }[] }>;
+  ) => Promise<ProjectIntakeSummary>;
 }): BackgroundJobHandlers {
   const delivery = deps.messagingDelivery;
   const cleanupDeps = { prisma: deps.prisma, secrets: deps.secretStore };
@@ -169,10 +170,19 @@ export function createBackgroundJobHandlers(deps: {
       )
         return;
       let text: string;
+      let receipt:
+        | { intakeId: string; intakeRevision: number; projectId: string; fileCount: number }
+        | undefined;
       try {
         if (!deps.projectIntakeStage) throw new Error("disabled");
         const result = await deps.projectIntakeStage(payload);
-        text = `Files received for Vendor One review (${result.files.length} files). I will review them and come back with questions.`;
+        receipt = {
+          intakeId: result.intakeId,
+          intakeRevision: result.intakeRevision,
+          projectId: payload.projectId,
+          fileCount: result.files.length,
+        };
+        text = `Staged ${receipt.fileCount} file(s) for review`;
       } catch (error) {
         const category = error instanceof Error ? error.message : "";
         const guidance: Record<string, string> = {
@@ -199,7 +209,13 @@ export function createBackgroundJobHandlers(deps: {
           })
         )
           return false;
-        const blocks = [{ kind: "text" as const, text }];
+        const blocks = [
+          {
+            kind: "text" as const,
+            text,
+            ...(receipt ? { inspectionContext: JSON.stringify({ intakeReceipt: receipt }) } : {}),
+          },
+        ];
         const message = await createThreadMessageInTransaction(tx, {
           threadId: payload.threadId,
           botId: payload.botId,

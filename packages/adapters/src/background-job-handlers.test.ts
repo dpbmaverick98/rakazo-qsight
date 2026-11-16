@@ -7,6 +7,7 @@ import type {
   SandboxProvider,
 } from "@rakazo/adapter-kit";
 import { memoryRetainTurnJob, SandboxUnresponsiveError } from "@rakazo/adapter-kit";
+import { blocksToAgentHistoryText } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import { currentDbContext } from "@rakazo/db";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
@@ -622,7 +623,7 @@ describe("project intake staging", () => {
   function fixture(
     callback?: Parameters<typeof createBackgroundJobHandlers>[0]["projectIntakeStage"],
   ) {
-    let saved: { id: string } | null = null;
+    let saved: { id: string; blocks: Parameters<typeof blocksToAgentHistoryText>[0] } | null = null;
     const tx = {
       $queryRaw: vi.fn(async () => []),
       $executeRaw: vi.fn(async () => 0),
@@ -631,10 +632,12 @@ describe("project intake staging", () => {
       },
       message: {
         findUnique: vi.fn(async () => saved),
-        create: vi.fn(async (_input: unknown) => {
-          saved = { id: "message" };
-          return saved;
-        }),
+        create: vi.fn(
+          async (input: { data: { blocks: Parameters<typeof blocksToAgentHistoryText>[0] } }) => {
+            saved = { id: "message", blocks: structuredClone(input.data.blocks) };
+            return saved;
+          },
+        ),
       },
       event: { create: vi.fn(async () => ({ seq: 0 })) },
     };
@@ -660,7 +663,14 @@ describe("project intake staging", () => {
   it("stages as the owner and posts one durable message and event across replays", async () => {
     const callback = vi.fn(async () => {
       expect(currentDbContext()).toEqual({ kind: "tenant", ...owner });
-      return { intakeId: "private-intake", files: [{ id: "private-file", status: "ready" }] };
+      return {
+        intakeId: "intake",
+        intakeRevision: 7,
+        files: [{ id: "private-file", status: "ready", upload_url: "https://private.test" }],
+        storageKey: "private-key",
+        contentBase64: "private-bytes",
+        token: "private-token",
+      };
     });
     const { stage, tx, prisma, events } = fixture(callback);
     await stage(payload);
@@ -677,6 +687,18 @@ describe("project intake staging", () => {
       }),
     );
     expect(tx.message.create).toHaveBeenCalledOnce();
+    const message = await tx.message.findUnique();
+    const context = message?.blocks[0];
+    expect(context).toMatchObject({
+      kind: "text",
+      inspectionContext: expect.any(String),
+    });
+    if (context?.kind !== "text" || !context.inspectionContext) throw new Error("Missing receipt");
+    expect(JSON.parse(context.inspectionContext)).toEqual({
+      intakeReceipt: { intakeId: "intake", intakeRevision: 7, projectId: "project", fileCount: 1 },
+    });
+    expect(blocksToAgentHistoryText(message!.blocks)).toContain(context.inspectionContext);
+    expect(tx.event.create).toHaveBeenCalledOnce();
     expect(tx.event.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         type: "thread.message.created",
@@ -684,17 +706,37 @@ describe("project intake staging", () => {
           blocks: [
             {
               kind: "text",
-              text: "Files received for Vendor One review (1 files). I will review them and come back with questions.",
+              text: "Staged 1 file(s) for review",
+              inspectionContext: JSON.stringify({
+                intakeReceipt: {
+                  intakeId: "intake",
+                  intakeRevision: 7,
+                  projectId: "project",
+                  fileCount: 1,
+                },
+              }),
             },
           ],
         }),
       }),
     });
     expect(JSON.stringify(tx.event.create.mock.calls)).not.toMatch(
-      /private-intake|private-file|https:/,
+      /private-file|private-key|private-bytes|private-token|https:/,
     );
     expect(events.notify).toHaveBeenCalledWith("thread", 0);
     expect(events.publishSpaceChange).toHaveBeenCalledWith(owner.spaceId, "runs");
+  });
+  it("recovers the same receipt after the durable commit outlives a failed notification", async () => {
+    const callback = vi.fn(async () => ({ intakeId: "intake", intakeRevision: 7, files: [] }));
+    const { stage, tx, events } = fixture(callback);
+    events.notify.mockRejectedValueOnce(new Error("notification unavailable"));
+    await expect(stage(payload)).rejects.toThrow("notification unavailable");
+    const committed = structuredClone(await tx.message.findUnique());
+    await stage(payload);
+    expect(await tx.message.findUnique()).toEqual(committed);
+    expect(callback).toHaveBeenCalledOnce();
+    expect(tx.message.create).toHaveBeenCalledOnce();
+    expect(tx.event.create).toHaveBeenCalledOnce();
   });
   it.each([
     ["forbidden", "Access denied"],
@@ -720,7 +762,9 @@ describe("project intake staging", () => {
     const message = JSON.stringify(tx.event.create.mock.calls);
     expect(message).toContain(guidance);
     expect(message).toContain("do not claim review");
-    expect(message).not.toMatch(/private-id|https:|private.invalid/);
+    expect(message).not.toMatch(
+      /private-id|https:|private.invalid|intakeReceipt|inspectionContext/,
+    );
   });
   it("reports staging unavailable when no callback is configured", async () => {
     const { stage, tx } = fixture();

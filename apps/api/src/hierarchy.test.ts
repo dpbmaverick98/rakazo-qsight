@@ -699,6 +699,7 @@ function intakeSetup(enabled = true) {
   const { deps } = setup();
   const stageProjectIntake = vi.fn(async () => ({
     intakeId: "intake",
+    intakeRevision: 7,
     files: [{ id: "file", status: "staged", upload_url: "secret-url" }],
     token: "secret-token",
   }));

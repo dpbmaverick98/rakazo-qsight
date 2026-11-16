@@ -83,6 +83,23 @@ claims, money and approvals. Rakazo is the conversation and presentation layer.
   than failing silently.
 - Idempotency: one intake key per send; retries reuse it. A changed payload with the
   same key conflicts; inspect before retrying.
+- Staging completion is one durable bot message per send, keyed by
+  `project.intake.stage:<idempotencyKey>` within the thread. Its text is
+  "Staged N file(s) for review"; the existing send-time staging note remains.
+  The text block's existing `inspectionContext` contains JSON of the form
+  `{ "intakeReceipt": { "intakeId": "…", "intakeRevision": 1, "projectId": "…", "fileCount": 2 } }`.
+  This fixed-field receipt uses the create/replay response's intake revision;
+  it is a staging snapshot, not a claim that parsing or review has completed.
+  No upload URLs, storage keys, source bytes, tokens or per-file payloads are stored
+  in the receipt. The upstream response supplies no staging timestamp, so none is
+  invented.
+- Recovery: message blocks and the matching event commit together under the thread
+  lock. A replay finds the same nonce and leaves that message and context intact,
+  including after a missed realtime notification. A retry before commit reuses the
+  upstream intake idempotency key. The normal thread history read restores the
+  receipt into model context, so the PM can read that intake by id without relying
+  on the newest-20 `list_open_intakes` window. Read current status/revision before
+  preparing subsequent decisions; the receipt does not grant write authority.
 - Partial uploads: completion is per file; failed or missing uploads stay visible
   and retryable. A folder send is not "done" until every file is complete or
   explicitly removed.
