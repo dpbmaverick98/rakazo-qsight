@@ -38,6 +38,7 @@ it("keeps an accessible fallback and navigation after a map import failure", asy
               {
                 id: "north",
                 name: "North Building",
+                address: "10 Example Street",
                 latitude: 0,
                 longitude: 0,
                 projects: [{ id: "roof", name: "Roof survey", url: "https://example.test/roof" }],
@@ -52,6 +53,13 @@ it("keeps an accessible fallback and navigation after a map import failure", asy
     );
     expect(container.textContent).toContain("North Building");
     expect(container.textContent).toContain("Map unavailable");
+    const identity = container.querySelector(".lucide-building")!.parentElement!;
+    expect(
+      container.querySelector('[role="status"]')!.compareDocumentPosition(identity) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
+    expect(identity.nextElementSibling?.textContent).toBe("10 Example Street");
     expect(container.querySelector('[aria-label="Building map"]')).toBeNull();
     expect(container.querySelector("[aria-expanded]")).not.toBeNull();
   } finally {

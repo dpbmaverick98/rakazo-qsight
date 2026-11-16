@@ -158,6 +158,11 @@ function ProjectStageContent({
         <h2 className="my-4 text-heading1 font-semibold tracking-tight break-words">
           {data.client.name}
         </h2>
+        <ErrorBoundary fallback={<MapFallback />} key={building.id}>
+          <Suspense fallback={<MapFallback />}>
+            <BuildingMap building={building} />
+          </Suspense>
+        </ErrorBoundary>
         <div className="mb-3 flex items-center gap-2">
           <Building aria-hidden="true" className="size-4 shrink-0" />
           <span>{building.name}</span>
@@ -166,11 +171,6 @@ function ProjectStageContent({
         building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
           <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
         ) : null}
-        <ErrorBoundary fallback={<MapFallback />} key={building.id}>
-          <Suspense fallback={<MapFallback />}>
-            <BuildingMap building={building} />
-          </Suspense>
-        </ErrorBoundary>
         <ul>
           {building.projects.map((project) => (
             <li key={project.id}>

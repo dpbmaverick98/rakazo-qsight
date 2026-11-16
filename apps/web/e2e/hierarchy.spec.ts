@@ -90,6 +90,15 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     "true",
   );
   await expect(page.getByText("Map unavailable", { exact: true })).toBeVisible();
+  const mapFallback = page.getByText("Map unavailable", { exact: true });
+  const buildingLabel = page.getByText("North Building", { exact: true }).last();
+  const addressLabel = page.getByText(candidate.address, { exact: true });
+  await expect(addressLabel).toHaveCount(1);
+  const mapBox = await mapFallback.boundingBox();
+  const buildingBox = await buildingLabel.boundingBox();
+  const addressBox = await addressLabel.boundingBox();
+  expect(buildingBox!.y).toBeGreaterThanOrEqual(mapBox!.y + mapBox!.height);
+  expect(addressBox!.y).toBeGreaterThan(buildingBox!.y);
   const sidebarBuilding = page.getByRole("heading", { name: "North Building", exact: true });
   await expect(sidebarBuilding).toBeVisible();
   await expect(sidebarBuilding.locator("button")).toHaveCount(0);
