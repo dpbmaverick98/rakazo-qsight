@@ -142,7 +142,6 @@ import { storeInboundAttachment } from "./artifacts.js";
 import { mountAuditExportRoute } from "./audit-export.js";
 import { createBillingService } from "./billing.js";
 import { mountBillingRoutes } from "./billing-webhook.js";
-import { provisionBuildingManager } from "./building-manager.js";
 import { clientBuildMiddleware, readDeployedWebBuild } from "./client-build.js";
 import {
   clientIpMiddleware,
@@ -1051,12 +1050,6 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       : undefined,
     auditProject: (actor, projectId, action) =>
       runAsTenant(actor, () => auditProjectMutation(prisma, actor, projectId, action)),
-    buildingManager: hierarchySource
-      ? (actor, building, revision) =>
-          runAsTenant(actor, () =>
-            provisionBuildingManager(prisma, actor, hierarchySource, building, revision),
-          )
-      : undefined,
     projectManager: hierarchySource
       ? async (actor, project, revision, finishSetup, automatic) => {
           const client = createRouterClient(router, { context: { actor } });

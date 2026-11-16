@@ -141,10 +141,6 @@ function ReadyClientSpaceAction({
             initiallyOpen
             onBusyChange={setBusy}
             onCreated={async (building) => {
-              if (action === "building" && building.botId) {
-                await openManager(building.botId);
-                return;
-              }
               setCreatedBuilding(building);
               setBuildingId(building.id);
               setNewBuilding(false);

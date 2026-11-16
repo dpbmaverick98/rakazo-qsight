@@ -139,7 +139,7 @@ it("reuses and reveals an existing project's manager without recreating the proj
   expect(view.onOpenBot).toHaveBeenCalledWith({ id: "existing" });
 });
 it.each(["building", "project"] as const)(
-  "uses verified location proof for %s and continues to its manager",
+  "uses verified location proof for %s and continues through the project step",
   async (action) => {
     const location = {
       address: "10 Example Street",
@@ -189,16 +189,16 @@ it.each(["building", "project"] as const)(
     await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"]')!.click());
     await submit();
     await submit();
-    if (action === "project") {
-      expect(view.onOpenBot).not.toHaveBeenCalled();
-      expect(document.querySelector("select")!.value).toBe("south");
-      await fill("Roof survey");
-      await submit();
-      expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
-        buildingId: "south",
-        name: "Roof survey",
-      });
-    }
+    expect(view.onOpenBot).not.toHaveBeenCalled();
+    expect(view.onClose).not.toHaveBeenCalled();
+    expect(mocks.provision).not.toHaveBeenCalled();
+    expect(document.querySelector("select")!.value).toBe("south");
+    await fill("Roof survey");
+    await submit();
+    expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
+      buildingId: "south",
+      name: "Roof survey",
+    });
     expect(fetch.mock.calls.slice(0, 3).map(([url]) => url)).toEqual([
       "/api/agent-plane/locations/search",
       "/api/agent-plane/locations/proof",
@@ -209,7 +209,7 @@ it.each(["building", "project"] as const)(
       verification_token: "proof",
       nickname: "",
     });
-    expect(mocks.provision).toHaveBeenCalledTimes(action === "project" ? 1 : 0);
+    expect(mocks.provision).toHaveBeenCalledOnce();
     expect(view.refreshRoster).toHaveBeenCalledOnce();
     expect(view.onOpenBot).toHaveBeenCalledOnce();
   },

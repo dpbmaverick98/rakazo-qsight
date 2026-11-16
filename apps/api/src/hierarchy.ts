@@ -40,11 +40,6 @@ export function mountHierarchyRoute(
     trustedOrigin?: (origin: string) => boolean;
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
-    buildingManager?: (
-      actor: Actor,
-      building: CreatedBuilding,
-      revision: number,
-    ) => Promise<string>;
     projectManager?: (
       actor: Actor,
       project: Pick<CreatedProject, "id" | "name">,
@@ -227,9 +222,8 @@ export function mountHierarchyRoute(
           operationId,
         );
         await deps.resolveBinding(actor, binding.revision);
-        const botId = await deps.buildingManager?.(actor, result, binding.revision);
         await deps.changed?.(actor);
-        return c.json({ ...result, ...(botId ? { botId } : {}) }, 201);
+        return c.json(result, 201);
       } catch (error) {
         if (error instanceof SyntaxError) return c.json({ status: "invalid_request" }, 400);
         const result = failure(error);
