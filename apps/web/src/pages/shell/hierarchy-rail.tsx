@@ -346,14 +346,7 @@ function ClaimLinks({ data, onClaims }: { data: ProjectCommercial; onClaims?: ()
               {claim.name}
             </Button>
           ) : (
-            <a
-              className="text-body underline"
-              href={data.project.url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {claim.name}
-            </a>
+            <span className="text-body">{claim.name}</span>
           )}
         </li>
       ))}

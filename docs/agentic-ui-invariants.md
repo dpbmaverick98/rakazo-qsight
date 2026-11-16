@@ -9,6 +9,7 @@ Scope: Rakazo web/Electron client workspace, desktop and web. Native mobile is
 explicitly out of scope for this version.
 
 Related:
+
 - [Right rail tabs](right-rail-tabs.md) — tab/stage seam and Harness research.
 - [Artifact stage](artifact-stage.md) — typed artifact seam.
 - [Client hierarchy](hierarchy.md) — existing binding and authorization rules.
@@ -51,8 +52,7 @@ Client
   but MUST NOT author them.
 - **UI-4 — Right region is view-only.** The right region MUST NOT create, rename,
   delete, upload, publish, approve, or edit records. Its actions are limited to
-  navigation, expanding/collapsing, tab switching, and opening the corresponding
-  QSight record.
+  navigation, expanding/collapsing, and tab switching.
 - **UI-5 — One manager per project.** A project has one canonical project
   manager. Creating another manager for the same project is a conflict, not a
   duplicate row.
@@ -174,8 +174,9 @@ Purpose: a view-only, tabbed project space that follows the selected manager.
 - Selecting a file inside Sub vendors opens an additional **file preview** tab.
 - Additional tabs are allowed for files, tables, and future project views. The two
   default tabs above are the baseline; they are not a closed set.
-- Tabs are read-only. They may navigate to QSight, expand/collapse, select a
-  claim/sub vendor, and open a file.
+- Tabs are read-only. They may expand/collapse, select a claim/sub vendor, and
+  open a file. The rail shows no outbound record links; Vendor One is opened
+  separately, outside the rail.
 - The tab state is per project-manager conversation. Switching manager MUST switch
   the tabs to that manager's project; it MUST NOT reuse another project's tab
   content.
@@ -216,8 +217,7 @@ Default view for the selected manager.
   read-only inspection.
 - An expanded project shows:
   - project name and status;
-  - claim names under the project;
-  - links to QSight.
+  - claim names under the project.
 - Money totals are **claim-level**. Project space MUST NOT present an unlabelled
   project-level total as the authoritative proposed/breakdown/invoice figure;
   those figures live in Claims under their claim.
@@ -251,8 +251,7 @@ Read-only file/evidence view for the selected claim and sub vendor.
   - **Proposal** — amount and source documents;
   - **Breakdown** — amount and source documents;
   - **Invoices** — invoice totals and invoice documents.
-- Each file row shows a document role, amount when known, status, and a deep link
-  to QSight for inspection.
+- Each file row shows a document role, amount when known, and status.
 - Clicking a file opens a **file preview tab** rather than expanding the file
   inline. The preview tab is read-only and returns to the Sub vendors tab on close.
 - The selected claim, sub vendor, and file MUST be added to the PM's current

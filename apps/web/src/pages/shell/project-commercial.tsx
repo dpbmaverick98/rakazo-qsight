@@ -144,15 +144,6 @@ export function CommercialPanel({
                                         : t`Checks incomplete`}
                                     </p>
                                   ) : null}
-                                  <a
-                                    className="underline"
-                                    href={item.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    aria-label={t`Open ${item.title} (opens in new tab)`}
-                                  >
-                                    <Trans>Open work package</Trans> ↗
-                                  </a>
                                 </li>
                               ))}
                             </ul>
