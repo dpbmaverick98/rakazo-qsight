@@ -8,6 +8,7 @@ import { composerHoldsUnsavedWork } from "../../lib/composer-draft";
 import type { PageSession } from "../../lib/pages";
 import { createPageSession } from "../../lib/pages";
 import type { createSpaceRpc } from "../../lib/rpc";
+import { inspectionStorageKey } from "./inspection-storage";
 import { useComposerActions } from "./use-composer-actions";
 
 vi.mock("@lingui/react/macro", () => {
@@ -595,4 +596,53 @@ it("rejects oversized documents and unsafe relative paths", () => {
   expect(latest.activePendingAttachments).toHaveLength(0);
   expect(latest.attachmentNotice).toContain("over");
   expect(latest.attachmentNotice).toContain("invalid path");
+});
+
+it("carries the current scoped inspection on the existing PM send and keeps it on failure", async () => {
+  const inspection = {
+    scope: "fixture-scope",
+    projectId: "roof",
+    bindingRevision: 2,
+    botId: "bot-1",
+  };
+  const selection = {
+    claimId: "claim",
+    vendorId: "vendor",
+    packageId: "drywall",
+    fileId: "invoice",
+    tab: "file",
+  };
+  sessionStorage.setItem(inspectionStorageKey(inspection.scope), JSON.stringify(selection));
+  act(() => root.render(<Harness extras={{ inspection }} />));
+  rpc.threads.send.mockRejectedValue(new Error("Inspection context is not available yet"));
+  await act(async () => {
+    await latest.sendMessage("Review this", [], "inspection-send");
+  });
+  expect(rpc.threads.send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      commercialInspection: {
+        projectId: "roof",
+        bindingRevision: 2,
+        claimId: "claim",
+        vendorId: "vendor",
+        packageId: "drywall",
+        fileId: "invoice",
+      },
+    }),
+  );
+  expect(sessionStorage.getItem(inspectionStorageKey(inspection.scope))).toBe(
+    JSON.stringify(selection),
+  );
+  sessionStorage.setItem(
+    inspectionStorageKey(inspection.scope),
+    JSON.stringify({ ...selection, tab: "space" }),
+  );
+  rpc.threads.send.mockResolvedValue({ runId: "run-1", taskId: "task-1" });
+  await act(async () => {
+    await latest.sendMessage("Review project", [], "project-send");
+  });
+  expect(rpc.threads.send).toHaveBeenLastCalledWith(
+    expect.objectContaining({ commercialInspection: undefined }),
+  );
+  sessionStorage.clear();
 });

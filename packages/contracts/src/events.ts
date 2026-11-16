@@ -122,7 +122,12 @@ export const AskReceipt = z.object({
 export type AskReceipt = z.infer<typeof AskReceipt>;
 
 export const MessageBlock = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("text"), text: z.string() }),
+  z.object({
+    kind: z.literal("text"),
+    text: z.string(),
+    /** Server-resolved read-only inspection snapshot; omitted from visible message text. */
+    inspectionContext: z.string().optional(),
+  }),
   z.object({
     kind: z.literal("card"),
     lines: z.array(z.object({ k: z.string(), v: z.string() })),

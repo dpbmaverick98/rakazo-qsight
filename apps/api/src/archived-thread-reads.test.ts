@@ -116,3 +116,15 @@ describe("archived thread read authorization", () => {
     );
   });
 });
+
+it("rejects inspection-bearing sends to archived bots before reading history", async () => {
+  const { call, findBot, findMessages } = fixture();
+  const result = await call("threads/send", {
+    botId: "bot-1",
+    text: "Review this",
+    commercialInspection: { projectId: "roof", bindingRevision: 1, claimId: "claim" },
+  });
+  expect(result.status).toBe(500);
+  expect(findBot).toHaveBeenCalled();
+  expect(findMessages).not.toHaveBeenCalled();
+});

@@ -37,6 +37,7 @@ import type {
 import type { Auth } from "@rakazo/auth";
 import type { LabFeature, McpServerConfigInput, ModelCredential, NavLink } from "@rakazo/contracts";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
+import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { BoardEvents, PrismaClient, ThreadEvents } from "@rakazo/db";
 import type { BillingService } from "./billing.js";
 import { accountRoutes } from "./routes/account.js";
@@ -70,6 +71,7 @@ export { callMarkerClientNonce } from "./routes/threads.js";
 
 export interface RouterDeps {
   projectManagers?: {
+    readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     ownerServerPrefix: string;
     read: (externalClientId: string, fresh?: boolean) => Promise<Hierarchy>;
     managerServer: (

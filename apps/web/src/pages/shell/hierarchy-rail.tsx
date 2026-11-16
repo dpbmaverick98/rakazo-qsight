@@ -2,22 +2,15 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import { HierarchySchema } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
-import {
-  Button,
-  Disclosure,
-  SectionHeading,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@rakazo/ui-web";
+import { Button, Disclosure, SectionHeading, Tabs, TabsList, TabsTrigger } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { Building } from "lucide-react";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { withSpaceHeaders } from "../../lib/rpc";
+import { CommercialInspection, inspectionStorageKey } from "./commercial-inspection";
 import { hierarchyRetry } from "./hierarchy-refresh";
-import { CommercialPanel, useProjectCommercial } from "./project-commercial";
+import { useProjectCommercial } from "./project-commercial";
 
 const BuildingMap = lazy(() => import("./building-map"));
 
@@ -80,7 +73,6 @@ export function ProjectStage({
   onTabChange: (tab: "space" | "claims") => void;
 }) {
   const { t } = useLingui();
-  const claimsTab = useRef<HTMLButtonElement>(null);
   const building =
     data?.bindingRevision === selection.revision
       ? data.buildings.find(
@@ -89,13 +81,35 @@ export function ProjectStage({
             item.projects.some((project) => project.id === selection.projectId),
         )
       : undefined;
+  const inspectionScope = JSON.stringify([
+    scope.userId,
+    scope.spaceId,
+    selection.botId,
+    selection.revision,
+    selection.projectId,
+  ]);
+  useEffect(() => {
+    if (error || (!loading && !building))
+      sessionStorage.removeItem(inspectionStorageKey(inspectionScope));
+  }, [error, loading, building, inspectionScope]);
+  if (building && !error)
+    return (
+      <ProjectStageContent
+        data={data!}
+        building={building}
+        scope={scope}
+        selection={selection}
+        tab={tab}
+        onTabChange={onTabChange}
+      />
+    );
   return (
     <Tabs value={tab} onValueChange={(value) => onTabChange(value as "space" | "claims")}>
       <TabsList aria-label={t`Project views`} variant="line">
         <TabsTrigger value="space">
           <Trans>Project space</Trans>
         </TabsTrigger>
-        <TabsTrigger value="claims" ref={claimsTab}>
+        <TabsTrigger value="claims">
           <Trans>Claims</Trans>
         </TabsTrigger>
       </TabsList>
@@ -106,20 +120,8 @@ export function ProjectStage({
             <Trans>Retry</Trans>
           </Button>
         </div>
-      ) : !building ? (
-        <p role="status">{loading ? t`Loading project space…` : t`Project unavailable`}</p>
       ) : (
-        <ProjectStageContent
-          data={data!}
-          building={building}
-          scope={scope}
-          selection={selection}
-          tab={tab}
-          onClaims={() => {
-            onTabChange("claims");
-            claimsTab.current?.focus();
-          }}
-        />
+        <p role="status">{loading ? t`Loading project space…` : t`Project unavailable`}</p>
       )}
     </Tabs>
   );
@@ -131,14 +133,14 @@ function ProjectStageContent({
   scope,
   selection,
   tab,
-  onClaims,
+  onTabChange,
 }: {
   data: Hierarchy;
   building: Hierarchy["buildings"][number];
   scope: { userId: string | null; spaceId: string | null };
   selection: ProjectSelection;
   tab: "space" | "claims";
-  onClaims: () => void;
+  onTabChange: (tab: "space" | "claims") => void;
 }) {
   const query = useProjectCommercial(
     scope.userId,
@@ -149,77 +151,93 @@ function ProjectStageContent({
   );
   const commercial = query.isError ? undefined : (query.data ?? undefined);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([selection.projectId]));
-  return (
+  const projectSpace = (
     <>
-      <TabsContent value="space">
-        <SectionHeading variant="label" className="mt-4">
-          <Trans>Project space</Trans>
-        </SectionHeading>
-        <h2 className="my-4 text-heading1 font-semibold tracking-tight break-words">
-          {data.client.name}
-        </h2>
-        <ErrorBoundary fallback={<MapFallback />} key={building.id}>
-          <Suspense fallback={<MapFallback />}>
-            <BuildingMap building={building} />
-          </Suspense>
-        </ErrorBoundary>
-        <div className="mb-3 flex items-center gap-2">
-          <Building aria-hidden="true" className="size-4 shrink-0" />
-          <span>{building.name}</span>
-        </div>
-        {building.address?.trim() &&
-        building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
-          <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
-        ) : null}
-        <ul>
-          {building.projects.map((project) => (
-            <li key={project.id}>
-              <Disclosure
-                open={expanded.has(project.id)}
-                onOpenChange={(open) =>
-                  setExpanded((previous) => {
-                    const next = new Set(previous);
-                    if (open) next.add(project.id);
-                    else next.delete(project.id);
-                    return next;
-                  })
-                }
-                summary={project.name}
-                summaryClassName="min-h-10 w-full justify-between text-start text-body"
-              >
-                {project.id === selection.projectId ? (
-                  <>
-                    <CommercialStatus
-                      loading={query.isPending}
-                      unavailable={!query.data}
-                      error={query.isError}
-                      retry={() => {
-                        void query.refetch();
-                      }}
-                    />
-                    {commercial ? <ClaimLinks data={commercial} onClaims={onClaims} /> : null}
-                  </>
-                ) : expanded.has(project.id) ? (
-                  <ProjectPreview scope={scope} selection={selection} projectId={project.id} />
-                ) : null}
-              </Disclosure>
-            </li>
-          ))}
-        </ul>
-      </TabsContent>
-      <TabsContent value="claims">
-        {tab === "claims" ? (
-          <CommercialPanel
-            data={commercial}
-            loading={query.isPending}
-            error={query.isError}
-            retry={() => {
-              void query.refetch();
-            }}
-          />
-        ) : null}
-      </TabsContent>
+      <SectionHeading variant="label" className="mt-4">
+        <Trans>Project space</Trans>
+      </SectionHeading>
+      <h2 className="my-4 text-heading1 font-semibold tracking-tight break-words">
+        {data.client.name}
+      </h2>
+      <ErrorBoundary fallback={<MapFallback />} key={building.id}>
+        <Suspense fallback={<MapFallback />}>
+          <BuildingMap building={building} />
+        </Suspense>
+      </ErrorBoundary>
+      <div className="mb-3 flex items-center gap-2">
+        <Building aria-hidden="true" className="size-4 shrink-0" />
+        <span>{building.name}</span>
+      </div>
+      {building.address?.trim() &&
+      building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
+        <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
+      ) : null}
+      <ul>
+        {building.projects.map((project) => (
+          <li key={project.id}>
+            <Disclosure
+              open={expanded.has(project.id)}
+              onOpenChange={(open) =>
+                setExpanded((previous) => {
+                  const next = new Set(previous);
+                  if (open) next.add(project.id);
+                  else next.delete(project.id);
+                  return next;
+                })
+              }
+              summary={project.name}
+              summaryClassName="min-h-10 w-full justify-between text-start text-body"
+            >
+              {project.id === selection.projectId ? (
+                <>
+                  <CommercialStatus
+                    loading={query.isPending}
+                    unavailable={!query.data}
+                    error={query.isError}
+                    retry={() => {
+                      void query.refetch();
+                    }}
+                  />
+                  {commercial ? (
+                    <ClaimLinks data={commercial} onClaims={() => onTabChange("claims")} />
+                  ) : null}
+                </>
+              ) : expanded.has(project.id) ? (
+                <ProjectPreview scope={scope} selection={selection} projectId={project.id} />
+              ) : null}
+            </Disclosure>
+          </li>
+        ))}
+      </ul>
     </>
+  );
+  return (
+    <CommercialInspection
+      key={JSON.stringify([
+        scope.userId,
+        scope.spaceId,
+        selection.botId,
+        selection.revision,
+        selection.projectId,
+      ])}
+      scope={JSON.stringify([
+        scope.userId,
+        scope.spaceId,
+        selection.botId,
+        selection.revision,
+        selection.projectId,
+      ])}
+      ready={query.isFetchedAfterMount && !query.isFetching}
+      projectSpace={projectSpace}
+      projectTab={tab}
+      onProjectTabChange={onTabChange}
+      data={commercial}
+      loading={query.isPending}
+      error={query.isError}
+      retry={() => {
+        void query.refetch();
+      }}
+    />
   );
 }
 

@@ -33,6 +33,14 @@ export const ProjectCommercialSchema = z.object({
       z.object({
         id: Id,
         name: Text,
+        totals: z
+          .object({
+            proposed: Money,
+            breakdown: Money,
+            invoiced: Money,
+            remaining: Money,
+          })
+          .optional(),
         sub_vendors: z
           .array(
             z.object({
@@ -44,6 +52,24 @@ export const ProjectCommercialSchema = z.object({
                     id: Id,
                     title: Text,
                     status: Text,
+                    documents: z
+                      .array(
+                        z.object({
+                          id: Id,
+                          filename: Text,
+                          role: Text,
+                          content_type: Text,
+                          size_bytes: z.number().int().nonnegative(),
+                          status: Text,
+                          created_at: Text,
+                          superseded_at: z.null(),
+                          replacement_for_document_id: z.null(),
+                          package_url: Link,
+                          url: Link,
+                        }),
+                      )
+                      .max(1000)
+                      .optional(),
                     document_count: z.number().int().nonnegative(),
                     document_state: Text,
                     proposed: Money,
@@ -65,3 +91,21 @@ export const ProjectCommercialSchema = z.object({
     .max(500),
 });
 export type ProjectCommercial = z.infer<typeof ProjectCommercialSchema>;
+
+/** Identities only: the server must authorize and resolve these before model use. */
+export const CommercialInspectionSelectionSchema = z
+  .object({
+    projectId: Id,
+    bindingRevision: z.number().int().positive(),
+    claimId: Id,
+    vendorId: Id.optional(),
+    packageId: Id.optional(),
+    fileId: Id.optional(),
+  })
+  .refine(
+    (value) => (!value.packageId || !!value.vendorId) && (!value.fileId || !!value.packageId),
+    {
+      message: "Inspection ancestry is required",
+    },
+  );
+export type CommercialInspectionSelection = z.infer<typeof CommercialInspectionSelectionSchema>;

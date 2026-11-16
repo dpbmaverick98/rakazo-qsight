@@ -778,6 +778,20 @@ function SpaceShell() {
   const { computerBot, openComputer } = computerControls;
   const composer = useComposerActions({
     rpc,
+    inspection: projectSelection
+      ? {
+          scope: JSON.stringify([
+            userId ?? null,
+            shellSpaceId ?? bootstrapMe?.spaceId ?? null,
+            projectSelection.botId,
+            projectSelection.revision,
+            projectSelection.projectId,
+          ]),
+          projectId: projectSelection.projectId,
+          bindingRevision: projectSelection.revision,
+          botId: projectSelection.botId,
+        }
+      : undefined,
     pageSession: pages.session,
     activeId: active?.id,
     inGroup,

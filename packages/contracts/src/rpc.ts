@@ -202,6 +202,7 @@ import {
   SpendingPaymentSchema,
   SpendingStatusSchema,
 } from "./payments.js";
+import { CommercialInspectionSelectionSchema } from "./project-commercial.js";
 import { MessageReactionSchema } from "./reactions.js";
 import { RoutineWatchSchema } from "./routine-watch.js";
 import {
@@ -244,6 +245,7 @@ const structuredMentionTarget = z.discriminatedUnion("kind", [
 ]);
 
 const threadSendFields = threadTarget.safeExtend({
+  commercialInspection: CommercialInspectionSelectionSchema.optional(),
   imageHandling: z.enum(["confirm", "file"]).optional(),
   text: z.string().max(THREAD_MESSAGE_TEXT_MAX_LENGTH).optional(),
   artifactIds: z.array(Id).max(ATTACHMENT_COUNT_CEILING).optional(),
