@@ -64,6 +64,11 @@ it.each([
   ["list_buildings", "Look up buildings"],
   ["list_projects", "Look up projects"],
   ["get_project", "Read project"],
+  ["get_project_summary", "Read project summary"],
+  ["get_claim_position", "Read claim position"],
+  ["list_issues", "Look up issues"],
+  ["get_invoice_register", "Read invoice register"],
+  ["preview_change_order", "Preview change order"],
 ])("labels saved and new %s calls without exposing the server name", (action, label) => {
   for (const tool of [
     action,
@@ -90,6 +95,34 @@ it("covers every catalog tool in shared step projection", () => {
     const tool = `mcp__example__${action}`;
     const label = friendlyMcpToolLabel(tool);
     expect(label).not.toBe("Use connected tool");
+    expect(friendlyMcpToolLabel(action)).toBe(label);
     expect(appendToolStep([], tool)).toEqual([{ label, count: 1 }]);
   }
+});
+
+it("keeps review reads trusted and write-scope preparation separate", () => {
+  expect(PROJECT_MANAGER_TOOLS.trustedTools).toEqual([
+    "list_clients",
+    "list_buildings",
+    "list_projects",
+    "list_work_packages",
+    "get_project_summary",
+    "get_claim_position",
+    "list_issues",
+    "search_documents",
+    "get_document_evidence",
+    "get_invoice_register",
+    "preview_change_order",
+  ]);
+  expect(PROJECT_MANAGER_TOOLS.setupWriteTools).toEqual([
+    "search_locations",
+    "get_location_proof",
+    "create_client",
+    "create_building",
+    "create_project",
+    "create_work_package",
+  ]);
+  const catalog = [...PROJECT_MANAGER_TOOLS.trustedTools, ...PROJECT_MANAGER_TOOLS.setupWriteTools];
+  expect(catalog).not.toContain("rename_project");
+  expect(catalog).not.toContain("delete_project");
 });

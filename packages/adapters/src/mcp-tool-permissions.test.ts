@@ -36,7 +36,7 @@ it("supports explicit trust for a write without granting another write", () => {
 it("preserves explicit writes across provisioning without admitting new tools", () => {
   const policy = projectManagerToolPolicy(["create_project", "unknown"]);
   expect(mcpToolTrusted(policy, "create_project")).toBe(true);
-  expect(mcpToolTrusted(policy, "search_clients")).toBe(true);
+  expect(mcpToolTrusted(policy, "list_clients")).toBe(true);
   expect(mcpToolAllowed(policy, "unknown")).toBe(false);
   expect(policy.trustedTools).not.toContain("unknown");
 });
