@@ -5,11 +5,24 @@ import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import { Button, Disclosure, SectionHeading, Tabs, TabsList, TabsTrigger } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { Building } from "lucide-react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { withSpaceHeaders } from "../../lib/rpc";
 import { CommercialInspection, inspectionStorageKey } from "./commercial-inspection";
 import { hierarchyRetry } from "./hierarchy-refresh";
 import { useProjectCommercial } from "./project-commercial";
+
+const BuildingMap = lazy(() => import("./building-map"));
+
+function MapFallback() {
+  const { t } = useLingui();
+  return (
+    <p
+      role="status"
+      className="mb-4 flex h-40 items-center justify-center rounded-md border border-border bg-muted text-body text-muted-foreground"
+    >{t`Map unavailable`}</p>
+  );
+}
 
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery<Hierarchy | null>({
@@ -146,6 +159,11 @@ function ProjectStageContent({
       <h2 className="my-4 text-heading1 font-semibold tracking-tight break-words">
         {data.client.name}
       </h2>
+      <ErrorBoundary fallback={<MapFallback />} key={building.id}>
+        <Suspense fallback={<MapFallback />}>
+          <BuildingMap building={building} />
+        </Suspense>
+      </ErrorBoundary>
       <div className="mb-3 flex items-center gap-2">
         <Building aria-hidden="true" className="size-4 shrink-0" />
         <span>{building.name}</span>
@@ -154,8 +172,6 @@ function ProjectStageContent({
       building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
         <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
       ) : null}
-      {/* Keep the map neutral until the exact basemap is configured. */}
-      <div aria-hidden="true" className="mb-4 h-40 rounded-md border border-border bg-muted" />
       <ul>
         {building.projects.map((project) => (
           <li key={project.id}>

@@ -1,8 +1,8 @@
 /**
  * Content-Security-Policy for documents the web server (and the desktop bundled renderer) serves.
- * The app talks only to its own origin: /api, /rpc, the Sentry tunnel and the /novnc screen proxy
- * all live there, so 'self' covers fetches, WebSockets and screen frames in every deployment. The
- * web server may add operator-configured https origins for a script its CDN injects.
+ * The API, RPC, monitoring tunnel and screen proxy live on the app origin; the optional portfolio
+ * basemap also fetches from its tile host. The web server may add operator-configured https
+ * origins for a script its CDN injects.
  */
 
 /** Static shell for SandboxedHtmlViewer. It must load from the network so it does not inherit the
@@ -39,7 +39,8 @@ const APP_DIRECTIVES: Record<string, string[]> = {
   "font-src": ["'self'", "data:"],
   // Voice replies and video attachments play from object URLs.
   "media-src": ["'self'", "blob:"],
-  "connect-src": ["'self'"],
+  // The portfolio basemap fetches its style, vector tiles, glyphs and sprites here.
+  "connect-src": ["'self'", "https://maps.geoapify.com"],
   // The /novnc screen proxy, the HTML viewer shell and PDF object URLs.
   "frame-src": ["'self'", "blob:"],
   "object-src": ["'none'"],
@@ -120,7 +121,7 @@ export function appContentSecurityPolicy(extensions: ContentSecurityPolicyExtens
   const directives: Record<string, string[]> = {
     ...APP_DIRECTIVES,
     "script-src": ["'self'", ...(extensions.scriptSrc ?? [])],
-    "connect-src": ["'self'", ...(extensions.connectSrc ?? [])],
+    "connect-src": [...APP_DIRECTIVES["connect-src"]!, ...(extensions.connectSrc ?? [])],
   };
   if (extensions.crisp) {
     for (const [name, sources] of Object.entries(CRISP_DIRECTIVES)) {
