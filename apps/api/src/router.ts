@@ -35,7 +35,13 @@ import type {
   WorkActivities,
 } from "@rakazo/adapters";
 import type { Auth } from "@rakazo/auth";
-import type { LabFeature, McpServerConfigInput, ModelCredential, NavLink } from "@rakazo/contracts";
+import type {
+  Actor,
+  LabFeature,
+  McpServerConfigInput,
+  ModelCredential,
+  NavLink,
+} from "@rakazo/contracts";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
 import type { BoardEvents, PrismaClient, ThreadEvents } from "@rakazo/db";
@@ -70,6 +76,10 @@ export { HEARTBEAT_MS, SESSION_RECHECK_MS } from "./routes/shared.js";
 export { callMarkerClientNonce } from "./routes/threads.js";
 
 export interface RouterDeps {
+  stageProjectIntake?: (
+    actor: Actor,
+    input: { projectId: string; botId: string; artifactIds: string[] },
+  ) => Promise<{ intakeId: string; files: { id: string; status: string }[] }>;
   projectManagers?: {
     readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     ownerServerPrefix: string;

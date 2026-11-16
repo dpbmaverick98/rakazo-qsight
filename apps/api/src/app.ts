@@ -169,6 +169,7 @@ import { moveMcpArgsIntoSecrets } from "./mcp-args-migration.js";
 import { startMessagingRuntime } from "./messaging-runtime.js";
 import { monitoringRoutes } from "./monitoring.js";
 import { pluginSubmissionRoutes } from "./plugin-submissions.js";
+import type { ProjectIntakeInput } from "./project-intake.js";
 import { stageProjectIntake } from "./project-intake.js";
 import { sendReferralEmails } from "./referral-email.js";
 import { mountApiRequestBodyLimits, rpcBodyLimit } from "./request-body-limit.js";
@@ -187,6 +188,7 @@ import { createAuthResponseAudit } from "./security-audit.js";
 import { mountSharedPages } from "./shared-pages.js";
 import {
   bindingAccess,
+  boundHierarchy,
   canManageClientBinding,
   changeClientBinding,
   resolveClientBinding,
@@ -763,8 +765,47 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     (error) => getLogger().error("stalled organization deletion failed", error),
   );
 
+  const hierarchySource = qsightHierarchyFromEnv();
+  const stageIntake = hierarchySource
+    ? (actor: Actor, input: ProjectIntakeInput) =>
+        runAsTenant(actor, () =>
+          stageProjectIntake(
+            {
+              source: {
+                createIntake: hierarchySource.createIntake,
+                completeIntakeFile: hierarchySource.completeIntakeFile,
+                revokeManagerToken: hierarchySource.revokeManagerToken,
+                managerServer: async (id, name) => {
+                  const config = await hierarchySource.managerServer(id, name);
+                  return {
+                    tokenId: config.tokenId,
+                    token: config.headers.Authorization.slice("Bearer ".length),
+                  };
+                },
+              },
+              readArtifact: (owner, artifact) =>
+                getOwnedArtifact({ prisma, artifacts }, owner, artifact),
+            },
+            actor,
+            input,
+          ),
+        )
+    : undefined;
+
   const router = createRouter({
-    projectManagers: qsightHierarchyFromEnv(),
+    projectManagers: hierarchySource,
+    stageProjectIntake:
+      hierarchySource && stageIntake
+        ? (actor, input) =>
+            runAsTenant(actor, async () => {
+              const { hierarchy } = await boundHierarchy(prisma, actor, hierarchySource);
+              const project = hierarchy.buildings
+                .flatMap((building) => building.projects)
+                .find((project) => project.id === input.projectId);
+              if (!project) throw new Error("Project unavailable");
+              return stageIntake(actor, { ...input, projectName: project.name });
+            })
+        : undefined,
     speechSummary:
       env.voiceSummaryMinChars === undefined
         ? undefined
@@ -1015,33 +1056,8 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     return actor && { actor, sessionId: session.session.id };
   };
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
-  const hierarchySource = qsightHierarchyFromEnv();
   mountHierarchyRoute(app, {
-    stageProjectIntake: hierarchySource
-      ? (actor, input) =>
-          runAsTenant(actor, () =>
-            stageProjectIntake(
-              {
-                source: {
-                  createIntake: hierarchySource.createIntake,
-                  completeIntakeFile: hierarchySource.completeIntakeFile,
-                  revokeManagerToken: hierarchySource.revokeManagerToken,
-                  managerServer: async (id, name) => {
-                    const config = await hierarchySource.managerServer(id, name);
-                    return {
-                      tokenId: config.tokenId,
-                      token: config.headers.Authorization.slice("Bearer ".length),
-                    };
-                  },
-                },
-                readArtifact: (owner, artifact) =>
-                  getOwnedArtifact({ prisma, artifacts }, owner, artifact),
-              },
-              actor,
-              input,
-            ),
-          )
-      : undefined,
+    stageProjectIntake: stageIntake,
     authorizePreview: (actor, botId, selection) =>
       runAsTenant(actor, async () => {
         const target = await resolveThreadTarget(prisma, actor, { botId });

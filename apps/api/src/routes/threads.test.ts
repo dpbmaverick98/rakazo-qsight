@@ -1,8 +1,10 @@
 import { ORPCError } from "@orpc/server";
-import type { Actor } from "@rakazo/contracts";
+import { RPCHandler } from "@orpc/server/fetch";
+import type { Actor, MessageBlock } from "@rakazo/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { answerComputerRequest } from "../computer-control.js";
 import type { RouterDeps } from "../router.js";
+import { createRouter } from "../router.js";
 import { purgeClearedThreadMemory } from "../thread-memory.js";
 import type { ThreadTarget } from "../thread-target.js";
 import { takeoverReleaser } from "./threads.js";
@@ -178,6 +180,155 @@ describe("purgeClearedThreadMemory", () => {
           generations: [2, 3],
           connectionIdentity: "connection-1",
         },
+      }),
+    );
+  });
+});
+
+vi.mock("./shared.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./shared.js")>()),
+  modelSetup: vi.fn(async () => ({ needsModel: false, hasDeployment: false })),
+}));
+vi.mock("../taught-skills.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../taught-skills.js")>()),
+  assertTeachingSendAllowed: vi.fn(),
+}));
+
+function intakeFixture(spawnKey = "pm:roof") {
+  const tx = {
+    artifact: {
+      findMany: vi.fn(async () => [
+        { id: "artifact-1", name: "Plan.pdf", mimeType: "application/pdf", size: 4 },
+      ]),
+    },
+    space: { findUnique: vi.fn(async () => ({ isDefault: false, deletingAt: null })) },
+    spaceMember: {
+      findUnique: vi.fn(async () => ({ role: "member" })),
+      count: vi.fn(async () => 1),
+    },
+
+    bot: {
+      findFirst: vi.fn(async () => ({
+        id: "bot",
+        spawnKey,
+        thread: { id: "thread" },
+        computer: null,
+      })),
+    },
+    $queryRaw: vi.fn(async () => []),
+    $executeRaw: vi.fn(async () => 0),
+    user: { findMany: vi.fn(async () => []) },
+    thread: { update: vi.fn(async () => ({ nextMessageSeq: 2, nextEventSeq: 2 })) },
+    message: {
+      findUnique: vi.fn(async () => null),
+      create: vi.fn(async ({ data }: { data: { blocks: MessageBlock[] } }) => ({
+        ...data,
+        id: "message",
+        seq: 1,
+        createdAt: new Date("2026-01-01T00:00:00Z"),
+      })),
+      update: vi.fn(),
+      findMany: vi.fn(async () => [
+        { id: "ask", blocks: [{ kind: "ask", text: "Which?", status: "pending" }] },
+      ]),
+      findFirst: vi.fn(async () => ({
+        id: "ask",
+        blocks: [{ kind: "ask", text: "Which?", status: "pending" }],
+      })),
+    },
+    task: {
+      create: vi.fn(async (_input: unknown) => ({ id: "task" })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+    run: {
+      findMany: vi.fn<(...args: unknown[]) => Promise<unknown[]>>(async () => []),
+      create: vi.fn(async () => ({ id: "run", taskId: "task", status: "queued", userId: "user" })),
+      findFirst: vi.fn(async () => ({ botId: "bot", userId: "user" })),
+      findUnique: vi.fn(async () => ({ status: "queued" })),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
+    steeringMessage: { create: vi.fn() },
+    event: { create: vi.fn(async () => ({ seq: 1, threadId: "thread" })) },
+  };
+  const prisma = { ...tx, $transaction: vi.fn(async (fn: (db: typeof tx) => unknown) => fn(tx)) };
+  const stageProjectIntake = vi.fn(async () => ({
+    intakeId: "intake-1",
+    files: [{ id: "file-1", status: "processing" }],
+  }));
+  const handler = new RPCHandler(
+    createRouter({
+      prisma,
+      stageProjectIntake,
+      env: { webOrigin: "http://127.0.0.1", agentRuntime: "scripted" },
+      events: { notify: vi.fn(async () => undefined) },
+      jobs: { enqueue: vi.fn(async () => undefined) },
+    } as unknown as RouterDeps),
+  );
+  const send = async (artifactIds?: string[]) => {
+    const { response } = await handler.handle(
+      new Request("http://127.0.0.1/rpc/threads/send", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ json: { botId: "bot", text: "Review this", artifactIds } }),
+      }),
+      { prefix: "/rpc", context: { actor } },
+    );
+    expect(response?.status).toBe(200);
+  };
+  return { tx, stageProjectIntake, send };
+}
+
+describe("PM chat attachment intake", () => {
+  it("stages once before the model turn and keeps the note out of stored blocks", async () => {
+    const f = intakeFixture();
+    await f.send(["artifact-1"]);
+    expect(f.stageProjectIntake).toHaveBeenCalledExactlyOnceWith(actor, {
+      projectId: "roof",
+      botId: "bot",
+      artifactIds: ["artifact-1"],
+    });
+    expect(f.tx.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt:
+            'Review this\n\nAttached files were staged in Vendor One intake intake-1 (1 files). Vendor One will inspect them; acknowledge that you will review them and ask one question at a time. Do not claim the documents are published or approved.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
+        }),
+      }),
+    );
+    expect(f.tx.message.create.mock.calls[0]?.[0].data.blocks).toEqual([
+      { kind: "text", text: "Review this" },
+      {
+        kind: "file",
+        artifactId: "artifact-1",
+        name: "Plan.pdf",
+        mimeType: "application/pdf",
+        size: 4,
+      },
+    ]);
+    expect(f.stageProjectIntake.mock.invocationCallOrder[0]).toBeLessThan(
+      f.tx.task.create.mock.invocationCallOrder[0]!,
+    );
+  });
+  it("does not stage for a non-PM bot", async () => {
+    const f = intakeFixture("other:roof");
+    await f.send(["artifact-1"]);
+    expect(f.stageProjectIntake).not.toHaveBeenCalled();
+  });
+  it("does not stage without artifacts", async () => {
+    const f = intakeFixture();
+    await f.send();
+    expect(f.stageProjectIntake).not.toHaveBeenCalled();
+  });
+  it("still sends with the failure note when staging fails", async () => {
+    const f = intakeFixture();
+    f.stageProjectIntake.mockRejectedValueOnce(new Error("unavailable"));
+    await f.send(["artifact-1"]);
+    expect(f.tx.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt:
+            'Review this\n\nAttachment staging failed; the files remain in this chat. Tell the user to retry and do not claim they were reviewed.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
+        }),
       }),
     );
   });

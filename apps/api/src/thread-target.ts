@@ -511,6 +511,7 @@ export async function sendThreadMessage(
     clientNonce?: string;
     /** Internal only: resolved from canonical server reads, never accepted by the send contract. */
     inspection?: ResolvedInspection;
+    stagingNote?: string;
     /** No model to start a turn: the send may only stop active work. */
     noModel?: boolean;
   },
@@ -518,9 +519,12 @@ export async function sendThreadMessage(
   /** Runs saved with the message, after the thread lock and before the message is routed. */
   startRoutines?: (tx: Prisma.TransactionClient) => Promise<Array<{ id: string; status: string }>>,
 ) {
-  const turnText = input.inspection
-    ? [input.text?.trim(), input.inspection.prompt].filter(Boolean).join("\n\n")
-    : input.text;
+  const turnText =
+    input.inspection || input.stagingNote
+      ? [input.text?.trim(), input.inspection?.prompt, input.stagingNote]
+          .filter(Boolean)
+          .join("\n\n")
+      : input.text;
   const existing = await replayExistingSend(
     deps,
     target.threadId,

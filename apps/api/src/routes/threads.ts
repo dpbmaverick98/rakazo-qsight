@@ -144,6 +144,25 @@ export function threadsRoutes(ctx: RouterContext) {
     const deployment = setup.hasDeployment
       ? { provider: deps.env.defaultProvider, model: deps.env.defaultModel }
       : null;
+    let stagingNote: string | undefined;
+    if (
+      target.kind === "bot" &&
+      target.bot.spawnKey?.startsWith("pm:") &&
+      input.artifactIds?.length &&
+      deps.stageProjectIntake
+    ) {
+      try {
+        const intake = await deps.stageProjectIntake(actor, {
+          projectId: target.bot.spawnKey.slice(3),
+          botId: target.botId,
+          artifactIds: input.artifactIds,
+        });
+        stagingNote = `Attached files were staged in Vendor One intake ${intake.intakeId} (${intake.files.length} files). Vendor One will inspect them; acknowledge that you will review them and ask one question at a time. Do not claim the documents are published or approved.`;
+      } catch {
+        stagingNote =
+          "Attachment staging failed; the files remain in this chat. Tell the user to retry and do not claim they were reviewed.";
+      }
+    }
     return sendThreadMessage(
       {
         ...deps,
@@ -159,7 +178,7 @@ export function threadsRoutes(ctx: RouterContext) {
       },
       actor,
       target,
-      { ...input, noModel, inspection },
+      { ...input, noModel, inspection, stagingNote },
       takeoverReleaser(deps, actor, target),
       startRoutines,
     ).catch((error: unknown) => {
