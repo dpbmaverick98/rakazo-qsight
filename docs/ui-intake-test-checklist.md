@@ -9,8 +9,10 @@ row Pass / Fail / Blocked and attach a screenshot for failures.
 
 - [ ] Dev stack is the build you intend to test (record branch/commit).
 - [ ] You are signed in as a Space owner/admin who can bind a client.
-- [ ] The project manager was provisioned **after** the `read+scaffold` change;
-      an older manager can read but cannot save corrections or create packages.
+- [ ] The project manager was **created** after the `read+scaffold` change.
+      Re-running provisioning for an existing manager reuses its managed credential
+      (`apps/api/src/project-manager.ts`), so it does **not** upgrade an older token;
+      create a new project/manager for testing if the current one predates the change.
 - [ ] The API worker has `QSIGHT_*` base URL/token settings, or staging will fail
       with a typed unavailable error (that is itself a check).
 - [ ] Use a disposable project; do not test on working commercial data.
@@ -110,6 +112,8 @@ Use one PDF plus one folder (two or three files).
 ## E. Boundaries (do not mark pass if any is violated)
 
 - [ ] No chat/tool path publishes or approves; writes use one explicit approval.
+- [ ] If corrections/package creation fail with permission denied, stop and confirm the
+      manager token has `read+scaffold`; a pre-change manager is a blocked test, not a UI bug.
 - [ ] Publication remains a human action in QSight (trusted card not built yet).
 - [ ] No cross-project/cross-client data in tabs, receipts, tool results or logs.
 - [ ] Existing PMs are not silently upgraded; reprovisioning is explicit.
