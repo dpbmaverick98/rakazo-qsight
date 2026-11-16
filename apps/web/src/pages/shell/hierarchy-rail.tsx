@@ -213,6 +213,11 @@ function ProjectStageContent({
   );
   return (
     <CommercialInspection
+      previewContext={{
+        botId: selection.botId,
+        projectId: selection.projectId,
+        revision: selection.revision,
+      }}
       key={JSON.stringify([
         scope.userId,
         scope.spaceId,

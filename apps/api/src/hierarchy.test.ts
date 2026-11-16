@@ -512,3 +512,52 @@ it.each([
   expect(response.status).toBe(502);
   expect(response.headers.get("cache-control")).toBe("no-store");
 });
+
+it("authenticates previews, delegates manager ancestry checks, and strips upstream metadata", async () => {
+  const { deps } = setup();
+  const authorizePreview = vi.fn(async () => {});
+  const previewDocument = vi.fn(
+    async () =>
+      new Response("PDF bytes", {
+        headers: {
+          "Content-Type": "application/pdf",
+          Location: "https://storage.example.test/private",
+          "X-Token": "secret",
+        },
+      }),
+  );
+  const app = new Hono();
+  mountHierarchyRoute(app, {
+    ...deps,
+    authorizePreview,
+    source: { ...deps.source, previewDocument },
+  });
+  const url =
+    "/api/agent-plane/projects/roof/documents/proposal/preview?botId=manager&claimId=claim&vendorId=vendor&packageId=drywall";
+  const request = () => app.request(url, { headers: { "x-rakazo-binding-revision": "1" } });
+  deps.sessionActor.mockResolvedValueOnce(null);
+  expect((await request()).status).toBe(401);
+  expect(previewDocument).not.toHaveBeenCalled();
+  authorizePreview.mockRejectedValueOnce(new ORPCError("BAD_REQUEST"));
+  expect((await request()).status).toBe(400);
+  expect(previewDocument).not.toHaveBeenCalled();
+  const response = await request();
+  expect(response.status).toBe(200);
+  expect(authorizePreview).toHaveBeenLastCalledWith(actor, "manager", {
+    projectId: "roof",
+    bindingRevision: 1,
+    claimId: "claim",
+    vendorId: "vendor",
+    packageId: "drywall",
+    fileId: "proposal",
+  });
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(response.headers.get("content-security-policy")).toContain("sandbox");
+  expect(response.headers.get("location")).toBeNull();
+  expect(response.headers.get("x-token")).toBeNull();
+  expect(await response.text()).toBe("PDF bytes");
+  previewDocument.mockResolvedValueOnce(new Response(null, { status: 415 }));
+  expect((await request()).status).toBe(415);
+  deps.resolveBinding.mockRejectedValueOnce(new ORPCError("CONFLICT"));
+  expect((await request()).status).toBe(409);
+});

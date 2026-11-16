@@ -8,9 +8,11 @@ import {
   selectableMessageText,
 } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
+import { Hono } from "hono";
 import { expect, it, vi } from "vitest";
 import { resolveCommercialInspection } from "./commercial-inspection.js";
 import type * as ComputerModule from "./computer-control.js";
+import { mountHierarchyRoute } from "./hierarchy.js";
 import type { RouterDeps } from "./router.js";
 import { createRouter } from "./router.js";
 import type * as SharedModule from "./routes/shared.js";
@@ -53,7 +55,15 @@ function fixture() {
   const commercial = structuredClone(commercialDocumentsFixture);
   const hierarchy = {
     client: { id: "client", name: "Client" },
-    buildings: [{ id: "building", projects: [{ id: "roof", name: "Canonical roof" }] }],
+    buildings: [
+      {
+        id: "building",
+        name: "Building",
+        projects: [
+          { id: "roof", name: "Canonical roof", url: "https://example.test/projects/roof" },
+        ],
+      },
+    ],
   };
   const tx = {
     space: { findUnique: vi.fn(async () => ({ isDefault: false, deletingAt: null })) },
@@ -175,7 +185,11 @@ it("rejects stale binding before upstream reads and changes during the commercia
 
 it("rejects ambiguous project/claim IDs, unscoped bots and missing document projections", async () => {
   const f = fixture();
-  f.hierarchy.buildings[0]!.projects.push({ id: "roof", name: "Ambiguous" });
+  f.hierarchy.buildings[0]!.projects.push({
+    id: "roof",
+    name: "Ambiguous",
+    url: "https://example.test/projects/roof",
+  });
   await expect(resolveCommercialInspection(f.deps, actor, target, selection)).rejects.toMatchObject(
     { code: "BAD_REQUEST" },
   );
@@ -311,3 +325,40 @@ it("accepts an inspection-bearing HTTP send and reaches the existing PM run", as
     data: { prompt: expect.stringContaining('"document":{"id":"proposal","name":"Proposal.pdf"}') },
   });
 });
+
+it.each(["projectId", "claimId", "vendorId", "packageId", "fileId"] as const)(
+  "rejects preview route ancestry mismatch in %s before requesting bytes",
+  async (key) => {
+    const f = fixture();
+    const previewDocument = vi.fn(async () => new Response("private bytes"));
+    const app = new Hono();
+    mountHierarchyRoute(app, {
+      sessionActor: async () => actor,
+      resolveBinding: async () => ({
+        externalClientId: "client",
+        clientName: "Client",
+        revision: 1,
+      }),
+      source: { ...f.source, previewDocument },
+      authorizePreview: async (actor, _botId, selection) => {
+        await resolveCommercialInspection(f.deps, actor, target, selection);
+      },
+    });
+    const input = { ...selection, [key]: "foreign" };
+    const query = new URLSearchParams({
+      botId: "bot",
+      claimId: input.claimId,
+      vendorId: input.vendorId!,
+      packageId: input.packageId!,
+    });
+    const response = await app.request(
+      `/api/agent-plane/projects/${input.projectId}/documents/${input.fileId}/preview?${query}`,
+      {
+        headers: { "x-rakazo-binding-revision": "1" },
+      },
+    );
+    expect(response.status).toBe(400);
+    expect(previewDocument).not.toHaveBeenCalled();
+    expect(await response.text()).not.toContain("private bytes");
+  },
+);

@@ -573,3 +573,69 @@ it("preserves additive metadata and totals while rebuilding document links witho
   expect(result).toEqual(commercialDocumentsFixture);
   expect(JSON.stringify(result)).not.toContain("fake-secret");
 });
+
+it.each(["application/pdf", "image/png", "text/markdown"])(
+  "previews %s through the agent contract without forwarding headers",
+  async (type) => {
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response("preview bytes", {
+          headers: {
+            "Content-Type": type,
+            Location: "https://storage.example.test/private",
+            "X-Storage-Key": "private-key",
+          },
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const response = await qsightHierarchyFromEnv(config)!.previewDocument("doc/1");
+    expect(String(fetch.mock.calls[0]?.[0])).toBe(
+      "https://hierarchy.example.test/api/v2/agent/documents/doc%2F1/preview",
+    );
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({
+      redirect: "error",
+      headers: { Authorization: "Bearer fake-token" },
+    });
+    expect(response.headers.get("content-type")).toBe(type);
+    expect([...response.headers.keys()]).toEqual(["content-type"]);
+    expect(await response.text()).toBe("preview bytes");
+  },
+);
+
+it.each([415, 200])("returns unsupported for status %s with unsafe content", async (status) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response("<script>bad()</script>", {
+          status,
+          headers: { "Content-Type": "text/html" },
+        }),
+    ),
+  );
+  const response = await qsightHierarchyFromEnv(config)!.previewDocument("doc");
+  expect(response.status).toBe(415);
+  expect(await response.text()).toBe("");
+});
+
+it("bounds extracted text and sanitizes upstream errors", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response("x".repeat(256_001), { headers: { "Content-Type": "text/markdown" } }),
+    ),
+  );
+  await expect(qsightHierarchyFromEnv(config)!.previewDocument("doc")).rejects.toThrow(
+    "Preview unavailable",
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("fake-token private storage URL");
+    }),
+  );
+  await expect(qsightHierarchyFromEnv(config)!.previewDocument("doc")).rejects.toThrow(
+    /^Preview unavailable$/,
+  );
+});

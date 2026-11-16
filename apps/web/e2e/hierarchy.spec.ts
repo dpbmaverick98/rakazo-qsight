@@ -46,6 +46,9 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
   await page.route("**/api/agent-plane/projects/roof/commercial", (route) =>
     route.fulfill({ json: commercialFixture }),
   );
+  await page.route("**/api/agent-plane/projects/roof/documents/*/preview?*", (route) =>
+    route.fulfill({ status: 415 }),
+  );
   await page.evaluate((id) => localStorage.setItem("rakazo:space-id", id), space.id);
   const botResponse = await page.request.post("/rpc/bots/create", {
     headers: { "x-rakazo-space-id": space.id },

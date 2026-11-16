@@ -14,7 +14,13 @@ import {
   RenameProjectSchema,
 } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
-import { deadlineSignal, PROJECT_MANAGER_TOOLS, readBoundedJsonResponse } from "@rakazo/core";
+import {
+  deadlineSignal,
+  PROJECT_MANAGER_TOOLS,
+  readBoundedJsonResponse,
+  readBoundedResponseBytes,
+  withAbort,
+} from "@rakazo/core";
 import { bestEffort, clientSetupCorrelationHeaders, clientSetupStage } from "@rakazo/logging";
 import { z } from "zod";
 
@@ -402,6 +408,44 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
           await bestEffort("revoke malformed project credential", revokeManagerToken(mintedId));
         // Parsing and network errors can contain credentials; never forward them.
         throw new Error("Project manager credentials unavailable");
+      }
+    },
+    // Integration-unverified: implements the upstream agent document preview contract.
+    async previewDocument(documentId: string): Promise<Response> {
+      const signal = deadlineSignal(15_000);
+      try {
+        const response = await upstream(
+          "document.preview",
+          new URL(
+            `/api/v2/agent/documents/${encodeURIComponent(Id.parse(documentId))}/preview`,
+            origin,
+          ),
+          { headers: { Authorization: `Bearer ${token}` }, redirect: "error", signal },
+        );
+        if (response.status === 415) return new Response(null, { status: 415 });
+        if (!response.ok) throw new Error();
+        const type = response.headers.get("content-type")?.split(";")[0]?.trim();
+        if (
+          !type ||
+          ![
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+            "text/markdown",
+            "text/plain",
+          ].includes(type)
+        )
+          return new Response(null, { status: 415 });
+        const bytes = await readBoundedResponseBytes(response, {
+          maxBytes: type.startsWith("text/") ? 256_000 : 20_000_000,
+          tooLargeMessage: "Preview unavailable",
+          read: (operation) => withAbort(operation(), signal),
+        });
+        return new Response(new Uint8Array(bytes).buffer, { headers: { "Content-Type": type } });
+      } catch {
+        throw new Error("Preview unavailable");
       }
     },
     async readCommercial(id: string, fresh = false) {

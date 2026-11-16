@@ -2,6 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Button, Tabs, TabsContent, TabsList, TabsTrigger } from "@rakazo/ui-web";
 import type { ComponentProps, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { DocumentPreview } from "./document-preview";
 import type { InspectionSelection as Selection } from "./inspection-storage";
 import { inspectionStorageKey, restoreInspection } from "./inspection-storage";
 import { CommercialPanel } from "./project-commercial";
@@ -13,6 +14,7 @@ const amountFields = { proposal: "proposed", breakdown: "breakdown", invoice: "i
 /** Only identities are remembered. Every render resolves them against an authorized fresh read. */
 export function CommercialInspection({
   scope,
+  previewContext,
   ready,
   projectSpace,
   projectTab,
@@ -20,6 +22,7 @@ export function CommercialInspection({
   ...props
 }: ComponentProps<typeof CommercialPanel> & {
   scope: string;
+  previewContext?: { botId: string; projectId: string; revision: number };
   ready: boolean;
   projectSpace: ReactNode;
   projectTab: "space" | "claims";
@@ -231,10 +234,22 @@ export function CommercialInspection({
               <p className="text-muted-foreground">
                 <span>{file.role}</span> <span>{file.status}</span>
               </p>
-              <p className="my-3">
-                <Trans>Preview unavailable</Trans>
-              </p>
-              <RecordLink url={file.url} />
+              {previewContext && selection && activeTab === "file" ? (
+                <DocumentPreview
+                  key={file.id}
+                  url={`/api/agent-plane/projects/${encodeURIComponent(previewContext.projectId)}/documents/${encodeURIComponent(file.id)}/preview?${new URLSearchParams({ botId: previewContext.botId, claimId: claim.id, vendorId: vendor.id, packageId: workPackage!.id })}`}
+                  revision={previewContext.revision}
+                  name={file.filename}
+                  externalUrl={file.url}
+                />
+              ) : (
+                <>
+                  <p>
+                    <Trans>Preview unavailable</Trans>
+                  </p>
+                  <RecordLink url={file.url} />
+                </>
+              )}
             </TabsContent>
           ) : null}
         </>
