@@ -439,7 +439,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         )
           return new Response(null, { status: 415 });
         const bytes = await readBoundedResponseBytes(response, {
-          maxBytes: type.startsWith("text/") ? 256_000 : 20_000_000,
+          maxBytes: type.startsWith("text/") ? 256 * 1024 : 20_000_000,
           tooLargeMessage: "Preview unavailable",
           read: (operation) => withAbort(operation(), signal),
         });

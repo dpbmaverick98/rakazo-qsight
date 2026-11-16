@@ -623,7 +623,7 @@ it("bounds extracted text and sanitizes upstream errors", async () => {
     "fetch",
     vi.fn(
       async () =>
-        new Response("x".repeat(256_001), { headers: { "Content-Type": "text/markdown" } }),
+        new Response("x".repeat(256 * 1024 + 1), { headers: { "Content-Type": "text/markdown" } }),
     ),
   );
   await expect(qsightHierarchyFromEnv(config)!.previewDocument("doc")).rejects.toThrow(
