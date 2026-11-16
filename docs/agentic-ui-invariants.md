@@ -78,6 +78,9 @@ Purpose: see clients, create clients, and select the project manager conversatio
   - **New building**
   - **New project**
   - **Delete client/space** only when the existing lifecycle rules allow it.
+- **New project always requires a building.** When the client has one building it
+  may be preselected; when it has multiple buildings the user must choose one. The
+  same flow may create a new building and then continue to the project.
 - Selecting the client row expands/collapses its hierarchy. It MUST NOT open a
   generic client chat.
 - Creating a client uses the existing landing-page flow:
@@ -355,6 +358,8 @@ A change that violates any of these is not ready:
 - **INV-UI-12** The map uses the exact QSight basemap provider/style and is static.
 - **INV-UI-13** An assigned manager is labelled `{Project} - PM`; the setup manager
   becomes permanent with history preserved.
+- **INV-UI-14** New project always resolves a building; multiple buildings require
+  an explicit choice, and the flow may create a building first.
 
 ## 10. Resolved decisions and remaining question
 
@@ -375,9 +380,6 @@ Resolved:
    read-only.
 8. **Setup manager lifecycle:** the setup manager becomes the permanent project
    manager after assignment; chat history is preserved.
-
-Remaining:
-
-- **Project creation from the client 3-dot:** when a client has multiple buildings,
-  must New project always choose a building, and may that flow create a new
-  building at the same time?
+9. **Project creation from the client 3-dot:** New project always requires a
+   building. With multiple buildings the user must choose one; the same flow may
+   create a new building and continue to the project.
