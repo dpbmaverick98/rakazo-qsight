@@ -39,8 +39,6 @@ export default defineConfig(({ command, mode }) => {
   let proxyHosts: readonly string[] | true = [];
   const proxy = apiProxy(api, () => proxyHosts);
   return {
-    // Prebundle the optional map before its first lazy load to avoid a dev optimizer restart.
-    optimizeDeps: { include: ["maplibre-gl"] },
     build: {
       sourcemap: true,
       rolldownOptions: {

@@ -5,144 +5,81 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import BuildingMap from "./building-map";
 
-const mocks = vi.hoisted(() => ({ Map: vi.fn(), Marker: vi.fn(), LngLatBounds: vi.fn() }));
-vi.mock("maplibre-gl", () => ({ ...mocks, setWorkerUrl: vi.fn() }));
-vi.mock("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url", () => ({ default: "worker.js" }));
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 afterEach(() => {
-  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  vi.clearAllMocks();
 });
-it.each([
-  "missing key",
-  "WebGL",
-  "timeout",
-  "pre-load error",
-  "context loss",
-  "ready",
-  "post-load error",
-  "post-load context loss",
-])("preserves navigation: %s", async (scenario) => {
-  vi.useFakeTimers();
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubEnv("VITE_GEOAPIFY_API_KEY", scenario === "missing key" ? "" : "fake-key");
-  const events: Record<string, () => void> = {};
-  const canvas = document.createElement("canvas");
-  const view = {
-    on: vi.fn((event: string, callback: () => void) => {
-      events[event] = callback;
-    }),
-    getCanvas: () => canvas,
-    getStyle: () => ({ layers: [{ id: "poi-label" }, { id: "transit-stop" }, { id: "road" }] }),
-    setLayoutProperty: vi.fn(),
-    resize: vi.fn(),
-    fitBounds: vi.fn(),
-    remove: vi.fn(),
-  };
-  mocks.Map.mockImplementation(function MapConstructor() {
-    if (scenario === "WebGL") throw new Error("No WebGL");
-    return view;
-  });
-  const pin = { setLngLat: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis() };
-  mocks.Marker.mockImplementation(function MarkerConstructor() {
-    return pin;
-  });
-  mocks.LngLatBounds.mockImplementation(function BoundsConstructor() {
-    return {};
-  });
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
-  const container = document.createElement("div");
-  const root = createRoot(container);
-  try {
-    await act(async () =>
-      root.render(
-        <>
-          <BuildingMap
-            building={{
-              id: "north",
-              name: "North Building",
-              latitude: 0,
-              longitude: 0,
-              projects: [],
-            }}
-          />
-          <button type="button">Roof survey</button>
-        </>,
-      ),
-    );
-    if (scenario === "missing key") expect(mocks.Map).not.toHaveBeenCalled();
-    else
-      expect(mocks.Map).toHaveBeenCalledWith(
-        expect.objectContaining({
-          interactive: false,
-          attributionControl: false,
-          zoom: 14,
-          style: "https://maps.geoapify.com/v1/styles/positron/style.json?apiKey=fake-key",
-        }),
+it.each(["missing key", "missing coordinates", "image error", "ready"])(
+  "preserves a static preview and navigation: %s",
+  async (scenario) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubEnv("VITE_GEOAPIFY_API_KEY", scenario === "missing key" ? "" : "fake-key&encoded");
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const building = {
+      id: "north",
+      name: "North Building",
+      latitude: scenario === "missing coordinates" ? null : 0,
+      longitude: -0.09,
+      projects: [],
+    };
+    try {
+      await act(async () =>
+        root.render(
+          <>
+            <BuildingMap building={building} />
+            <span>{building.name}</span>
+            <button type="button">Roof survey</button>
+          </>,
+        ),
       );
-    const emitError = () => events.error?.();
-    if (scenario === "timeout") {
-      await act(async () => {
-        emitError();
-        vi.advanceTimersByTime(7_999);
-      });
-      expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
-      await act(async () => vi.advanceTimersByTime(1));
-    }
-    if (scenario === "pre-load error") {
-      await act(async () => emitError());
-      expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
-    }
-    if (scenario === "context loss")
-      await act(async () => canvas.dispatchEvent(new Event("webglcontextlost")));
-    if (
-      ["ready", "pre-load error", "post-load error", "post-load context loss"].includes(scenario)
-    ) {
-      await act(async () => events.load!());
-      await act(async () => vi.advanceTimersByTime(8_000));
-      expect(view.setLayoutProperty.mock.calls).toEqual([
-        ["poi-label", "visibility", "none"],
-        ["transit-stop", "visibility", "none"],
-      ]);
-      expect(mocks.Marker).toHaveBeenCalledOnce();
-      expect(pin.setLngLat).toHaveBeenCalledWith([0, 0]);
-      expect(view.fitBounds).toHaveBeenCalledWith(expect.anything(), {
-        padding: 24,
-        maxZoom: 14,
-        duration: 0,
-      });
-      expect(container.textContent).toContain("Geoapify");
-      expect(container.textContent).not.toContain("North Building");
-      if (scenario === "post-load error") {
-        await act(async () => emitError());
-        await act(async () => emitError());
-      }
-      if (scenario === "post-load context loss") {
-        await act(async () => canvas.dispatchEvent(new Event("webglcontextlost")));
-        expect(container.querySelector('[role="status"]')?.textContent).toBe("Map unavailable");
-        expect(container.querySelector('a[href="https://www.geoapify.com/"]')).toBeNull();
+      const image = container.querySelector("img");
+      if (scenario === "missing key" || scenario === "missing coordinates") {
+        expect(image).toBeNull();
       } else {
-        expect(container.querySelector('[role="status"]')).toBeNull();
-        expect(container.querySelector('[aria-hidden="true"]')?.className).toBe("h-full w-full");
-        expect(container.querySelector('a[href="https://www.geoapify.com/"]')).not.toBeNull();
-        expect(pin.addTo).toHaveBeenCalledWith(view);
+        const url = new URL(image!.src);
+        expect(url.origin + url.pathname).toBe("https://maps.geoapify.com/v1/staticmap");
+        expect(Object.fromEntries(url.searchParams)).toEqual({
+          style: "positron",
+          width: "640",
+          height: "320",
+          center: "lonlat:-0.09,0",
+          zoom: "14",
+          marker: "lonlat:-0.09,0",
+          apiKey: "fake-key&encoded",
+        });
+        expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
+        expect(container.querySelector("a")).toBeNull();
+        await act(async () =>
+          image!.dispatchEvent(new Event(scenario === "ready" ? "load" : "error")),
+        );
       }
-    } else expect(container.querySelector('[role="status"]')?.textContent).toBe("Map unavailable");
-    expect(container.querySelector("button")?.textContent).toBe("Roof survey");
-  } finally {
-    await act(async () => root.unmount());
-  }
-  expect(vi.getTimerCount()).toBe(0);
-  if (!["missing key", "WebGL"].includes(scenario)) expect(view.remove).toHaveBeenCalledOnce();
-});
+      if (scenario === "ready") {
+        expect(container.querySelector('[role="status"]')).toBeNull();
+        expect(Array.from(container.querySelectorAll("a"), (a) => a.href)).toEqual([
+          "https://www.geoapify.com/",
+          "https://www.openstreetmap.org/copyright",
+          "https://openmaptiles.org/",
+        ]);
+        // Changing buildings must discard the previous image's loaded state.
+        await act(async () =>
+          root.render(<BuildingMap building={{ ...building, longitude: 1 }} />),
+        );
+        expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
+      } else {
+        expect(container.querySelector('[role="status"]')?.textContent).toBe("Map unavailable");
+        expect(container.querySelector("img")).toBeNull();
+        expect(container.querySelector("a")).toBeNull();
+        expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
+        expect(container.querySelector("button")?.textContent).toBe("Roof survey");
+      }
+      expect(container.querySelector("canvas")).toBeNull();
+    } finally {
+      await act(async () => root.unmount());
+    }
+  },
+);
