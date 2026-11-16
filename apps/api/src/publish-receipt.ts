@@ -36,8 +36,17 @@ export function canonicalJson(value: unknown): string {
     ancestors.add(value);
     try {
       if (Array.isArray(value)) {
-        if (Object.keys(value).length !== value.length) throw invalid();
-        return `[${Array.from(value, (item) => encode(item, depth + 1)).join(",")}]`;
+        const prototype = Object.getPrototypeOf(value);
+        if (prototype !== Array.prototype && prototype !== null) throw invalid();
+        const length = Object.getOwnPropertyDescriptor(value, "length")?.value;
+        if (Object.getOwnPropertyNames(value).length !== length + 1) throw invalid();
+        const items: string[] = [];
+        for (let index = 0; index < length; index++) {
+          const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+          if (!descriptor || !("value" in descriptor)) throw invalid();
+          items.push(encode(descriptor.value, depth + 1));
+        }
+        return `[${items.join(",")}]`;
       }
       return `{${Object.keys(value)
         .sort()
@@ -128,7 +137,7 @@ function validatePayload(payload: Payload) {
   const id = (value: unknown) =>
     typeof value === "string" && value.length > 0 && Buffer.byteLength(value) <= 200;
   const integer = (value: number, minimum = 0) => Number.isSafeInteger(value) && value >= minimum;
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const hash = /^[0-9a-f]{64}$/;
   if (
     payload.v !== 1 ||
@@ -199,9 +208,10 @@ export function signPublishReceipt(
 export function verifyPublishReceipt(
   receipt: string,
   publicKeyPem: string,
-  expected: { iss: string; aud: string; nowSeconds: number; action: string; kid?: string },
+  expected: { iss: string; aud: string; nowSeconds: number; action: string; kid: string },
 ): Payload {
   try {
+    if (typeof expected.kid !== "string" || !expected.kid) throw invalid();
     const parts = receipt.split(".");
     if (
       parts.length !== 3 ||
@@ -214,7 +224,7 @@ export function verifyPublishReceipt(
       throw invalid();
     const [headerPart, payloadPart, signaturePart] = parts as [string, string, string];
     const parse = (part: string) => {
-      const source = new TextDecoder("utf-8", { fatal: true }).decode(
+      const source = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
         Buffer.from(part, "base64url"),
       );
       const value = JSON.parse(source);
@@ -229,7 +239,7 @@ export function verifyPublishReceipt(
       !header.kid ||
       header.kid.length > 200 ||
       Object.keys(header).sort().join(",") !== "alg,kid,typ" ||
-      (expected.kid !== undefined && header.kid !== expected.kid)
+      header.kid !== expected.kid
     )
       throw invalid();
     const key = createPublicKey(publicKeyPem);
