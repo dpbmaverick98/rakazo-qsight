@@ -12,12 +12,17 @@ vi.mock("../ResizableSidePanel", () => ({
   ResizableSidePanel: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <aside>{children}</aside> : null,
 }));
-const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, stage: vi.fn() }));
+const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, isError: false, stage: vi.fn() }));
 beforeEach(() => {
   hierarchyMock.stage.mockClear();
+  hierarchyMock.isError = false;
 });
 vi.mock("./hierarchy-rail", () => ({
-  useHierarchy: () => ({ data: hierarchyMock.data, isFetching: false, isError: false }),
+  useHierarchy: () => ({
+    data: hierarchyMock.data,
+    isFetching: false,
+    isError: hierarchyMock.isError,
+  }),
   ProjectStage: (props: unknown) => {
     hierarchyMock.stage(props);
     return <div>project-stage</div>;
@@ -103,11 +108,14 @@ describe("shell panel dispatch", () => {
   });
 });
 
-it("keeps sibling projects while rejecting mismatched hierarchy scope and errors", () => {
+it("renders valid hierarchy despite navigation errors and rejects invalid hierarchy", () => {
   const building = { id: "north", projects: [{ id: "roof" }, { id: "sibling" }] };
   hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
-  const props = { hierarchyScope: { userId: "user", spaceId: "space", enabled: true } };
-  render("project:bot:1:space", false, true, props);
+  const props = {
+    hierarchyScope: { userId: "user", spaceId: "space", enabled: true },
+    navigationError: true,
+  };
+  expect(render("project:bot:1:space", false, true, props)).toContain("project-stage");
   expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
     data: { buildings: [building] },
     error: false,
@@ -116,11 +124,15 @@ it("keeps sibling projects while rejecting mismatched hierarchy scope and errors
     { bindingRevision: 2, client: { id: "client" }, buildings: [building] },
     { bindingRevision: 1, client: { id: "other" }, buildings: [building] },
     { bindingRevision: 1, client: { id: "client" }, buildings: [] },
+    { bindingRevision: 1, client: { id: "client" }, buildings: [{ id: "north", projects: [] }] },
+    undefined,
   ]) {
     hierarchyMock.data = data;
     render("project:bot:1:space", false, true, props);
-    expect(hierarchyMock.stage.mock.lastCall?.[0].error).toBe(true);
+    expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
   }
-  render("project:bot:1:space", false, true, { ...props, navigationError: true });
+  hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
+  hierarchyMock.isError = true;
+  render("project:bot:1:space", false, true, props);
   expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
 });

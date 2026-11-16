@@ -28,7 +28,6 @@ import { firstThreadRoute } from "./use-shell-navigation";
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
 export function ShellSidePanel({
   projectSelection,
-  navigationError,
   retryNavigation,
   openProjectPanel,
   artifactStage,
@@ -111,7 +110,6 @@ export function ShellSidePanel({
   );
   const selectedHierarchy =
     projectSelection &&
-    !navigationError &&
     !hierarchy.isError &&
     projectSelection.spaceId === hierarchyScope.spaceId &&
     projectSelection.clientId === hierarchy.data?.client.id &&
@@ -203,11 +201,7 @@ export function ShellSidePanel({
                 scope={hierarchyScope}
                 data={selectedHierarchy}
                 loading={hierarchy.isFetching}
-                error={
-                  !!navigationError ||
-                  hierarchy.isError ||
-                  !!(!hierarchy.isFetching && !selectedHierarchy)
-                }
+                error={hierarchy.isError || !!(!hierarchy.isFetching && !selectedHierarchy)}
                 retry={() => {
                   retryNavigation?.();
                   void hierarchy.refetch();
