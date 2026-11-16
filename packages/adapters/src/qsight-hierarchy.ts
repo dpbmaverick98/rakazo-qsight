@@ -42,8 +42,8 @@ const ResponseSchema = z.object({
     .array(
       z.object({
         id: Id,
-        name: Name,
-        address: z.string().trim().min(1).max(2000).nullable().optional(),
+        name: z.string().trim().max(500).nullish(),
+        address: z.string().trim().max(2000).nullable().optional(),
         latitude: z.number().min(-90).max(90).nullable().catch(null),
         longitude: z.number().min(-180).max(180).nullable().catch(null),
         projects: z.array(z.object({ id: Id, name: Name })).max(5000),
@@ -510,6 +510,8 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         client: raw.client,
         buildings: raw.buildings.map((building) => ({
           ...building,
+          name: building.name || building.address?.slice(0, 500) || "Building",
+          address: building.address || null,
           projects: building.projects.map((project) => ({
             ...project,
             url: new URL(`/projects/${encodeURIComponent(project.id)}`, origin).href,

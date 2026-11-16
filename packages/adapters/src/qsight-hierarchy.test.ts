@@ -639,3 +639,25 @@ it("bounds extracted text and sanitizes upstream errors", async () => {
     /^Preview unavailable$/,
   );
 });
+
+it.each([
+  ["", "  Example address  ", "Example address"],
+  [null, "  Example address  ", "Example address"],
+  ["   ", "Example address", "Example address"],
+  ["", null, "Building"],
+  [null, undefined, "Building"],
+  ["   ", "   ", "Building"],
+  ["  North Building  ", "Example address", "North Building"],
+])("normalizes building name %j with address %j", async (name, address, expected) => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        ...raw,
+        buildings: [{ ...raw.buildings[0], name, address }],
+      }),
+    ),
+  );
+  const result = await qsightHierarchyFromEnv(config)!.read("7");
+  expect(result.buildings[0]!.name).toBe(expected);
+});
