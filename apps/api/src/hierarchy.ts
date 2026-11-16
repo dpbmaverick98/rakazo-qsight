@@ -26,11 +26,14 @@ import type {
 } from "@rakazo/contracts/project-commercial";
 import { CommercialInspectionSelectionSchema } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
+import { z } from "zod";
+import type { ProjectIntakeInput, ProjectIntakeSummary } from "./project-intake.js";
 import type { ClientBinding } from "./space-client-binding.js";
 
 export function mountHierarchyRoute(
   app: Hono,
   deps: {
+    stageProjectIntake?: (actor: Actor, input: ProjectIntakeInput) => Promise<ProjectIntakeSummary>;
     sessionActor: (request: Request) => Promise<Actor | null>;
     authorizePreview?: (
       actor: Actor,
@@ -117,6 +120,79 @@ export function mountHierarchyRoute(
     await deps.projectManager(actor, projects[0]!, binding.revision, true, true);
     await deps.changed?.(actor);
   };
+  app.post("/api/agent-plane/projects/:id/intakes", async (c) => {
+    c.header("Cache-Control", "no-store");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.json({ status: "unauthorized" }, 401);
+    const origin = c.req.header("origin");
+    if (origin && !(deps.trustedOrigin?.(origin) ?? origin === new URL(c.req.url).origin))
+      return c.json({ status: "forbidden" }, 403);
+    if (
+      c.req.header("content-type")?.split(";")[0]?.trim() !== "application/json" ||
+      new URL(c.req.url).search
+    )
+      return c.json({ status: "invalid_request" }, 400);
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ status: "invalid_request" }, 400);
+    }
+    const id = z
+      .string()
+      .min(1)
+      .max(200)
+      .refine((value) => value !== "." && value !== "..");
+    const input = z
+      .object({ botId: id, artifactIds: z.array(id).min(1).max(10) })
+      .strict()
+      .safeParse(body);
+    if (!input.success || !id.safeParse(c.req.param("id")).success)
+      return c.json({ status: "invalid_request" }, 400);
+    try {
+      const { hierarchy } = await read(actor);
+      const project = hierarchy.buildings
+        .flatMap((building) => building.projects)
+        .find((item) => item.id === c.req.param("id"));
+      if (!project) return c.json({ status: "project_unavailable" }, 404);
+      const bots = await deps.navigationBots?.(actor);
+      if (!bots?.some((bot) => bot.id === input.data.botId && bot.spawnKey === `pm:${project.id}`))
+        return c.json({ status: "forbidden" }, 403);
+      if (!deps.stageProjectIntake) return c.json({ status: "disabled" }, 503);
+      try {
+        const result = await deps.stageProjectIntake(actor, {
+          ...input.data,
+          projectId: project.id,
+          projectName: project.name,
+        });
+        return c.json(
+          {
+            intakeId: result.intakeId,
+            files: result.files.map(({ id, status }) => ({ id, status })),
+          },
+          201,
+        );
+      } catch {
+        return c.json({ status: "staging_unavailable" }, 502);
+      }
+    } catch (error) {
+      const status = error instanceof ORPCError ? error.status : 502;
+      const allowed = [400, 403, 404, 409, 503].includes(status) ? status : 502;
+      const message =
+        error instanceof ORPCError &&
+        [
+          "disabled",
+          "personal",
+          "binding_missing",
+          "binding_stale",
+          "forbidden",
+          "binding_mismatch",
+        ].includes(error.message)
+          ? error.message
+          : "upstream_unavailable";
+      return c.json({ status: message }, allowed as 400 | 403 | 404 | 409 | 502 | 503);
+    }
+  });
   app.post("/api/agent-plane/clients", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);

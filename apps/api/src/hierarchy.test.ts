@@ -694,3 +694,94 @@ it.each(["member", "owner", "admin"])(
     }
   },
 );
+
+function intakeSetup() {
+  const { deps } = setup();
+  const stageProjectIntake = vi.fn(async () => ({
+    intakeId: "intake",
+    files: [{ id: "file", status: "staged", upload_url: "secret-url" }],
+    token: "secret-token",
+  }));
+  const app = new Hono();
+  mountHierarchyRoute(app, { ...deps, stageProjectIntake });
+  const request = (
+    body: unknown = { botId: "manager", artifactIds: ["artifact"] },
+    project = "roof",
+  ) =>
+    app.request(`/api/agent-plane/projects/${project}/intakes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  return { deps, stageProjectIntake, request };
+}
+it("stages authorized project attachments and returns only the summary", async () => {
+  const { request, stageProjectIntake } = intakeSetup();
+  const response = await request();
+  expect(response.status).toBe(201);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toEqual({
+    intakeId: "intake",
+    files: [{ id: "file", status: "staged" }],
+  });
+  expect(stageProjectIntake).toHaveBeenCalledWith(actor, {
+    projectId: "roof",
+    projectName: "Roof",
+    botId: "manager",
+    artifactIds: ["artifact"],
+  });
+});
+it("requires a session before intake binding or staging", async () => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  deps.sessionActor.mockResolvedValue(null);
+  expect((await request()).status).toBe(401);
+  expect(deps.resolveBinding).not.toHaveBeenCalled();
+  expect(stageProjectIntake).not.toHaveBeenCalled();
+});
+it("rejects foreign projects and foreign, archived or missing bots", async () => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  expect((await request(undefined, "foreign-project")).status).toBe(404);
+  for (const botId of ["foreign", "legacy", "missing"])
+    expect((await request({ botId, artifactIds: ["artifact"] })).status).toBe(403);
+  deps.navigationBots.mockResolvedValue([]);
+  expect((await request()).status).toBe(403);
+  expect(stageProjectIntake).not.toHaveBeenCalled();
+});
+it("rejects invalid intake input before external reads", async () => {
+  const { deps, request } = intakeSetup();
+  for (const body of [
+    {},
+    { botId: "manager", artifactIds: [] },
+    { botId: "manager", artifactIds: Array(11).fill("a") },
+    { botId: "x".repeat(201), artifactIds: ["a"] },
+    { botId: "manager", artifactIds: ["x".repeat(201)] },
+  ])
+    expect((await request(body)).status).toBe(400);
+  expect(deps.source.read).not.toHaveBeenCalled();
+});
+it("preserves binding failures without leaking arbitrary messages", async () => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  for (const [code, message, status] of [
+    ["FORBIDDEN", "binding_missing", 403],
+    ["CONFLICT", "binding_stale", 409],
+    ["BAD_GATEWAY", "https://secret.example.test token", 502],
+  ] as const) {
+    deps.resolveBinding.mockRejectedValueOnce(new ORPCError(code, { message }));
+    const response = await request();
+    expect(response.status).toBe(status);
+    expect(await response.text()).not.toMatch(/https|token/);
+  }
+  expect(stageProjectIntake).not.toHaveBeenCalled();
+});
+it("rejects a mismatched hierarchy and sanitizes staging failures", async () => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  deps.source.read.mockResolvedValueOnce({ ...data, client: { id: "foreign", name: "Other" } });
+  expect((await request()).status).toBe(502);
+  expect(stageProjectIntake).not.toHaveBeenCalled();
+  stageProjectIntake.mockRejectedValueOnce(
+    new ORPCError("FORBIDDEN", { message: "https://secret.example.test token" }),
+  );
+  const response = await request();
+  expect(response.status).toBe(502);
+  expect(await response.json()).toEqual({ status: "staging_unavailable" });
+});
