@@ -162,17 +162,25 @@ Purpose: a view-only, tabbed project space that follows the selected manager.
 
 - The right region is a **tabbed stage**, not a second chat and not a form.
 - The default tab is **Project space**.
-- The three default tabs, in order, are:
+- The default tabs, in order, are:
   1. **Project space**
   2. **Claims**
-  3. **Sub vendors**
-- Tabs are read-only. They may navigate to QSight, expand/collapse, and select a
-  claim/sub vendor for inspection.
+- **Sub vendors** is a context tab: it appears when the user selects a sub vendor
+  in Claims and then shows that sub vendor's work and files. It is not a permanent
+  empty tab before a selection.
+- Selecting a file inside Sub vendors opens an additional **file preview** tab.
+- Additional tabs are allowed for files, tables, and future project views. The two
+  default tabs above are the baseline; they are not a closed set.
+- Tabs are read-only. They may navigate to QSight, expand/collapse, select a
+  claim/sub vendor, and open a file.
 - The tab state is per project-manager conversation. Switching manager MUST switch
   the tabs to that manager's project; it MUST NOT reuse another project's tab
   content.
 - The active tab persists per conversation. Missing state falls back to
   **Project space**.
+- Claim, sub-vendor, and file navigation in the right region MUST update the PM's
+  current context so the manager knows which claim, sub vendor, and file the user is
+  viewing. This context is read-only and MUST NOT change the selected manager.
 - No creation buttons, Add project, Add building, edit, delete, upload, publish, or
   approve controls belong in the right rail.
 - The right region MUST populate automatically when the manager creates the
@@ -187,14 +195,15 @@ Purpose: a view-only, tabbed project space that follows the selected manager.
 Default view for the selected manager.
 
 - Large **client name** at the top.
-- A pastel, static map matching the Vendor One portfolio map visual language:
+- A pastel, static map using the **exact QSight/Vendor One portfolio basemap
+  provider and style** (not a recolored third-party basemap):
   - pale grey/blue land and water;
   - white/minimal roads;
   - subdued labels;
   - one building marker with a concise label;
   - no pan, scroll zoom, double-click zoom, box zoom, keyboard zoom, touch zoom,
     or zoom controls;
-  - OSM/attribution retained;
+  - required basemap attribution retained;
   - a building icon and building name below the map, with the address only when it
     differs from the building name;
   - no duplicated building name.
@@ -204,9 +213,11 @@ Default view for the selected manager.
   read-only inspection.
 - An expanded project shows:
   - project name and status;
-  - high-level stats: proposed, breakdown, invoiced, remaining/position;
   - claim names under the project;
   - links to QSight.
+- Money totals are **claim-level**. Project space MUST NOT present an unlabelled
+  project-level total as the authoritative proposed/breakdown/invoice figure;
+  those figures live in Claims under their claim.
 - The selected manager's project MUST be visually anchored to the manager
   selection; clicking another project may preview it but MUST NOT silently change
   the active chat manager.
@@ -216,26 +227,33 @@ Default view for the selected manager.
 Read-only claims view for the selected project.
 
 - Header: project name.
-- Project totals: **Proposed**, **Breakdown**, **Invoices** (and remaining/position
-  only when there is a valid reference).
 - Claims list for that project.
+- Each claim shows its own **Proposed**, **Breakdown**, **Invoices**, and
+  remaining/position figures. These totals are **claim-level**, not project-level.
+  A project rollup may be shown only when it is clearly labelled as a rollup.
 - Under each claim: claim name and its sub vendors.
-- Selecting a claim/sub vendor prepares the Sub vendors tab for that context.
+- Selecting a sub vendor opens the **Sub vendors** tab for that claim + sub vendor.
 - No editing, creating, or approving claims here.
 - Money formatting must be consistent and must preserve absent values as absent,
   not as zero. A real zero invoice is not the same as no invoice evidence.
 
-### Tab 3 — Sub vendors
+### Context tab — Sub vendors
 
 Read-only file/evidence view for the selected claim and sub vendor.
 
-- Shows the selected sub vendor within the selected claim.
+- The tab is absent until the user selects a sub vendor in Claims. Selecting a sub
+  vendor opens and activates this tab for `{claim} / {sub vendor}`.
+- Shows the selected sub vendor's work within the selected claim.
 - File-system-like sub-tabs for the sub vendor:
   - **Proposal** — amount and source documents;
   - **Breakdown** — amount and source documents;
   - **Invoices** — invoice totals and invoice documents.
 - Each file row shows a document role, amount when known, status, and a deep link
   to QSight for inspection.
+- Clicking a file opens a **file preview tab** rather than expanding the file
+  inline. The preview tab is read-only and returns to the Sub vendors tab on close.
+- The selected claim, sub vendor, and file MUST be added to the PM's current
+  context so the manager can discuss the exact work the user is viewing.
 - Documents MUST remain grouped by their actual claim/sub vendor/package; no
   cross-project or cross-sub-vendor mixing.
 - The tab is a view of the filing system, not an uploader.
@@ -245,8 +263,9 @@ Read-only file/evidence view for the selected claim and sub vendor.
 
 - Creating/assigning a project from the chat or left menu MUST make the right
   region reflect the new building/project without a manual reload.
-- Creating a claim/sub vendor/work package MUST populate the Claims and Sub vendors
-  tabs for that project.
+- Creating a claim/sub vendor/work package MUST populate Claims for that project.
+  A newly created sub vendor appears in Claims and can be selected to open the
+  Sub vendors context tab.
 - A newly created project starts with explicit empty states until claims/documents
   exist.
 - Auto-population MUST NOT steal the user's active tab. The first creation may
@@ -286,8 +305,11 @@ Read-only file/evidence view for the selected claim and sub vendor.
 - Client: the client's canonical QSight name.
 - Building: `{building name}` with a building icon. If the address differs, show
   it once as secondary text.
-- Manager: `{project name} - {manager name}` once assigned. Before assignment:
-  `Proj. Manager - Sam`.
+- Manager: `{project name} - PM` once assigned (for example, `NiceDesign - PM`);
+  do not substitute a person's name into the assigned manager label. Before
+  assignment the default manager is `Proj. Manager - Sam`.
+- The setup manager becomes the project's permanent manager after assignment; its
+  chat history is preserved.
 - Avoid raw IDs, internal table names, tool names, and provider names in copy.
 - Use construction terms: client, building, project, claim, sub vendor, work
   package, proposal, breakdown, invoice, change order, evidence, review.
@@ -316,38 +338,46 @@ A change that violates any of these is not ready:
 - **INV-UI-04** Project space shows the client name large, pastel static map,
   building icon + one label, the selected project expanded, and other projects
   collapsed.
-- **INV-UI-05** Claims shows only the selected project's claims and totals.
-- **INV-UI-06** Sub vendors shows only the selected claim/sub vendor's proposal,
-  breakdown, and invoice files.
+- **INV-UI-05** Claims shows only the selected project's claims and claim-level
+  proposed/breakdown/invoice totals.
+- **INV-UI-06** Selecting a sub vendor opens a Sub vendors tab for that claim/sub
+  vendor; clicking a file opens a read-only file tab; the PM context records the
+  current claim, sub vendor, and file.
 - **INV-UI-07** New building/project/claim data appears in the right rail without
   a manual reload.
 - **INV-UI-08** Empty, loading, unavailable, and unknown-kind states are explicit.
 - **INV-UI-09** No raw tool names, IDs, tokens, JSON, or document text are exposed.
 - **INV-UI-10** Desktop/web layout preserves the three regions; narrow layouts may
   collapse the right rail without changing the selection model.
+- **INV-UI-11** Default tabs are Project space and Claims; additional tabs
+  (Sub vendors, file preview, future tables) are allowed and are not creation
+  surfaces.
+- **INV-UI-12** The map uses the exact QSight basemap provider/style and is static.
+- **INV-UI-13** An assigned manager is labelled `{Project} - PM`; the setup manager
+  becomes permanent with history preserved.
 
-## 10. Decisions needed
+## 10. Resolved decisions and remaining question
 
-These are deliberately not guessed in the invariants above:
+Resolved:
 
-1. **Manager label:** should an assigned manager read `NiceDesign - Sam` (manager
-   name) or always `NiceDesign - PM`? The default before assignment is
-   `Proj. Manager - Sam`.
-2. **Project creation from client 3-dot:** when a client has multiple buildings,
-   does New project always ask for a building, and can it create a new building in
-   the same flow?
-3. **Claims totals:** are Proposed/Breakdown/Invoice totals project-level totals,
-   claim-level totals, or both at their respective levels? The current document
-   treats them as project totals at the project header and claim/sub-vendor amounts
-   within rows.
-4. **Sub vendor selection:** should the Sub vendors tab require an explicit
-   claim + sub vendor selection in Claims, or default to the first sub vendor?
-5. **Tab extensibility:** are the three tabs fixed for this version, or may files
-   and tables open additional tabs later? The current language keeps the three
-   defaults and leaves future tabs possible.
-6. **Map provider:** should the map exactly reuse the QSight portfolio basemap
-   provider/style, or may the Rakazo rail use a static snapshot of the QSight map?
-   The visual invariants are the same either way; behaviour is static and read-only.
-7. **Setup manager lifecycle:** after the first project is assigned and the setup
-   manager moves under the building, should it become that project's permanent
-   manager, with its chat history preserved?
+1. **Manager label:** an assigned manager is `{Project} - PM`, for example
+   `NiceDesign - PM`. Before assignment the default is `Proj. Manager - Sam`.
+2. **Claims totals:** totals are **claim-level**. Project space does not present an
+   unlabelled project total as authoritative.
+3. **Sub vendor selection:** the Sub vendors tab opens when the user selects a
+   sub vendor. It is not auto-selected or shown as an empty default.
+4. **Files:** clicking a file opens a read-only file preview tab.
+5. **PM context:** claim, sub vendor, and file navigation is added to the selected
+   manager's context.
+6. **Tab extensibility:** additional tabs are allowed for files, tables, and
+   future views; the baseline tabs are Project space and Claims.
+7. **Map:** reuse the exact QSight portfolio basemap provider/style, static and
+   read-only.
+8. **Setup manager lifecycle:** the setup manager becomes the permanent project
+   manager after assignment; chat history is preserved.
+
+Remaining:
+
+- **Project creation from the client 3-dot:** when a client has multiple buildings,
+  must New project always choose a building, and may that flow create a new
+  building at the same time?
