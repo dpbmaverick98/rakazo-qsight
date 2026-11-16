@@ -217,6 +217,40 @@ it.each(["processing", "ready", "published", "pending", "failed"])(
     expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
   },
 );
+it.each(["processing", "ready", "published"])(
+  "replays %s state even with a non-null upload URL",
+  async (status) => {
+    const deps = setup();
+    const intake = await deps.source.createIntake("project", [], "key", "token");
+    intake.files = intake.files.map((file) => ({ ...file, status }));
+    deps.source.createIntake.mockResolvedValue(intake);
+    await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
+      intakeId: "intake",
+      files: intake.files.map(({ id }) => ({ id, status })),
+    });
+    expect(deps.fetch).not.toHaveBeenCalled();
+    expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
+  },
+);
+it("uploads and completes failed files with non-null upload URLs", async () => {
+  const deps = setup();
+  const intake = await deps.source.createIntake("project", [], "key", "token");
+  intake.files = intake.files.map((file) => ({ ...file, status: "failed" }));
+  deps.source.createIntake.mockResolvedValue(intake);
+  await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
+    intakeId: "intake",
+    files: intake.files.map(({ id }) => ({ id, status: "staged" })),
+  });
+  expect(deps.fetch).toHaveBeenCalledTimes(2);
+  expect(deps.source.completeIntakeFile).toHaveBeenCalledTimes(2);
+  for (const [index, file] of intake.files.entries()) {
+    expect(deps.fetch.mock.calls[index]?.[0]).toBe(file.upload_url);
+    expect(deps.source.completeIntakeFile.mock.calls[index]?.slice(0, 2)).toEqual([
+      intake.id,
+      file.id,
+    ]);
+  }
+});
 it("preserves success when revocation fails", async () => {
   const deps = setup();
   deps.source.revokeManagerToken.mockRejectedValue(new Error("secret-token https://private.test"));

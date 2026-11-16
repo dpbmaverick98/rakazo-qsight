@@ -99,12 +99,11 @@ export async function stageProjectIntake(
       const completed = [];
       for (const file of intake.files) {
         const attachment = bySourceId.get(file.client_id!)!;
-        if (!file.upload_url) {
-          if (!["processing", "ready", "published"].includes(file.status))
-            throw new Error("Upload unavailable");
+        if (["processing", "ready", "published"].includes(file.status)) {
           completed.push({ id: file.id, status: file.status });
           continue;
         }
+        if (!file.upload_url) throw new Error("Upload unavailable");
         const response = await (deps.fetch ?? fetch)(file.upload_url, {
           method: "PUT",
           body: attachment.bytes,
