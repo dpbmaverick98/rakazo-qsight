@@ -1,25 +1,30 @@
 import type { PluginMarketplaceEntry, PluginPart } from "@rakazo/contracts";
 import { PluginPartSchema } from "@rakazo/contracts";
 
-/** Named project tools selected by the project-manager provisioning action. */
+/** server/mcp_pilot.py defines 19 tools; rename_project and delete_project are deliberately excluded. */
 export const PROJECT_MANAGER_TOOLS = {
   trustedTools: [
-    "search_clients",
     "list_clients",
+    "list_buildings",
+    "list_projects",
+    "list_work_packages",
+    "get_project_summary",
+    "get_claim_position",
+    "list_issues",
+    "search_documents",
+    "get_document_evidence",
+    "get_invoice_register",
+    "preview_change_order",
+  ],
+  // Location preparation requires write scope, just like hierarchy creation.
+  setupWriteTools: [
     "search_locations",
     "get_location_proof",
-    "get_client",
-    "get_building",
-    "list_buildings",
-    "get_project",
-    "list_projects",
-    "get_hierarchy",
-    "get_document",
-    "list_documents",
-    "get_work_package",
-    "list_work_packages",
+    "create_client",
+    "create_building",
+    "create_project",
+    "create_work_package",
   ],
-  setupWriteTools: ["create_client", "create_building", "create_project", "create_work_package"],
   name: "Vendor One",
   legacyServerPrefix: "QSight",
   serverName: "Vendor One Pilot",
