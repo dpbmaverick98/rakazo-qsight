@@ -77,6 +77,7 @@ import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
 import { ClientLanding } from "./shell/client-landing";
 import {
   clientNavigationGroups,
+  resolveProjectManager,
   unavailableClientNavigation,
   useClientNavigations,
 } from "./shell/client-navigation";
@@ -598,6 +599,16 @@ function SpaceShell() {
     clientNavigations[
       sidebarSpaces.findIndex((space) => space.id === (shellSpaceId ?? bootstrapMe?.spaceId))
     ];
+  const resolvedProject = resolveProjectManager(
+    clientNavigation?.isError ? null : clientNavigation?.data,
+    inGroup ? undefined : active?.id,
+  );
+  const projectSelection = resolvedProject
+    ? { ...resolvedProject, revision: resolvedProject.bindingRevision }
+    : undefined;
+  const projectPanel = projectSelection
+    ? (`project:${projectSelection.botId}:${projectSelection.revision}:space` as const)
+    : undefined;
   const sidebarGroups = useMemo(
     () =>
       clientNavigations.reduce(
@@ -807,8 +818,10 @@ function SpaceShell() {
     : undefined;
   useRightPanelRestore({
     rightPanel,
+    projectPanel,
+    projectResolutionPending: clientNavigations.some((query) => query.isPending),
     userId,
-    spaceId: bootstrapMe?.spaceId,
+    spaceId: shellSpaceId ?? bootstrapMe?.spaceId,
     inGroup,
     panelTarget: inGroup ? activeGroup?.id : active?.id,
     activeId: active?.id,
@@ -1277,7 +1290,8 @@ function SpaceShell() {
       />
 
       <ShellSidePanel
-        clientNavigation={clientNavigation?.isError ? null : clientNavigation?.data}
+        openProjectPanel={rightPanel.openProjectPanel}
+        projectSelection={projectSelection}
         navigationError={clientNavigation?.isError}
         retryNavigation={() => {
           void clientNavigation?.refetch();

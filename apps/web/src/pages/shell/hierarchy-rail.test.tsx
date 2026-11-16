@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ComponentProps, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
+import { ProjectStage, useHierarchy } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({
@@ -20,11 +19,8 @@ vi.mock("../../lib/rpc", () => ({
   withSpaceHeaders: () => new Headers(),
   rpcForSpace: () => ({ mcp: { servers: { provisionProjectManager: vi.fn() } } }),
 }));
-vi.mock("./project-commercial", () => ({
-  ProjectActivity: () => null,
-  CommercialSelection: () => null,
-}));
 const data = {
+  bindingRevision: 1,
   client: { id: "client", name: "Example Client" },
   buildings: [
     {
@@ -38,72 +34,6 @@ const data = {
   ],
 };
 afterEach(() => vi.unstubAllGlobals());
-async function mount(props: Partial<ComponentProps<typeof HierarchyRail>> = {}, route = "/app") {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  const retry = vi.fn();
-  const collapse = vi.fn();
-  await act(async () =>
-    root.render(
-      <MemoryRouter initialEntries={[route]}>
-        <HierarchyRail
-          data={data}
-          loading={false}
-          error={false}
-          retry={retry}
-          collapse={collapse}
-          {...props}
-        />
-      </MemoryRouter>,
-    ),
-  );
-  return {
-    container,
-    retry,
-    collapse,
-    close: async () => {
-      await act(async () => root.unmount());
-      container.remove();
-    },
-  };
-}
-it("expands buildings and offers project selection", async () => {
-  const view = await mount();
-  try {
-    const button = [...view.container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("North Building"),
-    )!;
-    expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(view.container.textContent).toContain("10 Example Street");
-    expect(view.container.textContent).toContain("Workspace artifacts");
-    expect(
-      [...view.container.querySelectorAll("button")].some(
-        (item) => item.textContent === "Roof survey",
-      ),
-    ).toBe(true);
-    await act(async () => button.click());
-    expect(button.getAttribute("aria-expanded")).toBe("false");
-  } finally {
-    await view.close();
-  }
-});
-it("renders loading, empty and retryable errors", async () => {
-  for (const [props, text] of [
-    [{ data: undefined, loading: true }, "Loading hierarchy…"],
-    [{ data: { ...data, buildings: [] } }, "Select a project manager"],
-    [{ data: undefined, error: true }, "Hierarchy unavailable"],
-  ] as [Partial<ComponentProps<typeof HierarchyRail>>, string][]) {
-    const view = await mount(props);
-    try {
-      expect(view.container.textContent).toContain(text);
-    } finally {
-      await view.close();
-    }
-  }
-});
-
 it("does not display a previous space while a new space loads or is disabled", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -145,101 +75,6 @@ it("does not display a previous space while a new space loads or is disabled", a
   } finally {
     await act(async () => root.unmount());
     client.clear();
-  }
-});
-
-it("hides the map when coordinates are absent or incomplete", async () => {
-  const view = await mount({
-    data: { ...data, buildings: [{ ...data.buildings[0]!, latitude: 12, longitude: null }] },
-  });
-  try {
-    expect(view.container.querySelector('[aria-label="Building map"]')).toBeNull();
-    expect(view.container.textContent).toContain("North Building");
-  } finally {
-    await view.close();
-  }
-});
-
-it("pins only complete coordinates without interactive markers", async () => {
-  // Preload the lazy module so this test can observe the real Leaflet marker DOM.
-  await import("./building-map");
-  const scroll = vi.fn();
-  const originalScroll = Element.prototype.scrollIntoView;
-  Element.prototype.scrollIntoView = scroll;
-  vi.stubGlobal(
-    "ResizeObserver",
-    class {
-      observe() {}
-      disconnect() {}
-    },
-  );
-  const view = await mount({
-    data: {
-      ...data,
-      buildings: [
-        { ...data.buildings[0]!, latitude: 0, longitude: 0 },
-        { id: "south", name: "South", latitude: null, longitude: 10, projects: [] },
-      ],
-    },
-  });
-  try {
-    // React retries the resolved lazy boundary on its next task.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-    const pins = view.container.querySelectorAll<HTMLElement>(".leaflet-marker-icon");
-    expect(pins).toHaveLength(1);
-    expect(pins[0]!.getAttribute("title")).toBe("North Building");
-    expect(pins[0]!.hasAttribute("tabindex")).toBe(false);
-    expect(pins[0]!.classList.contains("leaflet-interactive")).toBe(false);
-    await act(async () => pins[0]!.click());
-    const button = [...view.container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("North Building"),
-    )!;
-    expect(button.getAttribute("aria-expanded")).toBe("true");
-    expect(scroll).not.toHaveBeenCalled();
-  } finally {
-    await view.close();
-    Element.prototype.scrollIntoView = originalScroll;
-  }
-});
-
-it("does not offer building setup in the rail", async () => {
-  for (const buildings of [data.buildings, []]) {
-    const view = await mount({
-      data: { ...data, buildings },
-      scope: { userId: "user", spaceId: "space" },
-    });
-    try {
-      expect(view.container.textContent).not.toContain("Add building");
-      expect(view.container.querySelector('form[aria-label="Add building"]')).toBeNull();
-    } finally {
-      await view.close();
-    }
-  }
-});
-
-it("keeps the rail read-only with a large client name and a building icon", async () => {
-  for (const props of [
-    {},
-    { data: { ...data, buildings: [] } },
-    { data: undefined, loading: true },
-  ]) {
-    const view = await mount(props);
-    try {
-      expect(view.container.textContent).not.toMatch(
-        /Add project|Add building|Create project manager|Finish setup/,
-      );
-      expect(view.container.querySelector("form")).toBeNull();
-      if (props.data !== undefined || !props.loading)
-        expect(view.container.querySelector("h2")?.textContent).toBe("Example Client");
-      if (!props.data && !props.loading) {
-        expect(view.container.textContent).not.toContain("Building —");
-        expect(view.container.querySelector(".lucide-building")).not.toBeNull();
-      }
-    } finally {
-      await view.close();
-    }
   }
 });
 
@@ -340,17 +175,93 @@ it("keeps permission denials as errors", async () => {
   }
 });
 
-it.each(["North Building", "  north building  "])(
-  "omits a duplicate address %s",
-  async (address) => {
-    const view = await mount({
-      data: { ...data, buildings: [{ ...data.buildings[0]!, address }] },
-    });
-    try {
-      expect(view.container.textContent?.match(/North Building/g)).toHaveLength(1);
-      expect(view.container.querySelector("p")).toBeNull();
-    } finally {
-      await view.close();
-    }
-  },
-);
+it("expands only the PM project, reads siblings on demand and keeps Claims scoped", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const { commercialFixture } = await import("@rakazo/contracts/project-commercial-fixture");
+  const fetch = vi.fn(async (url: string) =>
+    Response.json({
+      ...commercialFixture,
+      project: { ...commercialFixture.project, id: url.includes("sibling") ? "sibling" : "roof" },
+    }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient();
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  let selectedTab = "space";
+  const selection = { botId: "pm", revision: 1, buildingId: "north", projectId: "roof" };
+  const stageData = {
+    ...data,
+    buildings: [
+      {
+        ...data.buildings[0]!,
+        address: "  north building  ",
+        latitude: 51.5,
+        longitude: -0.1,
+        projects: [
+          ...data.buildings[0]!.projects,
+          { id: "sibling", name: "Other project", url: "https://example.test/sibling" },
+        ],
+      },
+    ],
+  };
+  const render = (tab: "space" | "claims", current = selection) => (
+    <QueryClientProvider client={client}>
+      <ProjectStage
+        key={current.botId}
+        data={stageData}
+        loading={false}
+        error={false}
+        retry={() => {}}
+        scope={{ userId: "user", spaceId: "space" }}
+        selection={current}
+        tab={tab}
+        onTabChange={(next) => {
+          selectedTab = next;
+        }}
+      />
+    </QueryClientProvider>
+  );
+  try {
+    await act(async () => root.render(render("space")));
+    await vi.waitFor(() => expect(container.textContent).toContain("Finishes"));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
+    expect(container.querySelector("h2")?.textContent).toBe("Example Client");
+    expect(container.querySelector(".lucide-building")).not.toBeNull();
+    expect(container.querySelector(".bg-muted[aria-hidden=true]")).not.toBeNull();
+    expect(container.querySelector(".leaflet-container")).toBeNull();
+    expect(container.textContent).not.toContain("OpenStreetMap");
+    const sibling = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Other project",
+    )!;
+    expect(sibling.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => sibling.click());
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(
+        container.querySelector('a[href="https://hierarchy.example.test/projects/roof"]'),
+      ).not.toBeNull(),
+    );
+    const claim = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Finishes",
+    )!;
+    await act(async () => claim.click());
+    expect(selectedTab).toBe("claims");
+    await act(async () => root.render(render("claims")));
+    const region = container.querySelector('[aria-label="Commercial"]')!;
+    expect(region.textContent).toContain("Roof survey");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(container.querySelectorAll("input,form,textarea")).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/Create|Delete|Upload|Edit|Read-only|Total/);
+    await act(async () =>
+      root.render(render("claims", { ...selection, botId: "pm-other", projectId: "sibling" })),
+    );
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    container.remove();
+  }
+});

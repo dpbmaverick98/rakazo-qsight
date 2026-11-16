@@ -1,4 +1,3 @@
-import type { ClientNavigation, Hierarchy } from "@rakazo/contracts/hierarchy";
 import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,19 +12,15 @@ vi.mock("../ResizableSidePanel", () => ({
   ResizableSidePanel: ({ open, children }: { open: boolean; children: ReactNode }) =>
     open ? <aside>{children}</aside> : null,
 }));
-const hierarchyMock = vi.hoisted(() => ({
-  data: undefined as Hierarchy | undefined,
-  rail: vi.fn(),
-}));
+const hierarchyMock = vi.hoisted(() => ({ data: {} as unknown, stage: vi.fn() }));
 beforeEach(() => {
-  hierarchyMock.data = undefined;
-  hierarchyMock.rail.mockClear();
+  hierarchyMock.stage.mockClear();
 });
 vi.mock("./hierarchy-rail", () => ({
   useHierarchy: () => ({ data: hierarchyMock.data, isFetching: false, isError: false }),
-  HierarchyRail: (props: unknown) => {
-    hierarchyMock.rail(props);
-    return <div>hierarchy-rail</div>;
+  ProjectStage: (props: unknown) => {
+    hierarchyMock.stage(props);
+    return <div>project-stage</div>;
   },
 }));
 vi.mock("./bot-panel", () => ({
@@ -51,6 +46,17 @@ function render(
   const props = {
     hierarchyScope: { userId: null, spaceId: null, enabled: hierarchy },
     panel,
+    projectSelection: hierarchy
+      ? {
+          botId: "bot",
+          revision: 1,
+          spaceId: "space",
+          clientId: "client",
+          buildingId: "north",
+          projectId: "roof",
+        }
+      : undefined,
+    openProjectPanel: () => undefined,
     setPanel: () => undefined,
     active: group ? undefined : { id: "bot" },
     activeGroup: group ? { id: "group" } : undefined,
@@ -80,11 +86,14 @@ describe("shell panel dispatch", () => {
   ] as const)("preserves %s", (panel, marker) => {
     expect(render(panel, true)).toContain(marker);
   });
-  it("preserves the hierarchy rail beside the stage and after close", () => {
-    expect(render("artifact-stage", false, true)).toContain("hierarchy-rail");
+  it("uses a mutually exclusive project stage alongside existing panels", () => {
+    expect(render("project:bot:1:space", false, true)).toContain("project-stage");
+    for (const panel of ["artifact-stage", "computer", "routines", "settings"] as const) {
+      expect(render(panel, false, true)).not.toContain("project-stage");
+    }
     expect(render("artifact-stage", false, true)).toContain("Project brief");
-    expect(render(null, false, true)).toContain("hierarchy-rail");
-    expect(render(null, false, true)).not.toContain("Project brief");
+    expect(render(null, false, true)).not.toContain("project-stage");
+    expect(render("project:other:1:claims", false, true)).not.toContain("project-stage");
   });
   it("shows the artifact instead of bot settings, and closes completely", () => {
     expect(render("artifact-stage")).toContain("Project brief");
@@ -94,50 +103,24 @@ describe("shell panel dispatch", () => {
   });
 });
 
-it("anchors direct bot routes to one current client/building/project and clears stale scope", () => {
-  const navigation: ClientNavigation = {
-    spaceId: "space",
-    bindingRevision: 2,
-    client: { id: "client", name: "Client" },
-    setupBotIds: ["setup"],
-    buildings: [
-      { id: "north", name: "North", projects: [{ id: "roof", name: "Roof", botIds: ["manager"] }] },
-      {
-        id: "south",
-        name: "South",
-        projects: [{ id: "other", name: "Roof", botIds: ["other-manager"] }],
-      },
-    ],
-  };
-  hierarchyMock.data = {
-    ...navigation,
-    buildings: navigation.buildings.map((building) => ({
-      ...building,
-      projects: building.projects.map((project) => ({
-        ...project,
-        url: "https://example.test/project",
-      })),
-    })),
-  };
-  const props = {
-    clientNavigation: navigation,
-    hierarchyScope: { userId: "user", spaceId: "space", enabled: true },
-    active: { id: "manager" },
-  } as Partial<ComponentProps<typeof ShellSidePanel>>;
-  render(null, false, true, props);
-  expect(hierarchyMock.rail.mock.lastCall?.[0]).toMatchObject({
-    projectId: "roof",
-    data: { buildings: [{ id: "north", projects: [{ id: "roof" }] }] },
+it("keeps sibling projects while rejecting mismatched hierarchy scope and errors", () => {
+  const building = { id: "north", projects: [{ id: "roof" }, { id: "sibling" }] };
+  hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
+  const props = { hierarchyScope: { userId: "user", spaceId: "space", enabled: true } };
+  render("project:bot:1:space", false, true, props);
+  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
+    data: { buildings: [building] },
+    error: false,
   });
-  for (const activeId of ["setup", "legacy", "missing"]) {
-    render(null, false, true, {
-      ...props,
-      active: { id: activeId } as ComponentProps<typeof ShellSidePanel>["active"],
-    });
-    expect(hierarchyMock.rail.mock.lastCall?.[0].data).toBeUndefined();
+  for (const data of [
+    { bindingRevision: 2, client: { id: "client" }, buildings: [building] },
+    { bindingRevision: 1, client: { id: "other" }, buildings: [building] },
+    { bindingRevision: 1, client: { id: "client" }, buildings: [] },
+  ]) {
+    hierarchyMock.data = data;
+    render("project:bot:1:space", false, true, props);
+    expect(hierarchyMock.stage.mock.lastCall?.[0].error).toBe(true);
   }
-  render(null, false, true, { ...props, clientNavigation: { ...navigation, bindingRevision: 3 } });
-  expect(hierarchyMock.rail.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
-  render(null, false, true, { ...props, clientNavigation: null, navigationError: true });
-  expect(hierarchyMock.rail.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
+  render("project:bot:1:space", false, true, { ...props, navigationError: true });
+  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
 });

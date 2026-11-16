@@ -7,11 +7,9 @@ import type {
   Group,
   ThreadSnapshot,
 } from "@rakazo/contracts";
-import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
 import { Button } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { ComponentProps, Dispatch, ReactNode, SetStateAction } from "react";
-import { useState } from "react";
 import { ComputerMaintenanceActions } from "../../components/ComputerMaintenanceActions";
 import { PagesList } from "../../components/pages/PagesList";
 import type { Panel } from "../../lib/right-panel-state";
@@ -24,18 +22,18 @@ import { AgentImportForm } from "./agent-import";
 import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
-import { resolveProjectManager } from "./client-navigation";
-import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
+import { ProjectStage, useHierarchy } from "./hierarchy-rail";
 import { firstThreadRoute } from "./use-shell-navigation";
 
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
 export function ShellSidePanel({
+  projectSelection,
+  navigationError,
+  retryNavigation,
+  openProjectPanel,
   artifactStage,
   onSelectArtifact,
   hierarchyScope,
-  clientNavigation,
-  navigationError,
-  retryNavigation,
   rpc,
   panel,
   setPanel,
@@ -63,11 +61,19 @@ export function ShellSidePanel({
   onClearBot,
   discardChatAttachments,
 }: {
-  artifactStage: ArtifactStageState;
-  onSelectArtifact: (id: string) => void;
-  clientNavigation?: ClientNavigation | null;
+  openProjectPanel: (panel: `project:${string}`) => void;
+  projectSelection?: {
+    botId: string;
+    revision: number;
+    buildingId: string;
+    projectId: string;
+    spaceId: string;
+    clientId: string;
+  };
   navigationError?: boolean;
   retryNavigation?: () => void;
+  artifactStage: ArtifactStageState;
+  onSelectArtifact: (id: string) => void;
   hierarchyScope: { userId: string | null; spaceId: string | null; enabled: boolean };
   rpc: ReturnType<typeof createSpaceRpc>;
   panel: Panel;
@@ -103,27 +109,25 @@ export function ShellSidePanel({
     hierarchyScope.spaceId,
     hierarchyScope.enabled,
   );
-  const [hierarchyOpen, setHierarchyOpen] = useState(true);
-  const selection = resolveProjectManager(clientNavigation, activeGroup ? undefined : active?.id);
-  const selectedBuilding = hierarchy.data?.buildings.find(
-    (building) => building.id === selection?.buildingId,
-  );
-  const selectedProject = selectedBuilding?.projects.find(
-    (project) => project.id === selection?.projectId,
-  );
   const selectedHierarchy =
-    selection &&
-    selectedBuilding &&
-    selectedProject &&
-    hierarchy.data &&
-    selection.spaceId === hierarchyScope.spaceId &&
-    selection.bindingRevision === hierarchy.data.bindingRevision &&
-    selection.clientId === hierarchy.data.client.id &&
-    !hierarchy.isError
-      ? { ...hierarchy.data, buildings: [{ ...selectedBuilding, projects: [selectedProject] }] }
+    projectSelection &&
+    !navigationError &&
+    !hierarchy.isError &&
+    projectSelection.spaceId === hierarchyScope.spaceId &&
+    projectSelection.clientId === hierarchy.data?.client.id &&
+    projectSelection.revision === hierarchy.data.bindingRevision &&
+    hierarchy.data.buildings.some(
+      (building) =>
+        building.id === projectSelection.buildingId &&
+        building.projects.some((project) => project.id === projectSelection.projectId),
+    )
+      ? hierarchy.data
       : undefined;
-  const hierarchyAvailable = hierarchyScope.enabled;
-  const showHierarchy = hierarchyAvailable && hierarchyOpen;
+  const projectPrefix = projectSelection
+    ? (`project:${projectSelection.botId}:${projectSelection.revision}:` as const)
+    : null;
+  const projectOpen =
+    !!projectPrefix && (panel === `${projectPrefix}space` || panel === `${projectPrefix}claims`);
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
   const botTab =
     panel === "computer" || panel === "routines" || panel === "pages" || panel === "settings"
@@ -140,53 +144,25 @@ export function ShellSidePanel({
     await refreshBots().catch(() => undefined);
   }
 
+  const projectOpener =
+    projectSelection && !projectOpen ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() =>
+          openProjectPanel(`project:${projectSelection.botId}:${projectSelection.revision}:space`)
+        }
+      >
+        <Trans>Project space</Trans>
+      </Button>
+    ) : null;
+
   return (
     <>
-      {hierarchyAvailable && !hierarchyOpen && !open ? (
-        <div className="absolute end-3 top-14 z-10">
-          <Button variant="outline" size="sm" onClick={() => setHierarchyOpen(true)}>
-            <Trans>Hierarchy</Trans>
-          </Button>
-        </div>
+      {!open && projectOpener ? (
+        <div className="absolute end-3 top-14 z-10">{projectOpener}</div>
       ) : null}
-      <ResizableSidePanel
-        open={open || showHierarchy}
-        panel={panel ?? (showHierarchy ? "hierarchy" : "closed")}
-      >
-        {hierarchyAvailable && !hierarchyOpen && open ? (
-          <div className="border-b border-border px-5 py-2">
-            <Button variant="ghost" size="sm" onClick={() => setHierarchyOpen(true)}>
-              <Trans>Hierarchy</Trans>
-            </Button>
-          </div>
-        ) : null}
-        {showHierarchy ? (
-          <div
-            className={
-              open
-                ? "max-h-[40%] shrink-0 overflow-y-auto border-b border-border"
-                : "min-h-0 flex-1 overflow-y-auto"
-            }
-          >
-            <HierarchyRail
-              key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}:${selection?.bindingRevision}:${active?.id}`}
-              scope={hierarchyScope}
-              data={selectedHierarchy}
-              projectId={selection?.projectId}
-              loading={hierarchy.isFetching}
-              error={
-                !!navigationError ||
-                hierarchy.isError ||
-                !!(selection && !hierarchy.isFetching && !selectedHierarchy)
-              }
-              retry={() => {
-                retryNavigation?.();
-                void hierarchy.refetch();
-              }}
-              collapse={() => setHierarchyOpen(false)}
-            />
-          </div>
-        ) : null}
+      <ResizableSidePanel open={open} panel={panel ?? "closed"}>
         {open ? (
           <div className="rk-scroll min-h-0 flex-1 w-full overflow-y-auto px-5 py-[17px]">
             {panel === "artifact-stage" ? (
@@ -196,6 +172,7 @@ export function ShellSidePanel({
                 onClose={() => setPanel(null)}
               />
             ) : null}
+            {projectOpener ? <div className="mb-2">{projectOpener}</div> : null}
             {panel !== "artifact-stage" &&
             panel !== "routine" &&
             panel !== "create-group" &&
@@ -218,6 +195,28 @@ export function ShellSidePanel({
                   </Button>
                 </div>
               </div>
+            ) : null}
+            {projectOpen && projectSelection ? (
+              <ProjectStage
+                key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}:${projectPrefix}`}
+                selection={projectSelection}
+                scope={hierarchyScope}
+                data={selectedHierarchy}
+                loading={hierarchy.isFetching}
+                error={
+                  !!navigationError ||
+                  hierarchy.isError ||
+                  !!(!hierarchy.isFetching && !selectedHierarchy)
+                }
+                retry={() => {
+                  retryNavigation?.();
+                  void hierarchy.refetch();
+                }}
+                tab={panel?.endsWith(":claims") ? "claims" : "space"}
+                onTabChange={(tab) =>
+                  setPanel(`project:${projectSelection.botId}:${projectSelection.revision}:${tab}`)
+                }
+              />
             ) : null}
             {panel === "create-group" ? (
               <CreateGroupForm
