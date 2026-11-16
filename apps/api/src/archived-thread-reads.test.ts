@@ -117,15 +117,14 @@ describe("archived thread read authorization", () => {
   });
 });
 
-it("rejects inspection-bearing sends explicitly before resolving a thread or writing context", async () => {
+it("rejects inspection-bearing sends to archived bots before reading history", async () => {
   const { call, findBot, findMessages } = fixture();
   const result = await call("threads/send", {
     botId: "bot-1",
     text: "Review this",
     commercialInspection: { projectId: "roof", bindingRevision: 1, claimId: "claim" },
   });
-  expect(result.status).toBe(501);
-  expect(JSON.stringify(result.body)).toContain("Inspection context is not available yet");
-  expect(findBot).not.toHaveBeenCalled();
+  expect(result.status).toBe(500);
+  expect(findBot).toHaveBeenCalled();
   expect(findMessages).not.toHaveBeenCalled();
 });

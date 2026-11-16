@@ -26,6 +26,7 @@ import {
   withTransactionRetry,
 } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
+import { resolveCommercialInspection } from "../commercial-inspection.js";
 import { answerComputerRequest } from "../computer-control.js";
 import type { RouterDeps } from "../router.js";
 import { createRoutineTestRun, routineTestRunNonce, routineTestTarget } from "../routines.js";
@@ -120,16 +121,11 @@ export function threadsRoutes(ctx: RouterContext) {
     },
     startRoutines?: Parameters<typeof sendThreadMessage>[5],
   ) => {
-    // Fail closed: never silently drop inspection identities or trust them as model context.
-    // Ancestry/authorization resolution and injection for new, steering and waiting runs remain pending.
-    if (input.commercialInspection) {
-      throw new ORPCError("NOT_IMPLEMENTED", {
-        message:
-          "Inspection context is not available yet. Return to Project space to send without it.",
-      });
-    }
     const setup = await modelSetup(deps, actor);
     const target = await resolveThreadTarget(deps.prisma, actor, input);
+    const inspection = input.commercialInspection
+      ? await resolveCommercialInspection(deps, actor, target, input.commercialInspection)
+      : undefined;
     // A bot with its own runnable model needs no main model, and stopping work needs none.
     const replied =
       target.kind === "group" ? await replyParentBotId(deps.prisma, target, input) : undefined;
@@ -163,7 +159,7 @@ export function threadsRoutes(ctx: RouterContext) {
       },
       actor,
       target,
-      { ...input, noModel },
+      { ...input, noModel, inspection },
       takeoverReleaser(deps, actor, target),
       startRoutines,
     ).catch((error: unknown) => {

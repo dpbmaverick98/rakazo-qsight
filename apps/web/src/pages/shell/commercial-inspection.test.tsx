@@ -154,3 +154,19 @@ it("renders current package amounts in each category, preserving null and both f
     await view.close();
   }
 });
+
+it("inspection navigation performs no network write or run request", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const view = await mount();
+  try {
+    await view.click("Finishes");
+    await view.click("Example Interiors");
+    await view.click("Proposal.pdf");
+    await view.click("Close file");
+    await view.click("Invoices");
+    expect(fetch).not.toHaveBeenCalled();
+  } finally {
+    await view.close();
+  }
+});

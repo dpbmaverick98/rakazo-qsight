@@ -53,6 +53,8 @@ import {
   resolveGroupSendAttachments,
   resolveSendAttachments,
 } from "./artifacts.js";
+import type { ResolvedInspection } from "./commercial-inspection.js";
+import { assertInspectionCurrent } from "./commercial-inspection.js";
 import type { ImageAdmissionRun } from "./thread-image-admission.js";
 import { assertThreadImageInput } from "./thread-image-admission.js";
 import { cancelThreadRuns, finishThreadStop, isStopMessage } from "./thread-stop.js";
@@ -507,6 +509,8 @@ export async function sendThreadMessage(
     replyQuote?: string;
     fromPage?: true;
     clientNonce?: string;
+    /** Internal only: resolved from canonical server reads, never accepted by the send contract. */
+    inspection?: ResolvedInspection;
     /** No model to start a turn: the send may only stop active work. */
     noModel?: boolean;
   },
@@ -514,6 +518,9 @@ export async function sendThreadMessage(
   /** Runs saved with the message, after the thread lock and before the message is routed. */
   startRoutines?: (tx: Prisma.TransactionClient) => Promise<Array<{ id: string; status: string }>>,
 ) {
+  const turnText = input.inspection
+    ? [input.text?.trim(), input.inspection.prompt].filter(Boolean).join("\n\n")
+    : input.text;
   const existing = await replayExistingSend(
     deps,
     target.threadId,
@@ -533,6 +540,7 @@ export async function sendThreadMessage(
     deps.prisma.$transaction(async (tx) => {
       // A Space being deleted takes no new turns; its lock comes before the group and thread rows.
       if (!(await spaceTakesWork(tx, actor.spaceId))) throw new SpaceDeletionInProgressError();
+      if (input.inspection) await assertInspectionCurrent(tx, actor, target, input.inspection);
       const author = await loadMessageAuthor(tx, actor.userId);
       let routineRuns: Array<{ id: string; status: string }> = [];
       let replyToMessageId: string | undefined;
@@ -609,7 +617,7 @@ export async function sendThreadMessage(
         spaceId: actor.spaceId,
         threadId: target.threadId,
         answeredByUserId: actor.userId,
-        answer: input.text ?? "",
+        answer: turnText ?? "",
         beforeMessageSeq: message.seq,
         ...(replyToMessageId ? { replyToMessageId } : {}),
         answerMessageId: message.id,
@@ -665,10 +673,16 @@ export async function sendThreadMessage(
             imageAdmission: deps.imageAdmission,
           });
         }
-        const blocks = buildUserMessageBlocks(
+        const blocks: MessageBlock[] = buildUserMessageBlocks(
           input.text,
           sendAttachmentBlocks(attachmentBlocks, artifacts, input.imageHandling),
         );
+        if (input.inspection) {
+          // Persist beside this message so new turns, history and steering share one snapshot.
+          const textBlock = blocks.find((block) => block.kind === "text");
+          if (textBlock) Object.assign(textBlock, { inspectionContext: input.inspection.prompt });
+          else blocks.push({ kind: "text", text: "", inspectionContext: input.inspection.prompt });
+        }
         const message = await createThreadMessageInTransaction(tx, {
           threadId: target.threadId,
           role: "user",
@@ -708,8 +722,9 @@ export async function sendThreadMessage(
           const primary = answered[0];
           if (!primary) throw new IsolationError();
           await tx.message.update({ where: { id: message.id }, data: { runId: primary.id } });
-          const steered = answered.filter((run) =>
-            answerSteersRun(run, attachmentBlocks, input.imageHandling),
+          const steered = answered.filter(
+            (run) =>
+              input.inspection || answerSteersRun(run, attachmentBlocks, input.imageHandling),
           );
           for (const run of steered) {
             await tx.steeringMessage.create({
@@ -798,7 +813,7 @@ export async function sendThreadMessage(
             botId: target.botId,
             threadId: target.threadId,
             userId: actor.userId,
-            prompt: buildSendPrompt(input.text, artifacts, connectorNames),
+            prompt: buildSendPrompt(turnText, artifacts, connectorNames),
             status: "queued",
           },
         });
