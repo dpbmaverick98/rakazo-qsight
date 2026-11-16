@@ -1,76 +1,95 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Hierarchy } from "@rakazo/contracts/hierarchy";
-import { divIcon, latLngBounds, map, marker, tileLayer } from "leaflet";
-import "leaflet/dist/leaflet.css";
+import { Map as LibreMap, LngLatBounds, Marker, setWorkerUrl } from "maplibre-gl";
+import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 
-/** Read-only enhancement: the adjacent building disclosures remain the navigation fallback. */
-export default function BuildingMap({ buildings }: { buildings: Hierarchy["buildings"] }) {
+setWorkerUrl(mapWorkerUrl);
+
+/** Static enhancement; project navigation does not depend on the basemap. */
+export default function BuildingMap({ building }: { building: Hierarchy["buildings"][number] }) {
   const { t } = useLingui();
-  const [failed, setFailed] = useState(false);
-  const container = useRef<HTMLElement>(null);
+  const host = useRef<HTMLDivElement>(null);
+  const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const key = import.meta.env.VITE_GEOAPIFY_API_KEY;
+  const { latitude, longitude } = building;
+  const configured = Boolean(key && latitude != null && longitude != null);
   useEffect(() => {
-    if (!container.current || failed) return;
-    const located = buildings.filter(
-      (building) => building.latitude != null && building.longitude != null,
-    );
-    if (!located.length) return;
-    const view = map(container.current, {
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      touchZoom: false,
-      tapHold: false,
-      zoomControl: false,
-      attributionControl: true,
-    });
+    if (!host.current || !configured) return;
+    let view: LibreMap | undefined;
+    let resize: ResizeObserver | undefined;
+    setState("loading");
     try {
-      view.attributionControl.setPrefix(false);
-      tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-      })
-        .on("tileerror", () => setFailed(true))
-        .addTo(view);
-      const bounds = latLngBounds([]);
-      for (const building of located) {
-        const point: [number, number] = [building.latitude!, building.longitude!];
-        bounds.extend(point);
-        marker(point, {
-          icon: divIcon({
-            className: "rounded-full border-2 border-background bg-primary shadow-sm",
-            iconSize: [18, 18],
-            iconAnchor: [9, 9],
-          }),
-          title: building.name,
-          alt: building.name,
-          keyboard: false,
-          interactive: false,
-        }).addTo(view);
-      }
-      view.fitBounds(bounds, { padding: [24, 24], maxZoom: 16, animate: false });
-      const resize = new ResizeObserver(() => {
-        view.invalidateSize({ pan: false });
-        view.fitBounds(bounds, { padding: [24, 24], maxZoom: 16, animate: false });
+      view = new LibreMap({
+        container: host.current,
+        style: `https://maps.geoapify.com/v1/styles/positron/style.json?apiKey=${encodeURIComponent(key ?? "")}`,
+        center: [longitude!, latitude!],
+        zoom: 14,
+        interactive: false,
+        attributionControl: false,
       });
-      resize.observe(container.current);
-      return () => {
-        resize.disconnect();
-        view.remove();
-      };
-    } catch (error) {
-      view.remove();
-      throw error;
+      const instance = view;
+      const fail = () => setState("failed");
+      instance.on("error", fail);
+      instance.getCanvas().addEventListener("webglcontextlost", fail);
+      instance.on("load", () => {
+        try {
+          for (const layer of instance.getStyle().layers) {
+            if (/poi|transit/i.test(layer.id))
+              instance.setLayoutProperty(layer.id, "visibility", "none");
+          }
+          const pin = document.createElement("div");
+          pin.className = "size-4 rounded-full border-2 border-background bg-primary shadow-sm";
+          pin.setAttribute("aria-hidden", "true");
+          new Marker({ element: pin }).setLngLat([longitude!, latitude!]).addTo(instance);
+          const bounds = new LngLatBounds([longitude!, latitude!], [longitude!, latitude!]);
+          const fitBuilding = () => {
+            instance.resize();
+            instance.fitBounds(bounds, { padding: 24, maxZoom: 14, duration: 0 });
+          };
+          fitBuilding();
+          resize = new ResizeObserver(fitBuilding);
+          resize.observe(host.current!);
+          setState((previous) => (previous === "failed" ? previous : "ready"));
+        } catch {
+          fail();
+        }
+      });
+    } catch {
+      setState("failed");
     }
-  }, [buildings, failed]);
-  if (failed) throw new Error("Map tiles unavailable");
+    return () => {
+      resize?.disconnect();
+      view?.remove();
+    };
+  }, [configured, key, latitude, longitude]);
+  const ready = configured && state === "ready";
   return (
     <section
-      ref={container}
       aria-label={t`Building map`}
-      className="building-map-pastel relative isolate h-full w-full bg-muted"
-    />
+      className="relative mb-4 h-40 overflow-hidden rounded-md border border-border bg-muted"
+    >
+      <div
+        ref={host}
+        aria-hidden="true"
+        className={ready ? "h-full w-full" : "invisible h-full w-full"}
+      />
+      {!ready && (
+        <p
+          role="status"
+          className="absolute inset-0 flex items-center justify-center text-body text-muted-foreground"
+        >
+          {configured && state === "loading" ? t`Loading map…` : t`Map unavailable`}
+        </p>
+      )}
+      {ready && (
+        <div className="absolute bottom-0 right-0 bg-background px-1 text-caption text-foreground">
+          <a href="https://www.geoapify.com/">Powered by Geoapify</a> |{" "}
+          <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> |{" "}
+          <a href="https://openmaptiles.org/">© OpenMapTiles</a>
+        </div>
+      )}
+    </section>
   );
 }

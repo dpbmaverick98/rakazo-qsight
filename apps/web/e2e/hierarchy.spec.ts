@@ -15,16 +15,8 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     selectable: true,
     verification_token: "fake-candidate",
   };
-  // Keep the map journey deterministic and offline.
-  await page.route("https://tile.openstreetmap.org/**", (route) =>
-    route.fulfill({
-      contentType: "image/png",
-      body: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    }),
-  );
+  // External map failures must preserve project navigation.
+  await page.route("https://maps.geoapify.com/**", (route) => route.abort());
   await page.route("**/api/agent-plane/hierarchy", async (route) => {
     if (route.request().headers()["x-rakazo-space-id"] !== space.id)
       return route.fulfill({ status: 204 });
@@ -97,7 +89,7 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     "aria-expanded",
     "true",
   );
-  await expect(page.locator(".leaflet-container")).toHaveCount(0);
+  await expect(page.getByText("Map unavailable", { exact: true })).toBeVisible();
   const sidebarBuilding = page.getByRole("heading", { name: "North Building", exact: true });
   await expect(sidebarBuilding).toBeVisible();
   await expect(sidebarBuilding.locator("button")).toHaveCount(0);

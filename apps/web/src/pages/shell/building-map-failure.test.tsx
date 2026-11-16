@@ -1,47 +1,51 @@
 // @vitest-environment jsdom
-import { i18n } from "@lingui/core";
-import { I18nProvider } from "@lingui/react";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { ErrorBoundary } from "../../components/ErrorBoundary";
 import BuildingMap from "./building-map";
 
-const mocks = vi.hoisted(() => ({
-  map: vi.fn(),
-  tileLayer: vi.fn(),
-  latLngBounds: vi.fn(),
-  marker: vi.fn(),
-}));
-vi.mock("leaflet", () => ({ ...mocks, divIcon: vi.fn() }));
+const mocks = vi.hoisted(() => ({ Map: vi.fn(), Marker: vi.fn(), LngLatBounds: vi.fn() }));
+vi.mock("maplibre-gl", () => ({ ...mocks, setWorkerUrl: vi.fn() }));
+vi.mock("maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url", () => ({ default: "worker.js" }));
 vi.mock("@lingui/react/macro", () => ({
-  useLingui: () => ({ t: () => "Building map" }),
+  useLingui: () => ({ t: (parts: TemplateStringsArray) => parts.join("") }),
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
-afterEach(() => vi.restoreAllMocks());
-it.each(["initialization", "tiles"])(
-  "preserves the building list after map %s failure",
-  async (failure) => {
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
+});
+it.each(["missing key", "WebGL", "style", "context loss", "ready"])(
+  "preserves navigation: %s",
+  async (scenario) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const remove = vi.fn();
-    mocks.map.mockImplementation(() => {
-      if (failure === "initialization") throw new Error("Map unavailable");
-      return { attributionControl: { setPrefix: vi.fn() }, remove, fitBounds: vi.fn() };
-    });
-    let tileFailed = () => {};
-    const layer = {
-      on: (_event: string, failed: () => void) => {
-        tileFailed = failed;
-        return layer;
-      },
-      addTo: vi.fn(),
+    vi.stubEnv("VITE_GEOAPIFY_API_KEY", scenario === "missing key" ? "" : "fake-key");
+    const events: Record<string, () => void> = {};
+    const canvas = document.createElement("canvas");
+    const view = {
+      on: vi.fn((event: string, callback: () => void) => {
+        events[event] = callback;
+      }),
+      getCanvas: () => canvas,
+      getStyle: () => ({ layers: [{ id: "poi-label" }, { id: "transit-stop" }, { id: "road" }] }),
+      setLayoutProperty: vi.fn(),
+      resize: vi.fn(),
+      fitBounds: vi.fn(),
+      remove: vi.fn(),
     };
-    mocks.tileLayer.mockReturnValue(layer);
-    mocks.latLngBounds.mockReturnValue({ extend: vi.fn() });
-    const pin = { addTo: () => pin, bindTooltip: () => pin, on: () => pin };
-    mocks.marker.mockReturnValue(pin);
+    mocks.Map.mockImplementation(function MapConstructor() {
+      if (scenario === "WebGL") throw new Error("No WebGL");
+      return view;
+    });
+    const pin = { setLngLat: vi.fn().mockReturnThis(), addTo: vi.fn().mockReturnThis() };
+    mocks.Marker.mockImplementation(function MarkerConstructor() {
+      return pin;
+    });
+    mocks.LngLatBounds.mockImplementation(function BoundsConstructor() {
+      return {};
+    });
     vi.stubGlobal(
       "ResizeObserver",
       class {
@@ -49,63 +53,59 @@ it.each(["initialization", "tiles"])(
         disconnect() {}
       },
     );
-    i18n.loadAndActivate({ locale: "en", messages: {} });
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
       await act(async () =>
         root.render(
-          <I18nProvider i18n={i18n}>
-            <ErrorBoundary fallback={null}>
-              <BuildingMap
-                buildings={[
-                  { id: "north", name: "North Building", latitude: 0, longitude: 0, projects: [] },
-                ]}
-              />
-            </ErrorBoundary>
-            <button type="button">North Building</button>
-          </I18nProvider>,
+          <>
+            <BuildingMap
+              building={{
+                id: "north",
+                name: "North Building",
+                latitude: 0,
+                longitude: 0,
+                projects: [],
+              }}
+            />
+            <button type="button">Roof survey</button>
+          </>,
         ),
       );
-      if (failure === "tiles") {
-        expect(mocks.map).toHaveBeenCalledWith(
-          expect.anything(),
+      if (scenario === "missing key") expect(mocks.Map).not.toHaveBeenCalled();
+      else
+        expect(mocks.Map).toHaveBeenCalledWith(
           expect.objectContaining({
-            dragging: false,
-            scrollWheelZoom: false,
-            doubleClickZoom: false,
-            boxZoom: false,
-            keyboard: false,
-            touchZoom: false,
-            tapHold: false,
-            zoomControl: false,
-            attributionControl: true,
-          }),
-        );
-        expect(mocks.marker).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.objectContaining({
-            keyboard: false,
             interactive: false,
+            attributionControl: false,
+            zoom: 14,
+            style: "https://maps.geoapify.com/v1/styles/positron/style.json?apiKey=fake-key",
           }),
         );
-        expect(
-          container
-            .querySelector('[aria-label="Building map"]')
-            ?.classList.contains("building-map-pastel"),
-        ).toBe(true);
-        expect(mocks.tileLayer).toHaveBeenCalledWith(
-          expect.any(String),
-          expect.objectContaining({ attribution: expect.stringContaining("OpenStreetMap") }),
-        );
-        await act(async () => tileFailed());
-      }
-      expect(container.querySelector('[aria-label="Building map"]')).toBeNull();
-      expect(container.querySelector("button")?.textContent).toBe("North Building");
-      if (failure === "tiles") expect(remove).toHaveBeenCalledOnce();
+      if (scenario === "style") await act(async () => events.error!());
+      if (scenario === "context loss")
+        await act(async () => canvas.dispatchEvent(new Event("webglcontextlost")));
+      if (scenario === "ready") {
+        await act(async () => events.load!());
+        expect(view.setLayoutProperty.mock.calls).toEqual([
+          ["poi-label", "visibility", "none"],
+          ["transit-stop", "visibility", "none"],
+        ]);
+        expect(mocks.Marker).toHaveBeenCalledOnce();
+        expect(pin.setLngLat).toHaveBeenCalledWith([0, 0]);
+        expect(view.fitBounds).toHaveBeenCalledWith(expect.anything(), {
+          padding: 24,
+          maxZoom: 14,
+          duration: 0,
+        });
+        expect(container.textContent).toContain("Geoapify");
+        expect(container.textContent).not.toContain("North Building");
+      } else
+        expect(container.querySelector('[role="status"]')?.textContent).toBe("Map unavailable");
+      expect(container.querySelector("button")?.textContent).toBe("Roof survey");
     } finally {
       await act(async () => root.unmount());
-      vi.unstubAllGlobals();
     }
+    if (!["missing key", "WebGL"].includes(scenario)) expect(view.remove).toHaveBeenCalledOnce();
   },
 );

@@ -121,8 +121,3 @@ body,
   background-color: var(--primary);
   color: var(--primary-foreground);
 }
-
-/* Soften only the basemap: pins, labels and attribution keep their contrast. */
-.building-map-pastel .leaflet-tile-pane {
-  filter: saturate(0.12) brightness(1.16) contrast(0.72);
-}

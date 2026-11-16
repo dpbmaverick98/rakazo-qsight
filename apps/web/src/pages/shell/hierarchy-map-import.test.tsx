@@ -19,7 +19,7 @@ vi.mock("./project-commercial", () => ({
   useProjectCommercial: () => ({ isPending: false, isError: false, data: null }),
   CommercialPanel: () => null,
 }));
-it("keeps a neutral map placeholder and navigation without loading the unverified map", async () => {
+it("keeps an accessible fallback and navigation after a map import failure", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const container = document.createElement("div");
   const root = createRoot(container);
@@ -51,7 +51,7 @@ it("keeps a neutral map placeholder and navigation without loading the unverifie
       ),
     );
     expect(container.textContent).toContain("North Building");
-    expect(container.querySelector(".bg-muted[aria-hidden=true]")).not.toBeNull();
+    expect(container.textContent).toContain("Map unavailable");
     expect(container.querySelector('[aria-label="Building map"]')).toBeNull();
     expect(container.querySelector("[aria-expanded]")).not.toBeNull();
   } finally {

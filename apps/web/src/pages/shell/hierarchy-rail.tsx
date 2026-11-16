@@ -13,10 +13,23 @@ import {
 } from "@rakazo/ui-web";
 import { useQuery } from "@tanstack/react-query";
 import { Building } from "lucide-react";
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import { withSpaceHeaders } from "../../lib/rpc";
 import { hierarchyRetry } from "./hierarchy-refresh";
 import { CommercialPanel, useProjectCommercial } from "./project-commercial";
+
+const BuildingMap = lazy(() => import("./building-map"));
+
+function MapFallback() {
+  const { t } = useLingui();
+  return (
+    <p
+      role="status"
+      className="mb-4 flex h-40 items-center justify-center rounded-md border border-border bg-muted text-body text-muted-foreground"
+    >{t`Map unavailable`}</p>
+  );
+}
 
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery<Hierarchy | null>({
@@ -153,8 +166,11 @@ function ProjectStageContent({
         building.address.trim().toLocaleLowerCase() !== building.name.trim().toLocaleLowerCase() ? (
           <p className="mb-3 text-body text-muted-foreground">{building.address}</p>
         ) : null}
-        {/* Keep the map neutral until the exact basemap is configured. */}
-        <div aria-hidden="true" className="mb-4 h-40 rounded-md border border-border bg-muted" />
+        <ErrorBoundary fallback={<MapFallback />} key={building.id}>
+          <Suspense fallback={<MapFallback />}>
+            <BuildingMap building={building} />
+          </Suspense>
+        </ErrorBoundary>
         <ul>
           {building.projects.map((project) => (
             <li key={project.id}>
