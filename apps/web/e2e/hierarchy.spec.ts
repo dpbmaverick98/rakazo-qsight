@@ -87,21 +87,18 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
   const tabs = page.getByRole("tablist", { name: "Project views" });
   await expect(tabs).toBeVisible();
   await expect(page.getByRole("heading", { name: "Example Client", exact: true })).toBeVisible();
-  await expect(page.getByText("North Building", { exact: true }).last()).toBeVisible();
   await expect(page.getByRole("button", { name: "Roof survey", exact: true })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
   await expect(page.getByText("Map unavailable", { exact: true })).toBeVisible({ timeout: 15_000 });
   const mapFallback = page.getByText("Map unavailable", { exact: true });
-  const buildingLabel = page.getByText("North Building", { exact: true }).last();
   const addressLabel = page.getByText(candidate.address, { exact: true });
   await expect(addressLabel).toHaveCount(1);
   const mapBox = await mapFallback.boundingBox();
-  const buildingBox = await buildingLabel.boundingBox();
   const addressBox = await addressLabel.boundingBox();
-  expect(buildingBox!.y).toBeGreaterThanOrEqual(mapBox!.y + mapBox!.height);
-  expect(addressBox!.y).toBeGreaterThan(buildingBox!.y);
+  expect(addressBox!.y).toBeGreaterThanOrEqual(mapBox!.y + mapBox!.height);
+  await expect(page.getByText("North Building", { exact: true })).toHaveCount(1);
   const sidebarBuilding = page.getByRole("heading", { name: "North Building", exact: true });
   await expect(sidebarBuilding).toBeVisible();
   await expect(sidebarBuilding.locator("button")).toHaveCount(0);
@@ -133,6 +130,11 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
   await expect(page.getByRole("tab", { name: "Sub vendors", exact: true })).toBeFocused();
   await tabs.getByRole("tab", { name: "Claims", exact: true }).click();
   await expect(commercial.locator("input,textarea,form")).toHaveCount(0);
+  await expect(
+    commercial.getByRole("heading", { name: commercialFixture.project.name }),
+  ).toBeVisible();
+  await expect(commercial.getByRole("link", { name: /Open project/ })).toHaveCount(0);
+  await expect(commercial.getByText("No active work packages yet")).toHaveCount(0);
   await captureScreenshot(page, testInfo, "project-claims");
   await page.reload();
   await expect(tabs.getByRole("tab", { name: "Claims", exact: true })).toHaveAttribute(

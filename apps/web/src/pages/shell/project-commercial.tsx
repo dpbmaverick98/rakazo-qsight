@@ -53,20 +53,9 @@ export function CommercialPanel({
       {data ? (
         <>
           <SectionHeading className="break-words">{data.project.name}</SectionHeading>
-          <a
-            className="text-body underline"
-            href={data.project.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t`Open project (opens in new tab)`}
-          >
-            <Trans>Open project</Trans> ↗
-          </a>
-          {!data.claims.some((claim) =>
-            claim.sub_vendors.some((vendor) => vendor.work_packages.length),
-          ) ? (
+          {!data.claims.length ? (
             <p className="mt-3 text-body text-muted-foreground">
-              <Trans>No active work packages yet</Trans>
+              <Trans>No claims</Trans>
             </p>
           ) : null}
           <ul className="mt-3 space-y-3">

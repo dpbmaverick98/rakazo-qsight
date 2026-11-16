@@ -51,11 +51,20 @@ function MapImage({ src, label }: { src: string | undefined; label: string }) {
           {src && state === "loading" ? t`Loading map…` : t`Map unavailable`}
         </p>
       )}
+      {/* Keep accessible credits without duplicating the provider image’s default attribution. */}
       {ready && (
-        <div className="absolute bottom-0 right-0 bg-background px-1 text-caption text-foreground">
-          <a href="https://www.geoapify.com/">Powered by Geoapify</a> |{" "}
-          <a href="https://www.openstreetmap.org/copyright">© OpenStreetMap contributors</a> |{" "}
-          <a href="https://openmaptiles.org/">© OpenMapTiles</a>
+        <div className="sr-only">
+          <a tabIndex={-1} href="https://www.geoapify.com/">
+            Powered by Geoapify
+          </a>{" "}
+          |{" "}
+          <a tabIndex={-1} href="https://www.openstreetmap.org/copyright">
+            © OpenStreetMap contributors
+          </a>{" "}
+          |{" "}
+          <a tabIndex={-1} href="https://openmaptiles.org/">
+            © OpenMapTiles
+          </a>
         </div>
       )}
     </section>

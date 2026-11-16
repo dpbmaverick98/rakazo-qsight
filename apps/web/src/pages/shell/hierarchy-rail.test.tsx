@@ -196,7 +196,7 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     buildings: [
       {
         ...data.buildings[0]!,
-        address: "  north building  ",
+        address: "10 Example Street",
         latitude: 51.5,
         longitude: -0.1,
         projects: [
@@ -227,7 +227,8 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     await act(async () => root.render(render("space")));
     await vi.waitFor(() => expect(container.textContent).toContain("Finishes"));
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
+    expect(container.textContent).not.toContain("North Building");
+    expect(container.textContent?.match(/10 Example Street/g)).toHaveLength(1);
     expect(container.querySelector("h2")?.textContent).toBe("Example Client");
     expect(container.querySelector(".lucide-building")).not.toBeNull();
     expect(container.textContent).toContain("Map unavailable");

@@ -77,6 +77,10 @@ async function mount(props: Partial<ComponentProps<typeof CommercialPanel>> = {}
 it("groups packages behind claim and vendor disclosures and preserves canonical null money", async () => {
   const view = await mount();
   try {
+    expect(view.container.textContent).toContain(commercialFixture.project.name);
+    expect(view.container.querySelector(`a[href="${commercialFixture.project.url}"]`)).toBeNull();
+    expect(view.container.textContent).not.toContain("Open project");
+    expect(view.container.textContent).not.toContain("No active work packages yet");
     const claim = [...view.container.querySelectorAll("button")].find(
       (b) => b.textContent === "Finishes",
     )!;
@@ -102,7 +106,7 @@ it("groups packages behind claim and vendor disclosures and preserves canonical 
 it("supports loading, empty, error/retry without write actions", async () => {
   for (const [props, text] of [
     [{ data: undefined, loading: true }, "Loading commercial view…"],
-    [{ data: { ...commercialFixture, claims: [] } }, "No active work packages yet"],
+    [{ data: { ...commercialFixture, claims: [] } }, "No claims"],
     [{ data: undefined, error: true }, "Commercial view unavailable"],
   ] as [Partial<ComponentProps<typeof CommercialPanel>>, string][]) {
     const view = await mount(props);
