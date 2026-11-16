@@ -39,7 +39,11 @@ export function HierarchyRail({
   data,
   loading,
   scope,
+  projectId,
+  error,
+  retry,
 }: {
+  projectId?: string;
   scope?: { userId: string | null; spaceId: string | null };
   data?: Hierarchy | null;
   loading: boolean;
@@ -69,9 +73,17 @@ export function HierarchyRail({
           {data.client.name}
         </h2>
       ) : null}
-      {!data?.buildings.length ? (
+      {error ? (
+        <div role="alert">
+          <Trans>Hierarchy unavailable</Trans>
+          <Button variant="ghost" onClick={retry}>
+            <Trans>Retry</Trans>
+          </Button>
+        </div>
+      ) : null}
+      {!loading && !error && !data?.buildings.length ? (
         <p className="text-body text-muted-foreground">
-          <Trans>Quick access to building and project details</Trans>
+          <Trans>Select a project manager</Trans>
         </p>
       ) : null}
       {loading && !data?.buildings.length ? (
@@ -138,7 +150,7 @@ export function HierarchyRail({
                             <Button
                               variant="ghost"
                               className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-start break-words"
-                              aria-pressed={selected === project.id}
+                              aria-pressed={(projectId ?? selected) === project.id}
                               onClick={(event) => {
                                 selectionTrigger.current = event.currentTarget;
                                 setSelected(project.id);

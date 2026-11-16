@@ -92,8 +92,8 @@ it("expands buildings and offers project selection", async () => {
 it("renders loading, empty and retryable errors", async () => {
   for (const [props, text] of [
     [{ data: undefined, loading: true }, "Loading hierarchy…"],
-    [{ data: { ...data, buildings: [] } }, "Quick access to building and project details"],
-    [{ data: undefined, error: true }, "Quick access to building and project details"],
+    [{ data: { ...data, buildings: [] } }, "Select a project manager"],
+    [{ data: undefined, error: true }, "Hierarchy unavailable"],
   ] as [Partial<ComponentProps<typeof HierarchyRail>>, string][]) {
     const view = await mount(props);
     try {
