@@ -50,8 +50,8 @@ function upgrade(port: number, host: string) {
 }
 
 /** Points the config's API proxy at a stand-in API that accepts every upgrade. */
-async function useStandInApi() {
-  const api = http.createServer((_req, res) => res.end());
+async function useStandInApi(handler: http.RequestListener = (_req, res) => res.end()) {
+  const api = http.createServer(handler);
   api.on("upgrade", (_req, socket) => {
     socket.end(
       "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n",
@@ -94,6 +94,39 @@ describe("vite.config", () => {
       expect(upgrades).toEqual([DEVICE_SOCKET]);
       expect(proxy).toHaveProperty("/api");
     }
+  });
+
+  it("forwards hierarchy and commercial requests through the authenticated API", async () => {
+    const requests: { url: string | undefined; authorization: string | undefined }[] = [];
+    await useStandInApi((req, res) => {
+      requests.push({ url: req.url, authorization: req.headers.authorization });
+      res.setHeader("content-type", "application/json");
+      res.end(JSON.stringify({ bindingRevision: 7 }));
+    });
+    const server = await createServer({
+      configFile,
+      root: path.dirname(configFile),
+      mode: "development",
+      logLevel: "silent",
+      server: { host: "127.0.0.1", port: 0, hmr: false },
+    });
+    cleanup.push(() => server.close());
+    await server.listen();
+    const { port } = server.httpServer!.address() as AddressInfo;
+    const routes = [
+      "/api/agent-plane/hierarchy",
+      "/api/agent-plane/projects/project-test/commercial?bindingRevision=7",
+    ];
+    for (const route of routes) {
+      const response = await fetch(`http://127.0.0.1:${port}${route}`, {
+        headers: { Authorization: "Bearer fake-session-token" },
+      });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ bindingRevision: 7 });
+    }
+    expect(requests).toEqual(
+      routes.map((url) => ({ url, authorization: "Bearer fake-session-token" })),
+    );
   });
 
   it("lets the device socket through for the hosts the preview server serves", async () => {

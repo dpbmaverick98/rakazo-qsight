@@ -66,44 +66,6 @@ export default defineConfig(({ command, mode }) => {
           this.emitFile({ type: "asset", fileName: "build-id", source: `${buildId}\n` });
         },
       },
-      {
-        name: "qsight-hierarchy-preview",
-        apply: "serve",
-        configureServer(server) {
-          server.middlewares.use(async (req, res, next) => {
-            const pathname = (req.url || "").split("?")[0];
-            const commercial = pathname.match(
-              /^\/api\/agent-plane\/projects\/([^/]+)\/commercial$/,
-            );
-            if (pathname !== "/api/agent-plane/hierarchy" && !commercial) return next();
-            try {
-              const base = process.env.QSIGHT_BASE_URL || "http://127.0.0.1:8002";
-              const token = process.env.QSIGHT_AGENT_TOKEN || "";
-              const url = commercial
-                ? new URL(
-                    "/api/v2/agent/projects/" + encodeURIComponent(commercial[1]) + "/commercial",
-                    base,
-                  )
-                : new URL("/api/v2/agent/hierarchy", base);
-              if (!commercial && process.env.QSIGHT_CLIENT_ID)
-                url.searchParams.set("client_id", process.env.QSIGHT_CLIENT_ID);
-              const upstream = await fetch(url, {
-                headers: { authorization: "Bearer " + token },
-                signal: AbortSignal.timeout(5000),
-              });
-              const body = await upstream.text();
-              res.statusCode = upstream.status;
-              res.setHeader("content-type", "application/json");
-              res.setHeader("cache-control", "no-store");
-              res.end(body);
-            } catch {
-              res.statusCode = 502;
-              res.setHeader("content-type", "application/json");
-              res.end(JSON.stringify({ error: "hierarchy unavailable" }));
-            }
-          });
-        },
-      },
       react(),
       babel({ plugins: ["@lingui/babel-plugin-lingui-macro"] }),
       lingui(),
