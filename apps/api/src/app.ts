@@ -69,6 +69,7 @@ import {
   SpaceMemoryProviderResolver,
   StripeBillingProvider,
   sandboxProviderOptionsFromEnv,
+  stageProjectIntake,
   stripeBillingConfigFromEnv,
   UserDeviceHub,
   UserDevices,
@@ -169,7 +170,6 @@ import { moveMcpArgsIntoSecrets } from "./mcp-args-migration.js";
 import { startMessagingRuntime } from "./messaging-runtime.js";
 import { monitoringRoutes } from "./monitoring.js";
 import { pluginSubmissionRoutes } from "./plugin-submissions.js";
-import { stageProjectIntake } from "./project-intake.js";
 import { sendReferralEmails } from "./referral-email.js";
 import { mountApiRequestBodyLimits, rpcBodyLimit } from "./request-body-limit.js";
 import { auditProjectMutation, retireProject } from "./retire-project.js";

@@ -511,6 +511,7 @@ export async function sendThreadMessage(
     clientNonce?: string;
     /** Internal only: resolved from canonical server reads, never accepted by the send contract. */
     inspection?: ResolvedInspection;
+    stagingNote?: string;
     /** No model to start a turn: the send may only stop active work. */
     noModel?: boolean;
   },
@@ -518,8 +519,11 @@ export async function sendThreadMessage(
   /** Runs saved with the message, after the thread lock and before the message is routed. */
   startRoutines?: (tx: Prisma.TransactionClient) => Promise<Array<{ id: string; status: string }>>,
 ) {
-  const turnText = input.inspection
-    ? [input.text?.trim(), input.inspection.prompt].filter(Boolean).join("\n\n")
+  const inspectionContext = [input.inspection?.prompt, input.stagingNote]
+    .filter(Boolean)
+    .join("\n\n");
+  const turnText = inspectionContext
+    ? [input.text?.trim(), inspectionContext].filter(Boolean).join("\n\n")
     : input.text;
   const existing = await replayExistingSend(
     deps,
@@ -677,11 +681,11 @@ export async function sendThreadMessage(
           input.text,
           sendAttachmentBlocks(attachmentBlocks, artifacts, input.imageHandling),
         );
-        if (input.inspection) {
+        if (inspectionContext) {
           // Persist beside this message so new turns, history and steering share one snapshot.
           const textBlock = blocks.find((block) => block.kind === "text");
-          if (textBlock) Object.assign(textBlock, { inspectionContext: input.inspection.prompt });
-          else blocks.push({ kind: "text", text: "", inspectionContext: input.inspection.prompt });
+          if (textBlock) Object.assign(textBlock, { inspectionContext });
+          else blocks.push({ kind: "text", text: "", inspectionContext });
         }
         const message = await createThreadMessageInTransaction(tx, {
           threadId: target.threadId,
@@ -724,7 +728,8 @@ export async function sendThreadMessage(
           await tx.message.update({ where: { id: message.id }, data: { runId: primary.id } });
           const steered = answered.filter(
             (run) =>
-              input.inspection || answerSteersRun(run, attachmentBlocks, input.imageHandling),
+              Boolean(inspectionContext) ||
+              answerSteersRun(run, attachmentBlocks, input.imageHandling),
           );
           for (const run of steered) {
             await tx.steeringMessage.create({

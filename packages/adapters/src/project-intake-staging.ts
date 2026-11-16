@@ -131,7 +131,21 @@ export async function stageProjectIntake(
         // Reliable cleanup/expiry is a separate lifecycle decision.
       }
     }
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      [
+        "forbidden",
+        "personal",
+        "unbound",
+        "binding_missing",
+        "binding_stale",
+        "project_unavailable",
+        "space_unavailable",
+        "disabled",
+      ].includes(error.message)
+    )
+      throw error;
     throw new Error("Intake staging unavailable");
   }
 }

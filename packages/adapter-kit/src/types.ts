@@ -903,6 +903,16 @@ export interface VoiceTranscribeRequest {
 }
 
 export interface BackgroundJobPayloads {
+  "project.intake.stage": {
+    spaceId: string;
+    userId: string;
+    botId: string;
+    threadId: string;
+    artifactIds: string[];
+    projectId: string;
+    projectName: string;
+    idempotencyKey: string;
+  };
   "run.continue": { runId: string };
   "routine.wakeup": { routineId: string; scheduledFor: string };
   /** Run a failed routine run once more; the payload names the failed run. */

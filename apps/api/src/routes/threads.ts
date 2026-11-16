@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { ORPCError } from "@orpc/server";
-import { createAdapterContext, runJobKey } from "@rakazo/adapter-kit";
+import { createAdapterContext, projectIntakeStageJob, runJobKey } from "@rakazo/adapter-kit";
 import { getActiveTeachingSession, settleCallRequest, wakeRun } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import { MessageBlock } from "@rakazo/contracts";
 import type { CommercialInspectionSelection } from "@rakazo/contracts/project-commercial";
 import {
   AttachmentValidationError,
@@ -144,7 +146,15 @@ export function threadsRoutes(ctx: RouterContext) {
     const deployment = setup.hasDeployment
       ? { provider: deps.env.defaultProvider, model: deps.env.defaultModel }
       : null;
-    return sendThreadMessage(
+    const projectId =
+      target.kind === "bot" && target.bot.spawnKey?.startsWith("pm:")
+        ? target.bot.spawnKey.slice(3)
+        : undefined;
+    const stagingNote =
+      projectId && input.artifactIds?.length
+        ? "Attachments were received and are being staged in Vendor One. Acknowledge and say you will review them once ready. Do not claim publication or approval."
+        : undefined;
+    const result = await sendThreadMessage(
       {
         ...deps,
         maxAttachmentsPerMessage: deps.env.maxAttachmentsPerMessage,
@@ -159,7 +169,7 @@ export function threadsRoutes(ctx: RouterContext) {
       },
       actor,
       target,
-      { ...input, noModel, inspection },
+      { ...input, noModel, inspection, stagingNote },
       takeoverReleaser(deps, actor, target),
       startRoutines,
     ).catch((error: unknown) => {
@@ -168,6 +178,44 @@ export function threadsRoutes(ctx: RouterContext) {
       }
       throw error;
     });
+    if (projectId && target.kind === "bot") {
+      // Without a nonce there is no persisted send receipt to recover on replay;
+      // use this request's attachments and a fresh submission key.
+      const message = input.clientNonce
+        ? await deps.prisma.message.findUnique({
+            where: {
+              threadId_clientNonce: { threadId: target.threadId, clientNonce: input.clientNonce },
+            },
+            select: { blocks: true },
+          })
+        : null;
+      const artifactIds = input.clientNonce
+        ? MessageBlock.array()
+            .parse(message?.blocks ?? [])
+            .flatMap((block) =>
+              block.kind === "file" || block.kind === "image" ? [block.artifactId] : [],
+            )
+        : input.artifactIds;
+      if (artifactIds?.length) {
+        await deps.jobs
+          .enqueue(
+            projectIntakeStageJob({
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              botId: target.botId,
+              threadId: target.threadId,
+              artifactIds,
+              projectId,
+              projectName: target.bot.name,
+              idempotencyKey: input.clientNonce ?? randomUUID(),
+            }),
+          )
+          .catch(() => {
+            getLogger().warn("Project intake staging enqueue failed");
+          });
+      }
+    }
+    return result;
   };
   return {
     threads: {

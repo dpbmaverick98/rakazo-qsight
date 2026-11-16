@@ -1,4 +1,5 @@
 import { ORPCError } from "@orpc/server";
+import type { ProjectIntakeInput, ProjectIntakeSummary } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import type {
   ClientSetup,
@@ -27,7 +28,6 @@ import type {
 import { CommercialInspectionSelectionSchema } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
 import { z } from "zod";
-import type { ProjectIntakeInput, ProjectIntakeSummary } from "./project-intake.js";
 import type { ClientBinding } from "./space-client-binding.js";
 
 export function mountHierarchyRoute(

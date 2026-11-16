@@ -608,3 +608,142 @@ describe("memory.retain-turn", () => {
     );
   });
 });
+
+describe("project intake staging", () => {
+  const payload = {
+    ...owner,
+    botId: "bot",
+    threadId: "thread",
+    artifactIds: ["artifact"],
+    projectId: "project",
+    projectName: "Project",
+    idempotencyKey: "nonce",
+  };
+  function fixture(
+    callback?: Parameters<typeof createBackgroundJobHandlers>[0]["projectIntakeStage"],
+  ) {
+    let saved: { id: string } | null = null;
+    const tx = {
+      $queryRaw: vi.fn(async () => []),
+      $executeRaw: vi.fn(async () => 0),
+      thread: {
+        update: vi.fn(async () => ({ spaceId: owner.spaceId, nextMessageSeq: 1, nextEventSeq: 1 })),
+      },
+      message: {
+        findUnique: vi.fn(async () => saved),
+        create: vi.fn(async (_input: unknown) => {
+          saved = { id: "message" };
+          return saved;
+        }),
+      },
+      event: { create: vi.fn(async () => ({ seq: 0 })) },
+    };
+    const prisma = {
+      thread: {
+        findUnique: vi.fn(async () => owner),
+        findFirst: vi.fn(async () => ({ id: "thread" })),
+      },
+      message: tx.message,
+      $transaction: vi.fn(async (fn: (db: typeof tx) => unknown) => fn(tx)),
+    };
+    const events = {
+      notify: vi.fn(async () => undefined),
+      publishSpaceChange: vi.fn(async () => undefined),
+    };
+    const handlers = createBackgroundJobHandlers({
+      prisma,
+      events,
+      projectIntakeStage: callback,
+    } as unknown as Parameters<typeof createBackgroundJobHandlers>[0]);
+    return { tx, prisma, events, stage: handlers["project.intake.stage"] };
+  }
+  it("stages as the owner and posts one durable message and event across replays", async () => {
+    const callback = vi.fn(async () => {
+      expect(currentDbContext()).toEqual({ kind: "tenant", ...owner });
+      return { intakeId: "private-intake", files: [{ id: "private-file", status: "ready" }] };
+    });
+    const { stage, tx, prisma, events } = fixture(callback);
+    await stage(payload);
+    await stage(payload);
+    expect(callback).toHaveBeenCalledExactlyOnceWith(payload);
+    expect(prisma.thread.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "thread",
+          spaceId: owner.spaceId,
+          botId: "bot",
+          bot: { spaceId: owner.spaceId, spawnKey: "pm:project", archivedAt: null },
+        },
+      }),
+    );
+    expect(tx.message.create).toHaveBeenCalledOnce();
+    expect(tx.event.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: "thread.message.created",
+        payload: expect.objectContaining({
+          blocks: [
+            {
+              kind: "text",
+              text: "Files received for Vendor One review (1 files). I will review them and come back with questions.",
+            },
+          ],
+        }),
+      }),
+    });
+    expect(JSON.stringify(tx.event.create.mock.calls)).not.toMatch(
+      /private-intake|private-file|https:/,
+    );
+    expect(events.notify).toHaveBeenCalledWith("thread", 0);
+    expect(events.publishSpaceChange).toHaveBeenCalledWith(owner.spaceId, "runs");
+  });
+  it.each([
+    ["forbidden", "Access denied"],
+    ["personal", "bound client workspace"],
+    ["unbound", "bound client workspace"],
+    ["binding_missing", "binding is missing"],
+    ["binding_stale", "binding changed"],
+    ["project_unavailable", "project is unavailable"],
+    ["space_unavailable", "workspace is unavailable"],
+    ["disabled", "staging is unavailable"],
+    ["private-id https://private.invalid/token", "retry"],
+    ["constructor", "retry"],
+  ])("posts safe guidance for %s", async (category, guidance) => {
+    const { stage, tx } = fixture(async () => {
+      throw new Error(category);
+    });
+    await stage(payload, undefined, {
+      number: ["private-id https://private.invalid/token", "constructor"].includes(category)
+        ? 8
+        : 1,
+      max: 8,
+    });
+    const message = JSON.stringify(tx.event.create.mock.calls);
+    expect(message).toContain(guidance);
+    expect(message).toContain("do not claim review");
+    expect(message).not.toMatch(/private-id|https:|private.invalid/);
+  });
+  it("reports staging unavailable when no callback is configured", async () => {
+    const { stage, tx } = fixture();
+    await stage(payload);
+    expect(JSON.stringify(tx.event.create.mock.calls)).toContain("staging is unavailable");
+  });
+  it("retries transient failure without a premature message, then reports exhaustion", async () => {
+    const callback = vi.fn(async () => {
+      throw new Error("transient");
+    });
+    const { stage, tx } = fixture(callback);
+    await expect(stage(payload, undefined, { number: 1, max: 8 })).rejects.toThrow("transient");
+    expect(tx.message.create).not.toHaveBeenCalled();
+    await stage(payload, undefined, { number: 8, max: 8 });
+    expect(tx.message.create).toHaveBeenCalledOnce();
+  });
+  it("does not stage or publish to mismatched tenants or bot threads", async () => {
+    const callback = vi.fn();
+    const { stage, tx, prisma } = fixture(callback);
+    await stage({ ...payload, spaceId: "other-space" });
+    prisma.thread.findFirst.mockResolvedValueOnce(null as never);
+    await stage(payload);
+    expect(callback).not.toHaveBeenCalled();
+    expect(tx.message.create).not.toHaveBeenCalled();
+  });
+});

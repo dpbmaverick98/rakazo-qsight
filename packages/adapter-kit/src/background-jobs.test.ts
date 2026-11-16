@@ -9,6 +9,7 @@ import {
   memoryRetainTurnJob,
   messagingSendJob,
   parseBackgroundJob,
+  projectIntakeStageJob,
   RetryJobLaterError,
   routineRetryJob,
   teamChatAmbientJob,
@@ -41,6 +42,7 @@ function handlers(): BackgroundJobHandlers {
     "purchase.poll": vi.fn(async () => undefined),
     "media.poll": vi.fn(async () => undefined),
     "push.receipt": vi.fn(async () => undefined),
+    "project.intake.stage": vi.fn(async () => undefined),
   };
 }
 
@@ -261,4 +263,37 @@ describe("historyCompactJob", () => {
   it("keys different threads differently", () => {
     expect(historyCompactJobKey("thread-1")).not.toBe(historyCompactJobKey("thread-2"));
   });
+});
+
+it("validates, keys and dispatches project intake staging", async () => {
+  const payload = {
+    spaceId: "space",
+    userId: "user",
+    botId: "bot",
+    threadId: "thread",
+    artifactIds: ["file"],
+    projectId: "project",
+    projectName: "",
+    idempotencyKey: "nonce",
+  };
+  const job = projectIntakeStageJob(payload);
+  expect(job).toEqual({
+    name: "project.intake.stage",
+    payload,
+    replaceKey: "project.intake.stage:thread:nonce",
+    keepExisting: true,
+    maxAttempts: 8,
+  });
+  const target = handlers();
+  await dispatchBackgroundJob(target, job.name, job.payload);
+  expect(target["project.intake.stage"]).toHaveBeenCalledWith(payload);
+  for (const key of ["spaceId", "userId", "botId", "threadId", "projectId", "idempotencyKey"]) {
+    expect(() => parseBackgroundJob(job.name, { ...payload, [key]: "" })).toThrow();
+  }
+  for (const artifactIds of [[], [""]]) {
+    expect(() => parseBackgroundJob(job.name, { ...payload, artifactIds })).toThrow();
+  }
+  expect(projectIntakeStageJob({ ...payload, projectName: "Renamed" }).replaceKey).toBe(
+    job.replaceKey,
+  );
 });
