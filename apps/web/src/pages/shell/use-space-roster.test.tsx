@@ -3,7 +3,7 @@ import type { AppBootstrap, Bot, Group } from "@rakazo/contracts";
 import { act, useLayoutEffect, useRef, useState } from "react";
 import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
-import type { NavigateFunction } from "react-router-dom";
+import type { NavigateFunction, NavigateOptions } from "react-router-dom";
 import { BrowserRouter, useMatch } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { createSpaceRpc } from "../../lib/rpc";
@@ -56,7 +56,7 @@ let root: Root;
 let shell: {
   signals: RosterSignals;
   navigate: NavigateFunction;
-  openSpaceChat: (spaceId: string, path: string) => void;
+  openSpaceChat: (spaceId: string, path: string, options?: NavigateOptions) => void;
 };
 /** Settles the load of the other space, in the order the switches asked for it. */
 let spaceLoads: Array<{ finish: () => void; fail: () => void }>;
@@ -465,4 +465,14 @@ describe("a link to a group chat in another space", () => {
       expect(window.location.pathname).toBe("/app/home");
     },
   );
+});
+
+it("replaces a bare app entry when opening the fallback Space chat", async () => {
+  await open("/app");
+  const index = window.history.state.idx;
+  await act(async () => shell.openSpaceChat("work", "/app/sales", { replace: true }));
+  await finishLoadingSpace();
+  expect(state.space).toBe("work");
+  expect(window.location.pathname).toBe("/app/sales");
+  expect(window.history.state.idx).toBe(index);
 });

@@ -63,6 +63,7 @@ export function useSpaceRoster({
   const [spaces, setSpaces] = useState<Space[]>(seed?.spaces ?? []);
   const [archivedBots, setArchivedBots] = useState<Bot[]>(seed?.archivedBots ?? []);
   const [archivedGroups, setArchivedGroups] = useState<Group[]>(seed?.archivedGroups ?? []);
+  const [bootstrapSettled, setBootstrapSettled] = useState(false);
   const [initialBotsLoaded, setInitialBotsLoaded] = useState(Boolean(seed));
   // A failed first load falls back to the shell, whose re-reads and footer can still recover.
   const [initialLoadFailed, setInitialLoadFailed] = useState(false);
@@ -232,6 +233,8 @@ export function useSpaceRoster({
     archivedGroups,
     setArchivedGroups,
     setBotSections,
+    bootstrapSettled,
+    setBootstrapSettled,
     initialBotsLoaded,
     setInitialBotsLoaded,
     initialLoadFailed,
@@ -452,7 +455,10 @@ export function useSpaceBootstrap({
           if (!cancelled) setInitialLoadFailed(true);
         });
       })
-      .finally(() => rosterSignals.firstLoadSettled());
+      .finally(() => {
+        if (!cancelled) roster.setBootstrapSettled(true);
+        rosterSignals.firstLoadSettled();
+      });
     let refreshTimer: number | undefined;
     const refreshVisibleBots = () => {
       if (document.visibilityState !== "visible" && !callsEnabledRef.current) return;

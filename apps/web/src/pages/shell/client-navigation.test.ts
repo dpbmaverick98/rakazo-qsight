@@ -2,6 +2,7 @@ import type { Space } from "@rakazo/contracts";
 import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
 import { describe, expect, it } from "vitest";
 import {
+  clientLandingTarget,
   clientNavigationGroups,
   resolveProjectManager,
   unavailableClientNavigation,
@@ -219,5 +220,43 @@ it("moves the same active setup PM under its building and resolves the project s
     botId: "setup",
     buildingId: "building",
     projectId: "project",
+  });
+});
+
+describe("bare app client landing", () => {
+  const input = () => ({
+    loaded: true,
+    selectedSpaceId: null,
+    bots: [],
+    spaces: [
+      { ...space, id: "default", isDefault: true, bots: [] },
+      { ...space, isDefault: false },
+    ],
+    navigations: [{ isPending: false, isFetching: false, data: navigation }],
+  });
+  it("leaves an empty default Space for the client's setup PM", () => {
+    expect(clientLandingTarget(input())).toEqual({ spaceId: "space", path: "/app/setup" });
+  });
+  it("prefers a project PM when there is no setup PM", () => {
+    const value = input();
+    value.navigations[0]!.data = { ...navigation, setupBotIds: [] };
+    expect(clientLandingTarget(value)?.path).toBe("/app/manager");
+  });
+  it("uses the first bot when no canonical assignment is available", () => {
+    expect(clientLandingTarget({ ...input(), navigations: [] })?.path).toBe("/app/manager");
+  });
+  it("keeps the no-client landing", () => {
+    expect(clientLandingTarget({ ...input(), spaces: input().spaces.slice(0, 1) })).toBeUndefined();
+  });
+  it.each([
+    { loaded: false },
+    { selectedSpaceId: "default" },
+    { selectedSpaceId: "space" },
+    { botId: "requested" },
+    { groupId: "requested" },
+    { bots: [{ id: "existing" }] },
+    { navigations: [{ isPending: true, isFetching: true }] },
+  ])("preserves an explicit destination or unfinished load: %j", (override) => {
+    expect(clientLandingTarget({ ...input(), ...override })).toBeUndefined();
   });
 });

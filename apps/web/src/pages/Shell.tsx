@@ -76,6 +76,7 @@ import { ChatHeader } from "./shell/chat-header";
 import { FALLBACK_BOT_COLOR } from "./shell/chat-shared";
 import { ClientLanding } from "./shell/client-landing";
 import {
+  clientLandingTarget,
   clientNavigationGroups,
   resolveProjectManager,
   unavailableClientNavigation,
@@ -656,6 +657,31 @@ function SpaceShell() {
   useLayoutEffect(() => {
     openSpaceChatRef.current = openSpaceChat;
   }, [openSpaceChat]);
+
+  useEffect(() => {
+    const target = clientLandingTarget({
+      loaded: initialBotsLoaded && roster.bootstrapSettled,
+      selectedSpaceId: shellSpaceId,
+      botId,
+      groupId,
+      bots,
+      spaces: sidebarSpaces,
+      navigations: clientNavigations,
+    });
+    if (target && !roster.switchingSpace.current?.()) {
+      openSpaceChat(target.spaceId, target.path, { replace: true });
+    }
+  }, [
+    initialBotsLoaded,
+    roster.bootstrapSettled,
+    shellSpaceId,
+    botId,
+    groupId,
+    bots,
+    sidebarSpaces,
+    clientNavigations,
+    openSpaceChat,
+  ]);
 
   const activeSnapshot = inGroup
     ? snapshot?.groupId === groupId
