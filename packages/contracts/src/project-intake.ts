@@ -28,7 +28,7 @@ export const CompleteIntakeFileBodySchema = z.object({
 export const ProjectIntakeFileSchema = z
   .object({
     id: Id,
-    client_id: Id.optional(),
+    client_id: Id,
     filename: DisplayName,
     status: Status,
     upload_url: z.string().nullable(),
@@ -50,7 +50,18 @@ export const ProjectIntakeViewSchema = z
     review_revision: z.number().int().nonnegative(),
     context_fingerprint: z.string(),
     currency: z.string(),
-    path: z.string(),
+    path: z
+      .object({
+        client: NamedRecord.nullable(),
+        building: NamedRecord.extend({
+          display_name: DisplayName,
+          address: z.string().nullish(),
+          client_id: Id.optional(),
+          currency: z.string().nullish(),
+        }).nullable(),
+        project: NamedRecord.extend({ currency: z.string().nullish() }),
+      })
+      .passthrough(),
     files: z.array(ProjectIntakeFileSchema),
     claims: z.array(NamedRecord),
     subcontractors: z.array(NamedRecord),
