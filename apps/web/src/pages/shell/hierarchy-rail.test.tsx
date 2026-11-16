@@ -230,8 +230,13 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
     expect(container.querySelector("h2")?.textContent).toBe("Example Client");
     expect(container.querySelector(".lucide-building")).not.toBeNull();
-    expect(container.querySelector(".bg-muted[aria-hidden=true]")).not.toBeNull();
-    expect(container.querySelector(".leaflet-container")).toBeNull();
+    expect(container.textContent).toContain("Map unavailable");
+    const identity = container.querySelector(".lucide-building")!.parentElement!;
+    expect(
+      container.querySelector('[role="status"]')!.compareDocumentPosition(identity) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(container.querySelector(".maplibregl-canvas")).toBeNull();
     expect(container.textContent).not.toContain("OpenStreetMap");
     const sibling = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Other project",

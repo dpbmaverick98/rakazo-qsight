@@ -38,17 +38,15 @@ describe("app content security policy", () => {
     expect(policy.get("frame-ancestors")).toEqual(["'none'"]);
   });
 
-  it("talks only to its own origin, which hosts the API, RPC, monitoring tunnel and screen proxy", () => {
-    expect(policy.get("connect-src")).toEqual(["'self'"]);
+  it("allows only the app origin and portfolio basemap connections", () => {
+    expect(policy.get("connect-src")).toEqual(["'self'", "https://maps.geoapify.com"]);
     expect(policy.get("frame-src")).toEqual(["'self'", "blob:"]);
   });
 
-  it("allows HTTPS map tile images without widening scripts or connections", () => {
-    const tile = new URL("https://tile.openstreetmap.org/0/0/0.png");
-    expect(policy.get("img-src")).toContain(`${tile.protocol}`);
+  it("loads the bundled map worker without allowing remote scripts or blob workers", () => {
     expect(policy.get("script-src")).toEqual(["'self'"]);
-    expect(policy.get("connect-src")).toEqual(["'self'"]);
-    expect(APP_CONTENT_SECURITY_POLICY).not.toContain("*.openstreetmap.org");
+    expect(policy.get("worker-src")).toBeUndefined();
+    expect(APP_CONTENT_SECURITY_POLICY).not.toContain("*.geoapify.com");
   });
 
   it("reports violations to the same-origin API endpoint with both mechanisms", () => {
@@ -165,6 +163,7 @@ describe("operator-added origins", () => {
     expect(extended.get("script-src")).toEqual(["'self'", "https://static.example.com"]);
     expect(extended.get("connect-src")).toEqual([
       "'self'",
+      "https://maps.geoapify.com",
       "https://beacon.example.com",
       "https://*.example.net",
     ]);
