@@ -118,6 +118,7 @@ export async function stageProjectIntake(
           {
             generation: file.generation === undefined ? 1 : Number(file.generation),
             expected_source_sha256: attachment.manifest.expected_source_sha256,
+            reconfirm_source: true,
           },
           token,
         );

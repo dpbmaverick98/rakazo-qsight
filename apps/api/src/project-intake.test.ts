@@ -90,8 +90,18 @@ it("stages owned bytes with hashes, stable idempotency, per-file completion and 
     }),
   );
   expect(deps.source.completeIntakeFile.mock.calls).toEqual([
-    ["intake", "f1", { generation: 2, expected_source_sha256: hash }, "secret-token"],
-    ["intake", "f2", { generation: 1, expected_source_sha256: hash }, "secret-token"],
+    [
+      "intake",
+      "f1",
+      { generation: 2, expected_source_sha256: hash, reconfirm_source: true },
+      "secret-token",
+    ],
+    [
+      "intake",
+      "f2",
+      { generation: 1, expected_source_sha256: hash, reconfirm_source: true },
+      "secret-token",
+    ],
   ]);
   expect(deps.source.revokeManagerToken).toHaveBeenCalledWith("token-id");
   await stageProjectIntake(deps, actor, input);
