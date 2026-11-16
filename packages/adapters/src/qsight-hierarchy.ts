@@ -14,7 +14,19 @@ import {
   RenameProjectSchema,
 } from "@rakazo/contracts/hierarchy";
 import { ProjectCommercialSchema } from "@rakazo/contracts/project-commercial";
+import type {
+  CompleteIntakeFileBody,
+  IntakeReviewBody,
+  ProjectIntakeManifestFile,
+} from "@rakazo/contracts/project-intake";
 import {
+  CompleteIntakeFileBodySchema,
+  CompletionResponseSchema,
+  ProjectIntakeManifestFilesSchema,
+  ProjectIntakeViewSchema,
+} from "@rakazo/contracts/project-intake";
+import {
+  cancelResponseBody,
   deadlineSignal,
   PROJECT_MANAGER_TOOLS,
   readBoundedJsonResponse,
@@ -95,9 +107,48 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       const response = await fetch(url, { ...init, headers });
       fields.httpStatus = response.status;
       fields.status = response.ok ? "ok" : "error";
-      if (!response.ok) fields.errorCode = "upstream_http_error";
+      if (!response.ok) {
+        cancelResponseBody(response);
+        fields.errorCode = "upstream_http_error";
+      }
       return response;
     });
+  }
+  async function intakeRequest<T>(
+    path: string,
+    method: string,
+    scopedToken: string,
+    schema: z.ZodType<T>,
+    body?: unknown,
+    idempotencyKey?: string,
+  ): Promise<T> {
+    const signal = deadlineSignal(15_000);
+    let response: Response;
+    try {
+      response = await upstream("intake.request", new URL(path, origin), {
+        method,
+        headers: {
+          Authorization: `Bearer ${scopedToken}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...(idempotencyKey === undefined ? {} : { "Idempotency-Key": idempotencyKey }),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        redirect: "error",
+        signal,
+      });
+    } catch {
+      throw new Error("Intake upstream unavailable");
+    }
+    if (response.status === 409) throw new Error("Intake conflict");
+    if (response.status === 401 || response.status === 403)
+      throw new Error("Intake authorization failed");
+    if (!response.ok) throw new Error("Intake upstream unavailable");
+    try {
+      return schema.parse(await readBoundedJsonResponse(response, 1_000_000, signal));
+    } catch {
+      throw new Error("Intake upstream unavailable");
+    }
   }
   async function revokeManagerToken(tokenId: string) {
     const id = Id.parse(tokenId);
@@ -126,6 +177,59 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
     }
   }
   return {
+    async createIntake(
+      projectId: string,
+      files: ProjectIntakeManifestFile[],
+      idempotencyKey: string,
+      token: string,
+    ) {
+      const manifest = ProjectIntakeManifestFilesSchema.safeParse(files);
+      if (!manifest.success) throw new Error("Invalid intake manifest");
+      const project_id = Id.parse(projectId);
+      const view = await intakeRequest(
+        `/api/v2/agent/projects/${encodeURIComponent(project_id)}/intakes`,
+        "POST",
+        token,
+        ProjectIntakeViewSchema,
+        { project_id, files: manifest.data },
+        idempotencyKey,
+      );
+      if (view.project_id !== project_id) throw new Error("Intake upstream unavailable");
+      return view;
+    },
+    async completeIntakeFile(
+      intakeId: string,
+      fileId: string,
+      body: CompleteIntakeFileBody,
+      token: string,
+    ) {
+      const completion = CompleteIntakeFileBodySchema.safeParse(body);
+      if (!completion.success) throw new Error("Invalid intake completion input");
+      return intakeRequest(
+        `/api/v2/agent/intakes/${encodeURIComponent(Id.parse(intakeId))}/files/${encodeURIComponent(Id.parse(fileId))}/complete`,
+        "POST",
+        token,
+        CompletionResponseSchema,
+        completion.data,
+      );
+    },
+    readIntake(intakeId: string, token: string) {
+      return intakeRequest(
+        `/api/v2/agent/intakes/${encodeURIComponent(Id.parse(intakeId))}`,
+        "GET",
+        token,
+        ProjectIntakeViewSchema,
+      );
+    },
+    saveIntakeReview(intakeId: string, body: IntakeReviewBody, token: string) {
+      return intakeRequest(
+        `/api/v2/agent/intakes/${encodeURIComponent(Id.parse(intakeId))}/review`,
+        "PATCH",
+        token,
+        ProjectIntakeViewSchema,
+        body,
+      );
+    },
     spaceId,
     ownerServerPrefix: PROJECT_MANAGER_TOOLS.name,
     /** A null result means the upstream returned 409; recover with findClient. */

@@ -31,6 +31,7 @@
       "default": "./src/content-security-policy.ts"
     },
     "./hierarchy": "./src/hierarchy.ts",
+    "./project-intake": "./src/project-intake.ts",
     "./project-commercial": "./src/project-commercial.ts",
     "./project-commercial-fixture": "./src/project-commercial.fixture.ts"
   },
