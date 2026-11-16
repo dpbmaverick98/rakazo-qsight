@@ -19,7 +19,7 @@ export default function BuildingMap({ building }: { building: Hierarchy["buildin
     if (!host.current || !configured) return;
     let view: LibreMap | undefined;
     let resize: ResizeObserver | undefined;
-    let loaded = false;
+    let loadTimeout: ReturnType<typeof setTimeout> | undefined;
     setState("loading");
     try {
       view = new LibreMap({
@@ -32,12 +32,10 @@ export default function BuildingMap({ building }: { building: Hierarchy["buildin
       });
       const instance = view;
       const fail = () => setState("failed");
-      instance.on("error", () => {
-        if (!loaded) fail();
-      });
+      loadTimeout = setTimeout(fail, 8_000);
       instance.getCanvas().addEventListener("webglcontextlost", fail);
       instance.on("load", () => {
-        loaded = true;
+        clearTimeout(loadTimeout);
         try {
           for (const layer of instance.getStyle().layers) {
             if (/poi|transit/i.test(layer.id))
@@ -64,6 +62,7 @@ export default function BuildingMap({ building }: { building: Hierarchy["buildin
       setState("failed");
     }
     return () => {
+      clearTimeout(loadTimeout);
       resize?.disconnect();
       view?.remove();
     };

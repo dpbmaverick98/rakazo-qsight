@@ -13,6 +13,7 @@ vi.mock("@lingui/react/macro", () => ({
   Trans: ({ children }: { children: ReactNode }) => children,
 }));
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -20,12 +21,14 @@ afterEach(() => {
 it.each([
   "missing key",
   "WebGL",
-  "style",
+  "timeout",
+  "pre-load error",
   "context loss",
   "ready",
   "post-load error",
   "post-load context loss",
 ])("preserves navigation: %s", async (scenario) => {
+  vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubEnv("VITE_GEOAPIFY_API_KEY", scenario === "missing key" ? "" : "fake-key");
   const events: Record<string, () => void> = {};
@@ -88,11 +91,26 @@ it.each([
           style: "https://maps.geoapify.com/v1/styles/positron/style.json?apiKey=fake-key",
         }),
       );
-    if (scenario === "style") await act(async () => events.error!());
+    const emitError = () => events.error?.();
+    if (scenario === "timeout") {
+      await act(async () => {
+        emitError();
+        vi.advanceTimersByTime(7_999);
+      });
+      expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
+      await act(async () => vi.advanceTimersByTime(1));
+    }
+    if (scenario === "pre-load error") {
+      await act(async () => emitError());
+      expect(container.querySelector('[role="status"]')?.textContent).toBe("Loading map…");
+    }
     if (scenario === "context loss")
       await act(async () => canvas.dispatchEvent(new Event("webglcontextlost")));
-    if (["ready", "post-load error", "post-load context loss"].includes(scenario)) {
+    if (
+      ["ready", "pre-load error", "post-load error", "post-load context loss"].includes(scenario)
+    ) {
       await act(async () => events.load!());
+      await act(async () => vi.advanceTimersByTime(8_000));
       expect(view.setLayoutProperty.mock.calls).toEqual([
         ["poi-label", "visibility", "none"],
         ["transit-stop", "visibility", "none"],
@@ -107,8 +125,8 @@ it.each([
       expect(container.textContent).toContain("Geoapify");
       expect(container.textContent).not.toContain("North Building");
       if (scenario === "post-load error") {
-        await act(async () => events.error!());
-        await act(async () => events.error!());
+        await act(async () => emitError());
+        await act(async () => emitError());
       }
       if (scenario === "post-load context loss") {
         await act(async () => canvas.dispatchEvent(new Event("webglcontextlost")));
@@ -125,5 +143,6 @@ it.each([
   } finally {
     await act(async () => root.unmount());
   }
+  expect(vi.getTimerCount()).toBe(0);
   if (!["missing key", "WebGL"].includes(scenario)) expect(view.remove).toHaveBeenCalledOnce();
 });

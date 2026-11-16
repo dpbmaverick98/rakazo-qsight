@@ -89,7 +89,7 @@ test("PM project tabs share one right-panel controller", async ({ page }, testIn
     "aria-expanded",
     "true",
   );
-  await expect(page.getByText("Map unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Map unavailable", { exact: true })).toBeVisible({ timeout: 15_000 });
   const mapFallback = page.getByText("Map unavailable", { exact: true });
   const buildingLabel = page.getByText("North Building", { exact: true }).last();
   const addressLabel = page.getByText(candidate.address, { exact: true });
