@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { ProjectStage, useHierarchy } from "./hierarchy-rail";
+import { ProjectStage, projectStageFailure, useHierarchy } from "./hierarchy-rail";
 
 vi.mock("@lingui/react/macro", () => ({
   useLingui: () => ({
@@ -78,7 +78,7 @@ it("does not display a previous space while a new space loads or is disabled", a
   }
 });
 
-it.each(["personal", "binding_missing", "binding_stale", "binding_conflict", "empty"])(
+it.each(["personal", "binding_missing"])(
   "treats a %s Space as empty without losing HTTP errors for other failures",
   async (status) => {
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -146,9 +146,17 @@ it("recovers an empty binding on a change signal without timed reads", async () 
   }
 });
 
-it("keeps permission denials as errors", async () => {
+it.each([
+  [403, undefined, "forbidden"],
+  [409, "binding_stale", "stale"],
+  [409, "binding_conflict", "stale"],
+  [409, "space_unavailable", "stale"],
+])("keeps HTTP %s (%s) as a %s error", async (status, bodyStatus, reason) => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json({ status: bodyStatus }, { status })),
+  );
   const client = new QueryClient();
   const root = createRoot(document.createElement("div"));
   function Probe() {
@@ -167,8 +175,10 @@ it("keeps permission denials as errors", async () => {
       expect(client.getQueryState(["hierarchy", "user", "space"])?.status).toBe("error"),
     );
     expect(client.getQueryState(["hierarchy", "user", "space"])?.error).toMatchObject({
-      status: 403,
+      status,
+      reason,
     });
+    expect(client.getQueryData(["hierarchy", "user", "space"])).toBeUndefined();
   } finally {
     await act(async () => root.unmount());
     client.clear();
@@ -212,7 +222,6 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
         key={current.botId}
         data={stageData}
         loading={false}
-        error={false}
         retry={() => {}}
         scope={{ userId: "user", spaceId: "space" }}
         selection={current}
@@ -269,5 +278,75 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     await act(async () => root.unmount());
     client.clear();
     container.remove();
+  }
+});
+
+it("maps project stage failures in priority order", () => {
+  const ready = { loading: false, selected: true };
+  expect(projectStageFailure({ ...ready, navigationError: true, error: { reason: "stale" } })).toBe(
+    "navigation",
+  );
+  for (const reason of [
+    "navigation",
+    "stale",
+    "forbidden",
+    "unauthorized",
+    "unavailable",
+    "selection",
+  ] as const)
+    expect(projectStageFailure({ ...ready, error: { reason, status: 401 } })).toBe(reason);
+  for (const [status, expected] of [
+    [401, "unauthorized"],
+    [403, "forbidden"],
+    [500, "unavailable"],
+    ["401", "unavailable"],
+  ] as const)
+    expect(projectStageFailure({ ...ready, error: { status } })).toBe(expected);
+  expect(projectStageFailure({ ...ready, error: new Error("Failed") })).toBe("unavailable");
+  expect(projectStageFailure({ loading: false, selected: undefined })).toBe("selection");
+  expect(projectStageFailure({ ...ready, error: { status: 401 } })).toBe("unauthorized");
+  expect(projectStageFailure({ ...ready, error: { status: 403 } })).toBe("forbidden");
+  expect(projectStageFailure({ ...ready, error: { status: 503 } })).toBe("unavailable");
+  expect(projectStageFailure({ ...ready, error: { status: "401" } })).toBe("unavailable");
+  expect(projectStageFailure({ ...ready, error: new Error("Network failed") })).toBe("unavailable");
+  expect(projectStageFailure({ loading: true, selected: undefined })).toBeUndefined();
+  expect(projectStageFailure(ready)).toBeUndefined();
+});
+
+it("shows a stale connection warning, clears inspection and offers Retry", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const { inspectionStorageKey } = await import("./commercial-inspection");
+  const key = inspectionStorageKey(JSON.stringify(["user", "space", "pm", 1, "roof"]));
+  sessionStorage.setItem(key, "saved");
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const retry = vi.fn();
+  try {
+    await act(async () =>
+      root.render(
+        <ProjectStage
+          data={data}
+          loading={false}
+          failure="stale"
+          retry={retry}
+          scope={{ userId: "user", spaceId: "space" }}
+          selection={{ botId: "pm", revision: 1, buildingId: "north", projectId: "roof" }}
+          tab="space"
+          onTabChange={() => {}}
+        />,
+      ),
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "This project's client connection has changed.",
+    );
+    expect(sessionStorage.getItem(key)).toBeNull();
+    const button = [...container.querySelectorAll("button")].find(
+      (item) => item.textContent === "Retry",
+    )!;
+    await act(async () => button.click());
+    expect(retry).toHaveBeenCalledOnce();
+  } finally {
+    await act(async () => root.unmount());
+    sessionStorage.removeItem(key);
   }
 });

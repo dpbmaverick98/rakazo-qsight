@@ -24,6 +24,43 @@ function MapFallback() {
   );
 }
 
+export type ProjectStageFailure =
+  | "navigation"
+  | "stale"
+  | "forbidden"
+  | "unauthorized"
+  | "unavailable"
+  | "selection";
+
+export function projectStageFailure({
+  error,
+  navigationError,
+  loading,
+  selected,
+}: {
+  error?: unknown;
+  navigationError?: boolean;
+  loading: boolean;
+  selected: unknown;
+}): ProjectStageFailure | undefined {
+  if (navigationError) return "navigation";
+  if (error) {
+    const { reason, status } = error as { reason?: unknown; status?: unknown };
+    if (
+      reason === "navigation" ||
+      reason === "stale" ||
+      reason === "forbidden" ||
+      reason === "unauthorized" ||
+      reason === "unavailable" ||
+      reason === "selection"
+    )
+      return reason;
+    return status === 401 ? "unauthorized" : status === 403 ? "forbidden" : "unavailable";
+  }
+  if (!loading && !selected) return "selection";
+  return undefined;
+}
+
 export function useHierarchy(userId: string | null, spaceId: string | null, enabled: boolean) {
   return useQuery<Hierarchy | null>({
     queryKey: ["hierarchy", userId, spaceId],
@@ -36,10 +73,21 @@ export function useHierarchy(userId: string | null, spaceId: string | null, enab
         credentials: "include",
         signal,
       });
-      // Binding transitions and unconfigured Spaces have no authorized hierarchy yet.
-      if (response.status === 204 || response.status === 409) return null;
+      if (response.status === 204) return null;
+      if (response.status === 409) {
+        const body = await response.json().catch(() => null);
+        if (body?.status === "personal" || body?.status === "binding_missing") return null;
+        throw Object.assign(new Error("Hierarchy binding stale"), { status: 409, reason: "stale" });
+      }
       if (!response.ok) {
-        throw Object.assign(new Error("Hierarchy unavailable"), { status: response.status });
+        throw Object.assign(new Error("Hierarchy unavailable"), {
+          status: response.status,
+          reason: projectStageFailure({
+            error: { status: response.status },
+            loading: false,
+            selected: false,
+          }),
+        });
       }
       return HierarchySchema.parse(await response.json());
     },
@@ -56,7 +104,7 @@ export type ProjectSelection = {
 export function ProjectStage({
   data,
   loading,
-  error,
+  failure,
   retry,
   scope,
   selection,
@@ -65,7 +113,7 @@ export function ProjectStage({
 }: {
   data?: Hierarchy | null;
   loading: boolean;
-  error: boolean;
+  failure?: ProjectStageFailure;
   retry: () => void;
   scope: { userId: string | null; spaceId: string | null };
   selection: ProjectSelection;
@@ -89,10 +137,10 @@ export function ProjectStage({
     selection.projectId,
   ]);
   useEffect(() => {
-    if (error || (!loading && !building))
+    if (failure || (!loading && !building))
       sessionStorage.removeItem(inspectionStorageKey(inspectionScope));
-  }, [error, loading, building, inspectionScope]);
-  if (building && !error)
+  }, [failure, loading, building, inspectionScope]);
+  if (building && !failure)
     return (
       <ProjectStageContent
         data={data!}
@@ -113,12 +161,23 @@ export function ProjectStage({
           <Trans>Claims</Trans>
         </TabsTrigger>
       </TabsList>
-      {error ? (
+      {failure ? (
         <div role="alert">
-          <Trans>Project space unavailable</Trans>
-          <Button variant="ghost" onClick={retry}>
-            <Trans>Retry</Trans>
-          </Button>
+          {
+            {
+              navigation: t`Project navigation is unavailable.`,
+              stale: t`This project's client connection has changed.`,
+              forbidden: t`You do not have access to this project.`,
+              unauthorized: t`Sign in again to view this project.`,
+              unavailable: t`Project space is unavailable.`,
+              selection: t`Select a project manager to view this project.`,
+            }[failure]
+          }
+          {failure !== "forbidden" && failure !== "unauthorized" ? (
+            <Button variant="ghost" onClick={retry}>
+              <Trans>Retry</Trans>
+            </Button>
+          ) : null}
         </div>
       ) : (
         <p role="status">{loading ? t`Loading project space…` : t`Project unavailable`}</p>
