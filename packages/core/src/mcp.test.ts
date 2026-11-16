@@ -2,7 +2,7 @@ import { McpServerConfigInput } from "@rakazo/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { appendToolStep } from "./events.js";
 import { deriveMcpSlug, friendlyMcpToolLabel, mcpApprovalTitle } from "./mcp.js";
-import { PROJECT_MANAGER_TOOLS } from "./plugin-catalog.js";
+import { PROJECT_MANAGER_TOOLS, projectManagerToolPolicy } from "./plugin-catalog.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -65,6 +65,7 @@ it.each([
   ["list_projects", "Look up projects"],
   ["get_project", "Read project"],
   ["get_project_summary", "Read project summary"],
+  ["update_intake_file", "Save intake corrections"],
   ["get_intake", "Read staged intake"],
   ["list_open_intakes", "List open intakes"],
   ["get_claim_position", "Read claim position"],
@@ -119,6 +120,7 @@ it("keeps review reads trusted and write-scope preparation separate", () => {
     "preview_change_order",
   ]);
   expect(PROJECT_MANAGER_TOOLS.setupWriteTools).toEqual([
+    "update_intake_file",
     "search_locations",
     "get_location_proof",
     "create_client",
@@ -126,6 +128,9 @@ it("keeps review reads trusted and write-scope preparation separate", () => {
     "create_project",
     "create_work_package",
   ]);
+  const policy = projectManagerToolPolicy();
+  expect(policy.allowedTools).toContain("update_intake_file");
+  expect(policy.trustedTools).not.toContain("update_intake_file");
   const catalog = [...PROJECT_MANAGER_TOOLS.trustedTools, ...PROJECT_MANAGER_TOOLS.setupWriteTools];
   expect(catalog).not.toContain("rename_project");
   expect(catalog).not.toContain("delete_project");

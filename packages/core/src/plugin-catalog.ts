@@ -1,7 +1,7 @@
 import type { PluginMarketplaceEntry, PluginPart } from "@rakazo/contracts";
 import { PluginPartSchema } from "@rakazo/contracts";
 
-/** server/mcp_pilot.py defines 21 tools; rename_project and delete_project are deliberately excluded. */
+/** server/mcp_pilot.py defines 22 tools; rename_project and delete_project are deliberately excluded. */
 export const PROJECT_MANAGER_TOOLS = {
   trustedTools: [
     "list_clients",
@@ -20,6 +20,7 @@ export const PROJECT_MANAGER_TOOLS = {
   ],
   // Location preparation requires write scope, just like hierarchy creation.
   setupWriteTools: [
+    "update_intake_file",
     "search_locations",
     "get_location_proof",
     "create_client",
