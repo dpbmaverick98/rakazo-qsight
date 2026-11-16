@@ -10,7 +10,7 @@ const view = {
   review_revision: 0,
   context_fingerprint: "fingerprint",
   currency: "USD",
-  path: "",
+  path: { client: null, building: null, project: { id: "p", name: "Project" } },
   files: [],
   claims: [],
   subcontractors: [],
