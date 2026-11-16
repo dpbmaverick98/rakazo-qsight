@@ -1057,14 +1057,14 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
           )
       : undefined,
     projectManager: hierarchySource
-      ? async (actor, project, revision, finishSetup) => {
+      ? async (actor, project, revision, finishSetup, automatic) => {
           const client = createRouterClient(router, { context: { actor } });
           const { bot } = await client.mcp.servers.provisionProjectManager({
             projectId: project.id,
             projectName: project.name,
-            clientName: "",
             bindingRevision: revision,
             finishSetup,
+            automatic,
           });
           return bot.id;
         }

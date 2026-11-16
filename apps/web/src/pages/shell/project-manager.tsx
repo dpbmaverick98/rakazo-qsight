@@ -1,8 +1,9 @@
 import { useLingui } from "@lingui/react/macro";
 import type { Bot } from "@rakazo/contracts";
+import type { Hierarchy } from "@rakazo/contracts/hierarchy";
 import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
-import { Button } from "@rakazo/ui-web";
-import { useRef, useState } from "react";
+import { Button, NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@rakazo/ui-web";
+import { useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { rpcForSpace } from "../../lib/rpc";
 export function ProjectManagerAction({
@@ -76,6 +77,58 @@ export function ProjectManagerAction({
         <p role="alert" className="text-body text-destructive">
           {error}
         </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A choice is required when setup already contains several projects. */
+export function FinishSetupAction({
+  hierarchy,
+  spaceId,
+  onOpenBot,
+  onChanged,
+}: {
+  hierarchy: Hierarchy;
+  spaceId: string;
+  onOpenBot: (bot: Bot) => void;
+  onChanged: () => void;
+}) {
+  const { t } = useLingui();
+  const id = useId();
+  const [projectId, setProjectId] = useState("");
+  const projects = hierarchy.buildings.flatMap((building) => building.projects);
+  const project = projects.find((item) => item.id === projectId);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label htmlFor={id} className="sr-only">{t`Project`}</label>
+      <NativeSelect
+        id={id}
+        value={projectId}
+        onChange={(event) => setProjectId(event.target.value)}
+      >
+        <NativeSelectOption value="" disabled>{t`Select project`}</NativeSelectOption>
+        {hierarchy.buildings.map((building) => (
+          <NativeSelectOptGroup key={building.id} label={building.name}>
+            {building.projects.map((item) => (
+              <NativeSelectOption key={item.id} value={item.id}>
+                {item.name}
+              </NativeSelectOption>
+            ))}
+          </NativeSelectOptGroup>
+        ))}
+      </NativeSelect>
+      {project ? (
+        <ProjectManagerAction
+          key={project.id}
+          project={project}
+          client={hierarchy.client.name}
+          spaceId={spaceId}
+          bindingRevision={hierarchy.bindingRevision}
+          finishSetup
+          onOpenBot={onOpenBot}
+          onChanged={onChanged}
+        />
       ) : null}
     </div>
   );

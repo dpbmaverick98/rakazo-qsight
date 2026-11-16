@@ -2,6 +2,7 @@ import { createRouterClient } from "@orpc/server";
 import { EncryptedSecretStore } from "@rakazo/adapters";
 import { qsightHierarchyFromEnv } from "@rakazo/adapters/qsight-hierarchy";
 import type { Actor } from "@rakazo/contracts";
+import { appContract } from "@rakazo/contracts";
 import { PROJECT_MANAGER_TOOLS } from "@rakazo/core";
 import {
   createLogger,
@@ -43,11 +44,20 @@ function setup() {
     servers: [] as Row[],
     secrets: [] as Row[],
     assignments: [] as Row[],
+    messages: [
+      {
+        id: "history",
+        threadId: "existing-thread",
+        role: "user",
+        blocks: [{ kind: "text", text: "Setup history" }],
+      },
+    ] as Row[],
+    events: [] as Row[],
   };
   let sequence = 0;
   const prisma = {
     $executeRaw: vi.fn(),
-    $queryRaw: vi.fn(),
+    $queryRaw: vi.fn(async () => []),
     $transaction: vi.fn(async (run: (tx: typeof prisma) => Promise<unknown>) => {
       const snapshot = structuredClone(state);
       try {
@@ -57,6 +67,27 @@ function setup() {
         throw error;
       }
     }),
+    thread: {
+      findUniqueOrThrow: vi.fn(async () => ({ id: "existing-thread" })),
+      update: vi.fn(async () => ({
+        nextMessageSeq: state.messages.length + 1,
+        nextEventSeq: state.events.length + 1,
+        spaceId: "space",
+      })),
+    },
+    message: {
+      create: vi.fn(async ({ data }: Row) => {
+        const row = { id: `message-${state.messages.length}`, ...data };
+        state.messages.push(row);
+        return row;
+      }),
+    },
+    event: {
+      create: vi.fn(async ({ data }: Row) => {
+        state.events.push(data);
+        return data;
+      }),
+    },
     space: {
       findUnique: vi.fn(async () => ({ id: "space", name: "Example Client", isDefault: false })),
     },
@@ -197,7 +228,7 @@ function setup() {
     prisma,
     secrets,
     projectManagers: source,
-    events: { publishRosterChange: vi.fn(async () => {}) },
+    events: { notify: vi.fn(async () => {}), publishRosterChange: vi.fn(async () => {}) },
     env: { mcpAllowPrivateEndpoint: false },
     remoteConnectors: { resolveHostname: async () => [{ address: "203.0.113.10", family: 4 }] },
   };
@@ -515,6 +546,23 @@ it("promotes the same setup PM, preserves its conversation identity/history, and
   expect(threadHistory.get(reused.bot.id)).toBe(history);
   expect(test.state.bots).toHaveLength(2);
   expect(test.state.servers).toHaveLength(1);
+  expect(test.state.messages).toEqual([
+    expect.objectContaining({ id: "history", threadId: "existing-thread" }),
+    expect.objectContaining({
+      threadId: "existing-thread",
+      botId: "setup",
+      role: "bot",
+      clientNonce: "project-manager-promotion:roof",
+      blocks: [
+        {
+          kind: "text",
+          text: "I'm now the project manager for Roof survey. For other projects, follow the same building and project setup steps.",
+        },
+      ],
+    }),
+  ]);
+  expect(test.state.events).toHaveLength(1);
+  expect(test.deps.events.notify).toHaveBeenCalledOnce();
   expect(
     test.upstream.mock.calls.some(([url]) => String(url).endsWith("/tokens/test-token-id")),
   ).toBe(true);
@@ -537,7 +585,7 @@ it.each(["validation", "attachment", "duplicate"])(
     ).toHaveLength(1);
   },
 );
-it("does not promote setup when the hierarchy contains more than one project", async () => {
+it("finishes setup for an explicitly chosen project among several", async () => {
   const test = setup();
   test.upstream.mockResolvedValueOnce(
     Response.json({
@@ -553,12 +601,10 @@ it("does not promote setup when the hierarchy contains more than one project", a
       ],
     }),
   );
-  await expect(
-    provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true }),
-  ).rejects.toMatchObject({ code: "CONFLICT" });
-  expect(test.upstream.mock.calls.some(([url]) => String(url).includes("manager-token"))).toBe(
-    false,
-  );
+  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  const result = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(result.bot).toMatchObject({ id: "setup", spawnKey: "pm:roof" });
+  expect(test.repos.createBot).not.toHaveBeenCalled();
 });
 it("retries revocation without changing the surviving PM", async () => {
   const test = setup();
@@ -688,4 +734,75 @@ it("seeds new project managers with a scope question", async () => {
       },
     }),
   );
+});
+
+it("rechecks the single-project condition before automatic promotion mints credentials", async () => {
+  const test = setup();
+  test.upstream.mockResolvedValueOnce(
+    Response.json({
+      ...hierarchy,
+      buildings: [
+        {
+          ...hierarchy.buildings[0],
+          projects: [
+            ...hierarchy.buildings[0]!.projects,
+            { id: "second", name: "Second", url: "https://example.test/second" },
+          ],
+        },
+      ],
+    }),
+  );
+  await expect(
+    provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true, automatic: true }),
+  ).rejects.toMatchObject({ code: "CONFLICT" });
+  expect(test.state.servers).toHaveLength(0);
+  expect(test.state.messages).toHaveLength(1);
+});
+it("accepts a concurrent promotion of the same bot without adding another greeting", async () => {
+  const test = setup();
+  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  const stale = { ...test.state.bots[0]!, spawnKey: "setup:client" };
+  test.repos.listBots.mockResolvedValueOnce([stale]);
+  await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.messages).toHaveLength(2);
+  expect(test.state.events).toHaveLength(1);
+});
+it("allows the server creation handoff to omit unused client display hints", async () => {
+  const test = setup();
+  const parsed = appContract.mcp.servers.provisionProjectManager["~orpc"].inputSchema!.parse({
+    projectId: "roof",
+    projectName: "Roof survey",
+    finishSetup: true,
+  });
+  const result = await provisionProjectManager(test.ctx, actor, parsed);
+  expect(result.bot.name).toBe("Roof survey - PM");
+});
+
+it("preserves the setup PM when a building placeholder also exists", async () => {
+  const test = setup();
+  test.state.bots.push(
+    { id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" },
+    { id: "building-manager", userId: "user", spaceId: "space", spawnKey: "building:building" },
+  );
+  const result = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(result.bot.id).toBe("setup");
+  expect(test.state.bots[1]!.spawnKey).toBe("building:building");
+  expect(test.repos.createBot).not.toHaveBeenCalled();
+});
+it("rolls back the promotion and greeting together when credential attachment fails", async () => {
+  const test = setup();
+  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  test.prisma.botMcpServer.create.mockRejectedValueOnce(new Error("attachment failed"));
+  await expect(
+    provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true }),
+  ).rejects.toThrow("attachment failed");
+  expect(test.state.bots[0]!.spawnKey).toBe("setup:client");
+  expect(test.state.messages).toHaveLength(1);
+  expect(test.state.events).toHaveLength(0);
+  expect(test.deps.events.notify).not.toHaveBeenCalled();
+  await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(test.state.messages).toHaveLength(2);
+  expect(test.state.events).toHaveLength(1);
 });

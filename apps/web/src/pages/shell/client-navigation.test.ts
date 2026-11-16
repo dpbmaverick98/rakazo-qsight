@@ -191,3 +191,33 @@ it("keeps failed bound navigation unavailable rather than falling back to the ro
   expect(result).toHaveLength(1);
   expect(result[0]).toMatchObject({ spaceId: "space", bots: [], unavailable: true });
 });
+
+it("moves the same active setup PM under its building and resolves the project stage after promotion", () => {
+  const before = {
+    ...navigation,
+    buildings: [
+      { ...navigation.buildings[0]!, projects: [{ id: "project", name: "Roof", botIds: [] }] },
+    ],
+  };
+  expect(resolveProjectManager(before, "setup")).toBeNull();
+  expect(clientNavigationGroups(groups(), before, "")[0]!.bots[0]!.chat.id).toBe("setup");
+  const after = {
+    ...before,
+    setupBotIds: [],
+    buildings: [
+      { ...before.buildings[0]!, projects: [{ id: "project", name: "Roof", botIds: ["setup"] }] },
+    ],
+  };
+  const result = clientNavigationGroups(groups(), after, "");
+  expect(result[0]!.bots).toHaveLength(0);
+  const manager = result.find((group) => group.buildingId === "building")!.bots[0]!.chat;
+  expect(manager).toMatchObject({ id: "setup", name: "Roof - PM" });
+  expect(
+    result.flatMap((group) => group.bots).filter((item) => item.chat.id === "setup"),
+  ).toHaveLength(1);
+  expect(resolveProjectManager(after, "setup")).toMatchObject({
+    botId: "setup",
+    buildingId: "building",
+    projectId: "project",
+  });
+});

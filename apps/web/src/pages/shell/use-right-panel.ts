@@ -147,6 +147,7 @@ export function useRightPanelRestore({
       ? rightPanelStorageKey(userId, spaceId, inGroup ? "group" : "bot", panelTarget)
       : null;
   panelStorageKeyRef.current = panelStorageKey;
+  const projectAssignment = useRef<{ key: string; assigned: boolean } | null>(null);
 
   useEffect(() => {
     if (panel !== "routine") {
@@ -156,6 +157,12 @@ export function useRightPanelRestore({
 
   useEffect(() => {
     if (!panelStorageKey) return;
+    const previous = projectAssignment.current;
+    const sameChat = previous?.key === panelStorageKey;
+    projectAssignment.current = {
+      key: panelStorageKey,
+      assigned: !!projectPanel || (sameChat && previous.assigned),
+    };
     if (
       projectResolutionPending &&
       observedPanelKey.current !== panelStorageKey &&
@@ -180,6 +187,9 @@ export function useRightPanelRestore({
       // Each chat opens with its own saved panel, closed unless the user left it open there.
       pendingPanelRestore.current = readRightPanelState(panelStorageKey, projectPanel ?? null);
     }
+    // A setup conversation can gain its first assignment without changing bot or route.
+    if (sameChat && !previous.assigned && projectPanel && !panel)
+      pendingPanelRestore.current = { panel: projectPanel };
     const saved = pendingPanelRestore.current;
     if (!saved) return;
     // Explicit routine links take precedence over a local layout preference.

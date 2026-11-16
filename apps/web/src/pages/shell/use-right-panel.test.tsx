@@ -60,3 +60,42 @@ it("restores per-PM tabs and reopens Claims after system panels without storing 
     await act(async () => root.unmount());
   }
 });
+
+it("opens the project stage once when the same setup conversation gains an assignment", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const root = createRoot(document.createElement("div"));
+  let controller: RightPanel;
+  const searchParams = new URLSearchParams();
+  const routines: [] = [];
+  function Probe({ assigned }: { assigned: boolean }) {
+    const panel = useRightPanel({ searchParams, setSearchParams: () => {} });
+    controller = panel;
+    useRightPanelRestore({
+      rightPanel: panel,
+      userId: "user",
+      spaceId: "space",
+      inGroup: false,
+      panelTarget: "setup",
+      activeId: "setup",
+      projectPanel: assigned ? "project:setup:1:space" : undefined,
+      routines,
+      routinesBotId: "setup",
+      searchParams,
+      editingRoutineId: undefined,
+      restoreRoutine: () => {},
+      leaveRoutine: () => {},
+    });
+    return null;
+  }
+  try {
+    await act(async () => root.render(<Probe assigned={false} />));
+    expect(controller!.panel).toBeNull();
+    await act(async () => root.render(<Probe assigned />));
+    expect(controller!.panel).toBe("project:setup:1:space");
+    await act(async () => controller!.setPanel(null));
+    await act(async () => root.render(<Probe assigned />));
+    expect(controller!.panel).toBeNull();
+  } finally {
+    await act(async () => root.unmount());
+  }
+});

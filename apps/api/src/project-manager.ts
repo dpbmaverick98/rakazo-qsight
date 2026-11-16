@@ -3,7 +3,11 @@ import { lockMcpOAuthMaterial, persistPreparedSecret } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
 import { PROJECT_MANAGER_TOOLS, projectManagerToolPolicy, retry } from "@rakazo/core";
 import type { Prisma } from "@rakazo/db";
-import { lockSpaceDeletion } from "@rakazo/db";
+import {
+  appendEventInTransaction,
+  createThreadMessageInTransaction,
+  lockSpaceDeletion,
+} from "@rakazo/db";
 import { bestEffort, clientSetupDebug, clientSetupStage } from "@rakazo/logging";
 import { lockOwner } from "./availability.js";
 import { mcpServerDto } from "./mcp-servers.js";
@@ -18,9 +22,10 @@ export async function provisionProjectManager(
   input: {
     projectId: string;
     projectName: string;
-    clientName: string;
+    clientName?: string;
     bindingRevision?: number;
     finishSetup?: boolean;
+    automatic?: boolean;
   },
 ) {
   return clientSetupStage("promotion", { actorId: actor.userId, spaceId: actor.spaceId }, () =>
@@ -34,9 +39,10 @@ async function provision(
   input: {
     projectId: string;
     projectName: string;
-    clientName: string;
+    clientName?: string;
     bindingRevision?: number;
     finishSetup?: boolean;
+    automatic?: boolean;
   },
 ) {
   const { deps, repos, prepareMcpServer, insertMcpServer } = ctx;
@@ -53,8 +59,8 @@ async function provision(
     throw new ORPCError("BAD_GATEWAY", { message: "upstream_unavailable" });
   });
   const projects = hierarchy.buildings.flatMap((building) => building.projects);
-  if (input.finishSetup && (projects.length !== 1 || projects[0]?.id !== input.projectId))
-    throw new ORPCError("CONFLICT", { message: "Choose the only project to finish setup" });
+  if (input.automatic && (projects.length !== 1 || projects[0]?.id !== input.projectId))
+    throw new ORPCError("CONFLICT", { message: "Project setup changed" });
   const building = hierarchy.buildings.find((item) =>
     item.projects.some((project) => project.id === input.projectId),
   );
@@ -82,6 +88,7 @@ async function provision(
   const { tokenId, ...config } = await source.managerServer(project.id, project.name).catch(() => {
     throw new ORPCError("BAD_GATEWAY", { message: "Project manager unavailable" });
   });
+  let promotionEvent: { threadId: string; seq: number } | undefined;
   let adopted = false;
   let persistedToken = false;
   try {
@@ -107,6 +114,7 @@ async function provision(
           if (!bot) throw new ORPCError("CONFLICT", { message: "Project manager unavailable" });
           if (
             promoteSetup &&
+            bot.spawnKey !== `pm:${project.id}` &&
             bot.spawnKey !== `building:${building!.id}` &&
             bot.spawnKey !== `setup:${binding.externalClientId}`
           )
@@ -168,12 +176,13 @@ async function provision(
               data: { managedCredentialId: tokenId },
             });
           }
+          const promoting = promoteSetup && bot.spawnKey !== `pm:${project.id}`;
           await tx.bot.update({
             where: { id: botId },
             data: {
               inheritMcpServers: false,
               crossSpaceCommunication: false,
-              ...(promoteSetup
+              ...(promoting
                 ? {
                     spawnKey: `pm:${project.id}`,
                     name: `${project.name} - PM`,
@@ -182,6 +191,30 @@ async function provision(
                 : {}),
             },
           });
+          if (promoting) {
+            const thread = await tx.thread.findUniqueOrThrow({ where: { botId } });
+            const blocks = [
+              {
+                kind: "text" as const,
+                text: `I'm now the project manager for ${project.name}. For other projects, follow the same building and project setup steps.`,
+              },
+            ];
+            const message = await createThreadMessageInTransaction(tx, {
+              threadId: thread.id,
+              botId,
+              role: "bot",
+              blocks,
+              clientNonce: `project-manager-promotion:${project.id}`,
+            });
+            const event = await appendEventInTransaction(tx, {
+              spaceId: actor.spaceId,
+              threadId: thread.id,
+              botId,
+              type: "thread.message.created",
+              payload: { messageId: message.id, role: "bot", blocks },
+            });
+            promotionEvent = { threadId: thread.id, seq: event.seq };
+          }
           const previousAssignment = await tx.botMcpServer.findFirst({
             where: { botId, serverId: server.id, spaceId: actor.spaceId, userId: actor.userId },
           });
@@ -204,8 +237,8 @@ async function provision(
         const buildingManager = bots.find((bot) => bot.spawnKey === `building:${building!.id}`);
         const existing =
           bots.find((bot) => bot.spawnKey === spawnKey) ??
-          buildingManager ??
-          (input.finishSetup ? setup : undefined);
+          (input.finishSetup ? setup : undefined) ??
+          buildingManager;
         promoteSetup =
           !!existing && (existing.id === buildingManager?.id || existing.id === setup?.id);
         const bot =
@@ -250,6 +283,7 @@ async function provision(
         adopted = persistedToken;
       },
     );
+    if (promotionEvent) await deps.events.notify(promotionEvent.threadId, promotionEvent.seq);
     await deps.events.publishRosterChange?.({ spaceIds: [actor.spaceId] });
     clientSetupDebug("promotion", {
       actorId: actor.userId,

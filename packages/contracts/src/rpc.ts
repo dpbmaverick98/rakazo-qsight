@@ -1197,9 +1197,10 @@ export const appContract = {
               .max(200)
               .refine((id) => id !== "." && id !== ".."),
             projectName: z.string().trim().min(1).max(500),
-            clientName: z.string().trim().min(1).max(500),
+            clientName: z.string().trim().min(1).max(500).optional(),
             bindingRevision: z.number().int().positive().optional(),
             finishSetup: z.boolean().optional(),
+            automatic: z.boolean().optional(),
           }),
         )
         .output(z.object({ bot: BotSchema, server: McpServerSchema, created: z.boolean() })),
