@@ -93,6 +93,9 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       return response;
     });
   }
+  function managerConnectionKey(projectId: string) {
+    return `pm-${createHash("sha256").update(Id.parse(projectId)).digest("hex").slice(0, 60)}`;
+  }
   async function revokeManagerToken(tokenId: string) {
     const id = Id.parse(tokenId);
     const signal = deadlineSignal(5000);
@@ -357,6 +360,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
       }
     },
     revokeManagerToken,
+    managerConnectionKey,
     async managerServer(id: string, name: string) {
       let mintedId: string | undefined;
       const signal = deadlineSignal(5000);
@@ -388,7 +392,7 @@ export function qsightHierarchyFromEnv(env: NodeJS.ProcessEnv = process.env) {
         if (minted.project_id !== id) throw new Error("Project mismatch");
         return {
           tokenId: minted.token_id,
-          slug: `pm-${createHash("sha256").update(id).digest("hex").slice(0, 60)}`,
+          slug: managerConnectionKey(id),
           name: `${PROJECT_MANAGER_TOOLS.managerServerPrefix}${name}`.slice(0, 120),
           description: "",
           enabled: true,
