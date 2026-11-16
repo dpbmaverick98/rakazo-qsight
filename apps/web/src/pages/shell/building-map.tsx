@@ -38,7 +38,8 @@ function MapImage({ src, label }: { src: string | undefined; label: string }) {
           width={640}
           height={320}
           draggable={false}
-          className={ready ? "h-full w-full object-cover" : "invisible h-full w-full object-cover"}
+          // Overscan the bottom edge to clip the credits baked into the static image.
+          className={`h-[calc(100%+24px)] w-full object-cover object-top${ready ? "" : " invisible"}`}
           onLoad={() => setState("ready")}
           onError={() => setState("failed")}
         />
@@ -51,7 +52,7 @@ function MapImage({ src, label }: { src: string | undefined; label: string }) {
           {src && state === "loading" ? t`Loading map…` : t`Map unavailable`}
         </p>
       )}
-      {/* Keep accessible credits without duplicating the provider image’s default attribution. */}
+      {/* Keep accessible provider credits separate from the cropped image. */}
       {ready && (
         <div className="sr-only">
           <a tabIndex={-1} href="https://www.geoapify.com/">
