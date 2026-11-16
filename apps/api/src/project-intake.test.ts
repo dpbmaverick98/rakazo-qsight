@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ORPCError } from "@orpc/server";
 import { expect, it, vi } from "vitest";
 import { stageProjectIntake } from "./project-intake.js";
 
@@ -278,4 +279,39 @@ it.each([
   );
   expect(deps.fetch).not.toHaveBeenCalled();
   expect(deps.source.managerServer).not.toHaveBeenCalled();
+});
+
+it("uses a per-send idempotency key instead of the payload hash", async () => {
+  const deps = setup();
+  await stageProjectIntake(deps, actor, { ...input, idempotencyKey: "send-1" });
+  expect(deps.source.createIntake.mock.calls[0]?.[2]).toBe("send-1");
+});
+it("passes cancellation to uploads and stops before completing an aborted upload", async () => {
+  const deps = setup();
+  const controller = new AbortController();
+  deps.fetch.mockImplementationOnce(async (_url, options) => {
+    expect(options?.signal).toBe(controller.signal);
+    controller.abort();
+    return new Response(null, { status: 200 });
+  });
+  await expect(
+    stageProjectIntake(deps, actor, { ...input, signal: controller.signal }),
+  ).rejects.toThrow("Intake staging unavailable");
+  expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
+  expect(deps.source.revokeManagerToken).toHaveBeenCalledOnce();
+});
+it("checks cancellation before reading artifacts", async () => {
+  const deps = setup();
+  await expect(
+    stageProjectIntake(deps, actor, { ...input, signal: AbortSignal.abort() }),
+  ).rejects.toThrow();
+  expect(deps.readArtifact).not.toHaveBeenCalled();
+});
+
+it("preserves ORPC failure categories", async () => {
+  const deps = setup();
+  const error = new ORPCError("FORBIDDEN", { message: "access denied" });
+  deps.source.createIntake.mockRejectedValueOnce(error);
+  await expect(stageProjectIntake(deps, actor, input)).rejects.toBe(error);
+  expect(deps.source.revokeManagerToken).toHaveBeenCalledOnce();
 });

@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import { createAdapterContext, runJobKey } from "@rakazo/adapter-kit";
 import { getActiveTeachingSession, settleCallRequest, wakeRun } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import { attachmentMaxCount } from "@rakazo/contracts";
 import type { CommercialInspectionSelection } from "@rakazo/contracts/project-commercial";
 import {
   AttachmentValidationError,
@@ -149,18 +150,51 @@ export function threadsRoutes(ctx: RouterContext) {
       target.kind === "bot" &&
       target.bot.spawnKey?.startsWith("pm:") &&
       input.artifactIds?.length &&
-      deps.stageProjectIntake
+      input.imageHandling !== "confirm" &&
+      input.artifactIds.length <= attachmentMaxCount(deps.env) &&
+      deps.stageProjectIntake &&
+      !(
+        input.clientNonce &&
+        (await deps.prisma.message.findUnique({
+          where: {
+            threadId_clientNonce: { threadId: target.threadId, clientNonce: input.clientNonce },
+          },
+        }))
+      )
     ) {
+      const signal = AbortSignal.timeout(45_000);
+      let onAbort: (() => void) | undefined;
       try {
-        const intake = await deps.stageProjectIntake(actor, {
-          projectId: target.bot.spawnKey.slice(3),
-          botId: target.botId,
-          artifactIds: input.artifactIds,
-        });
-        stagingNote = `Attached files were staged in Vendor One intake ${intake.intakeId} (${intake.files.length} files). Vendor One will inspect them; acknowledge that you will review them and ask one question at a time. Do not claim the documents are published or approved.`;
-      } catch {
-        stagingNote =
-          "Attachment staging failed; the files remain in this chat. Tell the user to retry and do not claim they were reviewed.";
+        const intake = await Promise.race([
+          deps.stageProjectIntake(actor, {
+            projectId: target.bot.spawnKey.slice(3),
+            botId: target.botId,
+            artifactIds: input.artifactIds,
+            idempotencyKey: input.clientNonce,
+            signal,
+          }),
+          new Promise<never>((_resolve, reject) => {
+            onAbort = () => reject(signal.reason);
+            signal.addEventListener("abort", onAbort, { once: true });
+            if (signal.aborted) onAbort();
+          }),
+        ]);
+        stagingNote = `Attached files were received for review in Vendor One intake ${intake.intakeId} (${intake.files.length} files). Acknowledge receipt for review and ask one question at a time. Do not claim the documents are published or approved.`;
+      } catch (error) {
+        const category =
+          error instanceof ORPCError ? `${error.code} ${error.message}`.toLowerCase() : "";
+        const guidance = /forbidden|access.denied/.test(category)
+          ? "Access denied; ask the user to check their project access."
+          : /personal|unbound/.test(category)
+            ? "This client is personal or unbound; ask the user to select a bound client."
+            : /binding_missing|binding_stale/.test(category)
+              ? "The client binding is missing or stale; ask the user to reload or rebind the client."
+              : /project.unavailable|not_found/.test(category)
+                ? "The project is unavailable; ask the user to check the selected project."
+                : "Tell the user to retry.";
+        stagingNote = `Attachment staging failed; the files remain in this chat. ${guidance} Do not claim the files were received for review, reviewed, published or approved.`;
+      } finally {
+        if (onAbort) signal.removeEventListener("abort", onAbort);
       }
     }
     return sendThreadMessage(

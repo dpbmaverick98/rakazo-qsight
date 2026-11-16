@@ -78,7 +78,13 @@ export { callMarkerClientNonce } from "./routes/threads.js";
 export interface RouterDeps {
   stageProjectIntake?: (
     actor: Actor,
-    input: { projectId: string; botId: string; artifactIds: string[] },
+    input: {
+      projectId: string;
+      botId: string;
+      artifactIds: string[];
+      signal?: AbortSignal;
+      idempotencyKey?: string;
+    },
   ) => Promise<{ intakeId: string; files: { id: string; status: string }[] }>;
   projectManagers?: {
     readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;

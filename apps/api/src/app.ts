@@ -802,7 +802,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
               const project = hierarchy.buildings
                 .flatMap((building) => building.projects)
                 .find((project) => project.id === input.projectId);
-              if (!project) throw new Error("Project unavailable");
+              if (!project) throw new ORPCError("NOT_FOUND", { message: "Project unavailable" });
               return stageIntake(actor, { ...input, projectName: project.name });
             })
         : undefined,

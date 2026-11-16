@@ -251,7 +251,7 @@ function intakeFixture(spawnKey = "pm:roof") {
     event: { create: vi.fn(async () => ({ seq: 1, threadId: "thread" })) },
   };
   const prisma = { ...tx, $transaction: vi.fn(async (fn: (db: typeof tx) => unknown) => fn(tx)) };
-  const stageProjectIntake = vi.fn(async () => ({
+  const stageProjectIntake = vi.fn<NonNullable<RouterDeps["stageProjectIntake"]>>(async () => ({
     intakeId: "intake-1",
     files: [{ id: "file-1", status: "processing" }],
   }));
@@ -259,21 +259,31 @@ function intakeFixture(spawnKey = "pm:roof") {
     createRouter({
       prisma,
       stageProjectIntake,
-      env: { webOrigin: "http://127.0.0.1", agentRuntime: "scripted" },
+      env: {
+        webOrigin: "http://127.0.0.1",
+        agentRuntime: "scripted",
+        maxAttachmentsPerMessage: 10,
+      },
       events: { notify: vi.fn(async () => undefined) },
       jobs: { enqueue: vi.fn(async () => undefined) },
     } as unknown as RouterDeps),
   );
-  const send = async (artifactIds?: string[]) => {
+  const send = async (
+    artifactIds?: string[],
+    extra: Record<string, unknown> = {},
+    status = 200,
+  ) => {
     const { response } = await handler.handle(
       new Request("http://127.0.0.1/rpc/threads/send", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ json: { botId: "bot", text: "Review this", artifactIds } }),
+        body: JSON.stringify({
+          json: { botId: "bot", text: "Review this", artifactIds, ...extra },
+        }),
       }),
       { prefix: "/rpc", context: { actor } },
     );
-    expect(response?.status).toBe(200);
+    expect(response?.status).toBe(status);
   };
   return { tx, stageProjectIntake, send };
 }
@@ -286,12 +296,14 @@ describe("PM chat attachment intake", () => {
       projectId: "roof",
       botId: "bot",
       artifactIds: ["artifact-1"],
+      idempotencyKey: undefined,
+      signal: expect.any(AbortSignal),
     });
     expect(f.tx.task.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           prompt:
-            'Review this\n\nAttached files were staged in Vendor One intake intake-1 (1 files). Vendor One will inspect them; acknowledge that you will review them and ask one question at a time. Do not claim the documents are published or approved.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
+            'Review this\n\nAttached files were received for review in Vendor One intake intake-1 (1 files). Acknowledge receipt for review and ask one question at a time. Do not claim the documents are published or approved.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
         }),
       }),
     );
@@ -327,9 +339,86 @@ describe("PM chat attachment intake", () => {
       expect.objectContaining({
         data: expect.objectContaining({
           prompt:
-            'Review this\n\nAttachment staging failed; the files remain in this chat. Tell the user to retry and do not claim they were reviewed.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
+            'Review this\n\nAttachment staging failed; the files remain in this chat. Tell the user to retry. Do not claim the files were received for review, reviewed, published or approved.\n\nUser attached file "Plan.pdf" (application/pdf, 4 bytes).',
         }),
       }),
     );
   });
+});
+
+it("skips staging for a replayed nonce", async () => {
+  const f = intakeFixture();
+  f.tx.message.findUnique.mockResolvedValueOnce({ id: "saved" } as never);
+  await f.send(["artifact-1"], { clientNonce: "send-1" });
+  expect(f.stageProjectIntake).not.toHaveBeenCalled();
+  expect(f.tx.message.findUnique).toHaveBeenCalledWith({
+    where: { threadId_clientNonce: { threadId: "thread", clientNonce: "send-1" } },
+  });
+});
+it("skips staging for image confirmation", async () => {
+  const f = intakeFixture();
+  await f.send(["artifact-1"], { imageHandling: "confirm" });
+  expect(f.stageProjectIntake).not.toHaveBeenCalled();
+});
+it("skips staging over the attachment limit", async () => {
+  const f = intakeFixture();
+  const artifacts = Array.from({ length: 11 }, (_, index) => ({
+    id: `artifact-${index}`,
+    name: "Plan.pdf",
+    mimeType: "application/pdf",
+    size: 4,
+  }));
+  f.tx.artifact.findMany.mockResolvedValueOnce(artifacts);
+  await f.send(
+    artifacts.map(({ id }) => id),
+    {},
+    400,
+  );
+  expect(f.stageProjectIntake).not.toHaveBeenCalled();
+});
+it("passes the send nonce as the intake idempotency key", async () => {
+  const f = intakeFixture();
+  await f.send(["artifact-1"], { clientNonce: "send-1" });
+  expect(f.stageProjectIntake).toHaveBeenCalledWith(
+    actor,
+    expect.objectContaining({ idempotencyKey: "send-1" }),
+  );
+});
+it.each([
+  ["FORBIDDEN", "access denied", "Access denied"],
+  ["CONFLICT", "personal", "personal or unbound"],
+  ["CONFLICT", "unbound", "personal or unbound"],
+  ["CONFLICT", "binding_missing", "reload or rebind"],
+  ["CONFLICT", "binding_stale", "reload or rebind"],
+  ["NOT_FOUND", "project_unavailable", "project is unavailable"],
+  ["BAD_GATEWAY", "secret upstream details", "Tell the user to retry"],
+] as const)("supplies honest failure guidance for %s %s", async (code, message, guidance) => {
+  const f = intakeFixture();
+  f.stageProjectIntake.mockRejectedValueOnce(new ORPCError(code, { message }));
+  await f.send(["artifact-1"]);
+  expect(f.tx.task.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({ prompt: expect.stringContaining(guidance) }),
+    }),
+  );
+});
+it("bounds a stalled staging dependency and sends the failure note", async () => {
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementationOnce((ms) => {
+    expect(ms).toBe(45_000);
+    return AbortSignal.timeout(1);
+  });
+  try {
+    const f = intakeFixture();
+    f.stageProjectIntake.mockImplementationOnce(async () => new Promise(() => {}));
+    await f.send(["artifact-1"]);
+    expect(f.tx.task.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          prompt: expect.stringContaining("Attachment staging failed"),
+        }),
+      }),
+    );
+  } finally {
+    timeout.mockRestore();
+  }
 });

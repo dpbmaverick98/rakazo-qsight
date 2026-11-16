@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ORPCError } from "@orpc/server";
 import type { Actor } from "@rakazo/contracts";
 import type {
   CompleteIntakeFileBody,
@@ -10,6 +11,8 @@ export type ProjectIntakeInput = {
   projectName: string;
   botId: string;
   artifactIds: string[];
+  signal?: AbortSignal;
+  idempotencyKey?: string;
 };
 export type ProjectIntakeSummary = { intakeId: string; files: { id: string; status: string }[] };
 type Intake = {
@@ -49,16 +52,20 @@ export async function stageProjectIntake(
       ) => Promise<{ status: string }>;
     };
     fetch?: typeof fetch;
+    signal?: AbortSignal;
   },
   actor: Actor,
   input: ProjectIntakeInput,
 ): Promise<ProjectIntakeSummary> {
+  const signal = input.signal ?? deps.signal;
+  signal?.throwIfAborted();
   if (input.artifactIds.length > 10 || input.artifactIds.length === 0)
     throw new Error("Invalid intake request");
   try {
     const attachments = await Promise.all(
       input.artifactIds.map(async (artifactId) => {
         const artifact = await deps.readArtifact(actor, { botId: input.botId, artifactId });
+        signal?.throwIfAborted();
         const bytes = Buffer.from(artifact.contentBase64, "base64");
         return {
           bytes,
@@ -83,12 +90,17 @@ export async function stageProjectIntake(
     );
     if (bySourceId.size !== attachments.length) throw new Error("Invalid intake request");
     const files = attachments.map(({ manifest }) => manifest);
-    const key = createHash("sha256")
-      .update(JSON.stringify([actor.spaceId, input.projectId, input.botId, files]))
-      .digest("hex");
+    signal?.throwIfAborted();
+    const key =
+      input.idempotencyKey ??
+      createHash("sha256")
+        .update(JSON.stringify([actor.spaceId, input.projectId, input.botId, files]))
+        .digest("hex");
     const { token, tokenId } = await deps.source.managerServer(input.projectId, input.projectName);
     try {
+      signal?.throwIfAborted();
       const intake = await deps.source.createIntake(input.projectId, files, key, token);
+      signal?.throwIfAborted();
       if (intake.files.length !== attachments.length) throw new Error("Invalid intake response");
       const seen = new Set<string>();
       for (const file of intake.files) {
@@ -98,6 +110,7 @@ export async function stageProjectIntake(
       }
       const completed = [];
       for (const file of intake.files) {
+        signal?.throwIfAborted();
         const attachment = bySourceId.get(file.client_id!)!;
         if (["processing", "ready", "published"].includes(file.status)) {
           completed.push({ id: file.id, status: file.status });
@@ -109,8 +122,9 @@ export async function stageProjectIntake(
           body: attachment.bytes,
           headers: { "Content-Type": attachment.manifest.content_type },
           redirect: "error",
-          signal: AbortSignal.timeout(60_000),
+          signal: signal ?? AbortSignal.timeout(60_000),
         });
+        signal?.throwIfAborted();
         if (!response.ok) throw new Error("Upload unavailable");
         const result = await deps.source.completeIntakeFile(
           intake.id,
@@ -121,6 +135,7 @@ export async function stageProjectIntake(
           },
           token,
         );
+        signal?.throwIfAborted();
         completed.push({ id: file.id, status: result.status });
       }
       return { intakeId: intake.id, files: completed };
@@ -131,7 +146,8 @@ export async function stageProjectIntake(
         // Reliable cleanup/expiry is a separate lifecycle decision.
       }
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof ORPCError) throw error;
     throw new Error("Intake staging unavailable");
   }
 }
