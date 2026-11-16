@@ -60,6 +60,11 @@ it.each(["missing key", "missing coordinates", "image error", "ready"])(
       }
       if (scenario === "ready") {
         expect(container.querySelector('[role="status"]')).toBeNull();
+        expect(image!.parentElement!.classList.contains("overflow-hidden")).toBe(true);
+        expect(image!.classList.contains("h-[calc(100%+24px)]")).toBe(true);
+        expect(image!.classList.contains("object-cover")).toBe(true);
+        expect(image!.classList.contains("object-top")).toBe(true);
+        expect(image!.classList.contains("invisible")).toBe(false);
         expect(Array.from(container.querySelectorAll("a"), (a) => a.href)).toEqual([
           "https://www.geoapify.com/",
           "https://www.openstreetmap.org/copyright",
