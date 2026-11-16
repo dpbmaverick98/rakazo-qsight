@@ -234,12 +234,12 @@ it("mints only server-side, encrypts credentials, attaches only the scoped serve
   });
   const result = await provisionProjectManager(test.ctx, actor, input);
   expect(result).toMatchObject({
-    bot: { id: "pm", spawnKey: "pm:roof" },
+    bot: { id: "pm", spawnKey: "pm:roof", name: "Roof survey - PM" },
     server: { name: "Vendor One PM — Roof survey", allBots: false },
     created: true,
   });
   expect(test.state.bots[0]).toMatchObject({
-    name: "Proj. Manager - Sam",
+    name: "Roof survey - PM",
     inheritMcpServers: false,
     dailyCheckIns: false,
     fleetManagement: false,
@@ -474,7 +474,16 @@ it("rejects stale binding revisions and ordinary members before PM minting", asy
 
 it("promotes the same setup PM, preserves its conversation identity/history, and removes its owner connection", async () => {
   const test = setup();
-  test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
+  test.state.bots.push({
+    id: "setup",
+    userId: "user",
+    spaceId: "space",
+    spawnKey: "setup:client",
+    name: "Proj. Manager - Sam",
+  });
+  const unrelated = { id: "other", name: "Other manager", spawnKey: "pm:other" };
+  test.state.bots.push(unrelated);
+  expect(test.state.bots[0]!.name).toBe("Proj. Manager - Sam");
   test.state.assignments.push({
     botId: "setup",
     serverId: "owner",
@@ -484,19 +493,27 @@ it("promotes the same setup PM, preserves its conversation identity/history, and
   const history = [{ id: "message", content: "Roof setup", threadId: "existing-thread" }];
   const threadHistory = new Map([["setup", history]]);
   const result = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
-  expect(result.bot).toMatchObject({ id: "setup", spawnKey: "pm:roof" });
+  expect(result.bot).toMatchObject({ id: "setup", spawnKey: "pm:roof", name: "Roof survey - PM" });
+  expect(test.state.bots[0]).toMatchObject({ id: "setup", name: "Roof survey - PM" });
+  expect(unrelated).toEqual({ id: "other", name: "Other manager", spawnKey: "pm:other" });
+  expect(hierarchy.buildings[0]!.projects[0]!.name).toBe("Roof survey");
   expect(threadHistory.get(result.bot.id)).toBe(history);
   expect(test.repos.createBot).not.toHaveBeenCalled();
-  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.bots).toHaveLength(2);
   expect(test.state.assignments).toEqual([
     expect.objectContaining({ botId: "setup", serverId: result.server.id }),
   ]);
   expect(test.state.servers[0]).toHaveProperty("managedCredentialId", "test-token-id");
+  const retry = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
+  expect(retry.bot).toMatchObject({ id: "setup", name: "Roof survey - PM" });
+  expect(test.state.bots[0]!.name).toBe("Roof survey - PM");
+  expect(retry.server.id).toBe(result.server.id);
+  expect(threadHistory.get(retry.bot.id)).toBe(history);
   test.state.bots[0]!.name = "My manager";
   const reused = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
   expect(reused.bot.name).toBe("My manager");
   expect(threadHistory.get(reused.bot.id)).toBe(history);
-  expect(test.state.bots).toHaveLength(1);
+  expect(test.state.bots).toHaveLength(2);
   expect(test.state.servers).toHaveLength(1);
   expect(
     test.upstream.mock.calls.some(([url]) => String(url).endsWith("/tokens/test-token-id")),
@@ -650,7 +667,9 @@ it("promotes the building manager once and keeps client setup at the client", as
   );
   const first = await provisionProjectManager(test.ctx, actor, input);
   const second = await provisionProjectManager(test.ctx, actor, input);
-  expect(first.bot.id).toBe("building-manager");
+  expect(first.bot).toMatchObject({ id: "building-manager", name: "Roof survey - PM" });
+  expect(second.bot.name).toBe("Roof survey - PM");
+  expect(test.state.bots[0]!.name).toBe("Roof survey - PM");
   expect(second.bot.id).toBe(first.bot.id);
   expect(test.repos.createBot).not.toHaveBeenCalled();
   expect(test.state.bots.map((bot) => bot.spawnKey)).toEqual(["pm:roof", "setup:client"]);

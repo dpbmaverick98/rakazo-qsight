@@ -176,7 +176,7 @@ async function provision(
               ...(promoteSetup
                 ? {
                     spawnKey: `pm:${project.id}`,
-                    name: "Proj. Manager - Sam",
+                    name: `${project.name} - PM`,
                     instructions: projectManagerInstructions(project, hierarchy.client.name),
                   }
                 : {}),
@@ -211,7 +211,7 @@ async function provision(
         const bot =
           existing ??
           (await repos.createBot(actor, {
-            name: "Proj. Manager - Sam",
+            name: `${project.name} - PM`,
             spawnKey,
             description: "",
             initialMessage: {
@@ -236,7 +236,7 @@ async function provision(
             ? {
                 ...bot,
                 spawnKey,
-                name: "Proj. Manager - Sam",
+                name: `${project.name} - PM`,
                 instructions: projectManagerInstructions(project, hierarchy.client.name),
                 inheritMcpServers: false,
                 crossSpaceCommunication: false,
