@@ -211,7 +211,7 @@ export function CommercialInspection({
                                     {document.filename}
                                   </Button>
                                   <p className="text-muted-foreground">
-                                    <span>{document.role}</span> <span>{document.status}</span>
+                                    <DocumentLabels role={document.role} status={document.status} />
                                   </p>
                                   <RecordLink url={document.url} />
                                 </li>
@@ -232,7 +232,7 @@ export function CommercialInspection({
               </Button>
               <h2 className="my-3 font-medium break-words">{file.filename}</h2>
               <p className="text-muted-foreground">
-                <span>{file.role}</span> <span>{file.status}</span>
+                <DocumentLabels role={file.role} status={file.status} />
               </p>
               {previewContext && selection && activeTab === "file" ? (
                 <DocumentPreview
@@ -263,5 +263,52 @@ function RecordLink({ url }: { url: string }) {
     <a className="text-body underline" href={url} target="_blank" rel="noopener noreferrer">
       <Trans>Open record</Trans> ↗
     </a>
+  );
+}
+
+function documentRoleLabel(role: string) {
+  switch (role) {
+    case "proposal":
+      return <Trans>Proposal</Trans>;
+    case "breakdown":
+      return <Trans>Breakdown</Trans>;
+    case "invoice":
+      return <Trans>Invoice</Trans>;
+    case "support":
+      return <Trans>Support</Trans>;
+    case "change_order":
+      return <Trans>Change order</Trans>;
+    default:
+      return <Trans>Document</Trans>;
+  }
+}
+
+function documentStatusLabel(status: string) {
+  switch (status) {
+    case "ready":
+      return <Trans>Ready</Trans>;
+    case "parsing":
+      return <Trans>Processing</Trans>;
+    case "uploading":
+      return <Trans>Uploading</Trans>;
+    case "failed":
+      return <Trans>Failed</Trans>;
+    default:
+      return null;
+  }
+}
+
+function DocumentLabels({ role, status }: { role: string; status: string }) {
+  const statusLabel = documentStatusLabel(status);
+  return (
+    <>
+      <span>{documentRoleLabel(role)}</span>
+      {statusLabel ? (
+        <>
+          {" "}
+          <span>{statusLabel}</span>
+        </>
+      ) : null}
+    </>
   );
 }
