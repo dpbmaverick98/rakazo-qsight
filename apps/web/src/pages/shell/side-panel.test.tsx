@@ -20,11 +20,14 @@ beforeEach(() => {
   hierarchyMock.stage.mockClear();
   hierarchyMock.isError = false;
 });
-vi.mock("./hierarchy-rail", () => ({
+vi.mock("./hierarchy-rail", async (importOriginal) => ({
+  projectStageFailure: (await importOriginal<typeof import("./hierarchy-rail")>())
+    .projectStageFailure,
   useHierarchy: () => ({
     data: hierarchyMock.data,
     isFetching: false,
     isError: hierarchyMock.isError,
+    error: hierarchyMock.isError ? new Error("Hierarchy unavailable") : null,
   }),
   ProjectStage: (props: unknown) => {
     hierarchyMock.stage(props);
@@ -111,7 +114,7 @@ describe("shell panel dispatch", () => {
   });
 });
 
-it("renders valid hierarchy despite navigation errors and rejects invalid hierarchy", () => {
+it("reports navigation errors even with valid hierarchy and rejects invalid hierarchy", () => {
   const building = { id: "north", projects: [{ id: "roof" }, { id: "sibling" }] };
   hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
   const props = {
@@ -121,7 +124,7 @@ it("renders valid hierarchy despite navigation errors and rejects invalid hierar
   expect(render("project:bot:1:space", false, true, props)).toContain("project-stage");
   expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
     data: { buildings: [building] },
-    error: false,
+    failure: "navigation",
   });
   for (const data of [
     { bindingRevision: 2, client: { id: "client" }, buildings: [building] },
@@ -131,13 +134,19 @@ it("renders valid hierarchy despite navigation errors and rejects invalid hierar
     undefined,
   ]) {
     hierarchyMock.data = data;
-    render("project:bot:1:space", false, true, props);
-    expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
+    render("project:bot:1:space", false, true, { ...props, navigationError: false });
+    expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
+      data: undefined,
+      failure: "selection",
+    });
   }
   hierarchyMock.data = { bindingRevision: 1, client: { id: "client" }, buildings: [building] };
   hierarchyMock.isError = true;
-  render("project:bot:1:space", false, true, props);
-  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({ data: undefined, error: true });
+  render("project:bot:1:space", false, true, { ...props, navigationError: false });
+  expect(hierarchyMock.stage.mock.lastCall?.[0]).toMatchObject({
+    data: undefined,
+    failure: "unavailable",
+  });
 });
 
 it.each([true, false])(

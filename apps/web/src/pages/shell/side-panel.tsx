@@ -22,7 +22,7 @@ import { AgentImportForm } from "./agent-import";
 import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
-import { ProjectStage, useHierarchy } from "./hierarchy-rail";
+import { ProjectStage, projectStageFailure, useHierarchy } from "./hierarchy-rail";
 import { FinishSetupAction } from "./project-manager";
 import { firstThreadRoute } from "./use-shell-navigation";
 
@@ -31,6 +31,7 @@ export function ShellSidePanel({
   projectSelection,
   retryNavigation,
   openProjectPanel,
+  navigationError,
   artifactStage,
   onSelectArtifact,
   hierarchyScope,
@@ -220,7 +221,12 @@ export function ShellSidePanel({
                 scope={hierarchyScope}
                 data={selectedHierarchy}
                 loading={hierarchy.isFetching}
-                error={hierarchy.isError || !!(!hierarchy.isFetching && !selectedHierarchy)}
+                failure={projectStageFailure({
+                  error: hierarchy.error,
+                  navigationError,
+                  loading: hierarchy.isFetching,
+                  selected: selectedHierarchy,
+                })}
                 retry={() => {
                   retryNavigation?.();
                   void hierarchy.refetch();
