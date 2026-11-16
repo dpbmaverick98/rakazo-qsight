@@ -87,7 +87,6 @@ export const CreateBuildingSchema = z
   })
   .strict();
 export const CreatedBuildingSchema = z.object({
-  botId: Id.optional(),
   id: Id,
   name: z.string().max(200),
   address: z.string().min(1).max(2000),
