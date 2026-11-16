@@ -7,12 +7,10 @@ export function DocumentPreview({
   url,
   revision,
   name,
-  externalUrl,
 }: {
   url: string;
   revision: number;
   name: string;
-  externalUrl: string;
 }) {
   const text = useRef<HTMLPreElement>(null);
   const [preview, setPreview] = useState<{ kind: string; url?: string }>({ kind: "loading" });
@@ -69,9 +67,6 @@ export function DocumentPreview({
           <p>
             <Trans>Preview unavailable</Trans>
           </p>
-          <a className="underline" href={externalUrl} target="_blank" rel="noopener noreferrer">
-            <Trans>Open record</Trans> ↗
-          </a>
         </div>
       ) : null}
       <pre

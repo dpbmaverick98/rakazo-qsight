@@ -254,11 +254,10 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     expect(sibling.getAttribute("aria-expanded")).toBe("false");
     await act(async () => sibling.click());
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
-    await vi.waitFor(() =>
-      expect(
-        container.querySelector('a[href="https://hierarchy.example.test/projects/roof"]'),
-      ).not.toBeNull(),
-    );
+    await vi.waitFor(() => expect(container.querySelectorAll("li span.text-body")).toHaveLength(1));
+    expect(container.querySelector("li span.text-body")?.textContent).toBe("Finishes");
+    expect(container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/Open project|Open work package|Open record/);
     const claim = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Finishes",
     )!;

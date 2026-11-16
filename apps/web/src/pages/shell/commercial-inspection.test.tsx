@@ -67,14 +67,15 @@ it("shows authoritative claim totals and opens vendor/file tabs, closes to focus
     expect(view.button("Sub vendors").getAttribute("aria-selected")).toBe("true");
     expect(document.activeElement).toBe(view.button("Sub vendors"));
     expect(view.container.textContent).toContain("Proposal Ready");
+    expect(view.container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(view.container.textContent).not.toMatch(/Open project|Open work package|Open record/);
     await view.click("Invoices");
     expect(view.container.textContent).toContain("Invoice");
     await view.click("Invoice.pdf");
     expect(view.container.textContent).toContain("Preview unavailable");
     expect(view.container.querySelector("iframe,object,input,textarea,form")).toBeNull();
-    const link = view.container.querySelector("a")!;
-    expect(link.href).toContain("?document=invoice");
-    expect(link.rel).toBe("noopener noreferrer");
+    expect(view.container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(view.container.textContent).not.toMatch(/Open project|Open work package|Open record/);
     await view.click("Close file");
     expect(document.activeElement).toBe(view.button("Sub vendors"));
     expect(view.container.querySelector('[role="tab"][title="Invoice.pdf"]')).toBeNull();

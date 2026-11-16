@@ -213,7 +213,6 @@ export function CommercialInspection({
                                   <p className="text-muted-foreground">
                                     <DocumentLabels role={document.role} status={document.status} />
                                   </p>
-                                  <RecordLink url={document.url} />
                                 </li>
                               ))}
                           </ul>
@@ -240,29 +239,17 @@ export function CommercialInspection({
                   url={`/api/agent-plane/projects/${encodeURIComponent(previewContext.projectId)}/documents/${encodeURIComponent(file.id)}/preview?${new URLSearchParams({ botId: previewContext.botId, claimId: claim.id, vendorId: vendor.id, packageId: workPackage!.id })}`}
                   revision={previewContext.revision}
                   name={file.filename}
-                  externalUrl={file.url}
                 />
               ) : (
-                <>
-                  <p>
-                    <Trans>Preview unavailable</Trans>
-                  </p>
-                  <RecordLink url={file.url} />
-                </>
+                <p>
+                  <Trans>Preview unavailable</Trans>
+                </p>
               )}
             </TabsContent>
           ) : null}
         </>
       ) : null}
     </Tabs>
-  );
-}
-
-function RecordLink({ url }: { url: string }) {
-  return (
-    <a className="text-body underline" href={url} target="_blank" rel="noopener noreferrer">
-      <Trans>Open record</Trans> ↗
-    </a>
   );
 }
 

@@ -27,16 +27,11 @@ it.each(["application/pdf", "image/png", "text/markdown", "text/html"])(
     const container = document.createElement("div");
     const root = createRoot(container);
     await act(async () => {
-      root.render(
-        <DocumentPreview
-          url="/preview"
-          revision={1}
-          name="Document"
-          externalUrl="https://example.test/record"
-        />,
-      );
+      root.render(<DocumentPreview url="/preview" revision={1} name="Document" />);
     });
     expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/Open project|Open work package|Open record/);
     if (type === "text/markdown") {
       expect(container.querySelector("pre")?.textContent).toBe("<script>literal text</script>");
     } else if (type === "application/pdf") {
@@ -51,28 +46,25 @@ it.each(["application/pdf", "image/png", "text/markdown", "text/html"])(
   },
 );
 
-it.each([415, 502])("shows the external fallback for HTTP %s", async (status) => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  const request = vi.fn(async () => new Response(null, { status }));
-  vi.stubGlobal("fetch", request);
-  const container = document.createElement("div");
-  const root = createRoot(container);
-  await act(async () =>
-    root.render(
-      <DocumentPreview
-        url="/preview"
-        revision={2}
-        name="Document"
-        externalUrl="https://example.test/record"
-      />,
-    ),
-  );
-  expect(container.textContent).toContain("Preview unavailable");
-  expect(container.querySelector("a")?.href).toBe("https://example.test/record");
-  expect(container.querySelector("iframe,img")).toBeNull();
-  expect(request).toHaveBeenCalledWith(
-    "/preview",
-    expect.objectContaining({ cache: "no-store", headers: { "x-rakazo-binding-revision": "2" } }),
-  );
-  await act(async () => root.unmount());
-});
+it.each([415, 502])(
+  "shows preview unavailable without outbound links for HTTP %s",
+  async (status) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const request = vi.fn(async () => new Response(null, { status }));
+    vi.stubGlobal("fetch", request);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () =>
+      root.render(<DocumentPreview url="/preview" revision={2} name="Document" />),
+    );
+    expect(container.textContent).toContain("Preview unavailable");
+    expect(container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(container.textContent).not.toMatch(/Open project|Open work package|Open record/);
+    expect(container.querySelector("iframe,img")).toBeNull();
+    expect(request).toHaveBeenCalledWith(
+      "/preview",
+      expect.objectContaining({ cache: "no-store", headers: { "x-rakazo-binding-revision": "2" } }),
+    );
+    await act(async () => root.unmount());
+  },
+);

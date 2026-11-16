@@ -95,8 +95,8 @@ it("groups packages behind claim and vendor disclosures and preserves canonical 
     expect(view.container.querySelectorAll(".sr-only")).toHaveLength(3);
     expect(view.container.textContent).toContain("0 open issues");
     expect(view.container.textContent).toContain("Checks incomplete");
-    for (const link of view.container.querySelectorAll("a"))
-      expect(link.rel).toBe("noopener noreferrer");
+    expect(view.container.querySelectorAll('a[href^="http"]')).toHaveLength(0);
+    expect(view.container.textContent).not.toMatch(/Open project|Open work package|Open record/);
     await act(async () => claim.click());
     expect(claim.getAttribute("aria-expanded")).toBe("false");
   } finally {
