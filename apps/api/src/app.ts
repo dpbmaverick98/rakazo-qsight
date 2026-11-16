@@ -152,6 +152,7 @@ import {
   withClientIp,
 } from "./client-ip.js";
 import { setupClient } from "./client-setup.js";
+import { resolveCommercialInspection } from "./commercial-inspection.js";
 import { cspReportRoutes } from "./csp-report.js";
 import { configuredEmailProvider } from "./email.js";
 import { mountEmailInboundRoute } from "./email-inbound.js";
@@ -193,6 +194,7 @@ import { afterSpaceDeparture } from "./space-departure.js";
 import { createSpeechSummarizer } from "./speech-summary.js";
 import { SYSTEM_CONTEXT_PATHS } from "./system-context-routes.js";
 import { settleWithTimeout } from "./team-chat-startup.js";
+import { resolveThreadTarget } from "./thread-target.js";
 import { endUserDeviceSession, mountUserDeviceRoutes } from "./user-devices.js";
 import { mountVoiceHttpRoutes } from "./voice.js";
 import { mountWebhookHttpRoutes } from "./webhook.js";
@@ -1014,6 +1016,16 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   const sessionActor = async (request: Request) => (await requestSession(request))?.actor ?? null;
   const hierarchySource = qsightHierarchyFromEnv();
   mountHierarchyRoute(app, {
+    authorizePreview: (actor, botId, selection) =>
+      runAsTenant(actor, async () => {
+        const target = await resolveThreadTarget(prisma, actor, { botId });
+        await resolveCommercialInspection(
+          { prisma, projectManagers: hierarchySource },
+          actor,
+          target,
+          selection,
+        );
+      }),
     sessionActor,
     source: hierarchySource,
     retireProject: hierarchySource

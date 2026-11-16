@@ -20,7 +20,11 @@ import {
   ProjectMutationSchema,
   RenameProjectSchema,
 } from "@rakazo/contracts/hierarchy";
-import type { ProjectCommercial } from "@rakazo/contracts/project-commercial";
+import type {
+  CommercialInspectionSelection,
+  ProjectCommercial,
+} from "@rakazo/contracts/project-commercial";
+import { CommercialInspectionSelectionSchema } from "@rakazo/contracts/project-commercial";
 import type { Hono } from "hono";
 import type { ClientBinding } from "./space-client-binding.js";
 
@@ -28,6 +32,11 @@ export function mountHierarchyRoute(
   app: Hono,
   deps: {
     sessionActor: (request: Request) => Promise<Actor | null>;
+    authorizePreview?: (
+      actor: Actor,
+      botId: string,
+      selection: CommercialInspectionSelection,
+    ) => Promise<void>;
     trustedOrigin?: (origin: string) => boolean;
     changed?: (actor: Actor) => Promise<void>;
     canCreateProject?: (actor: Actor) => Promise<boolean>;
@@ -70,6 +79,7 @@ export function mountHierarchyRoute(
       ) => Promise<CreatedProject>;
       renameProject?: (id: string, name: string, buildingId: string) => Promise<unknown>;
       deleteProject?: (id: string, name: string) => Promise<void>;
+      previewDocument?: (id: string) => Promise<Response>;
       readCommercial?: (id: string, fresh?: boolean) => Promise<ProjectCommercial>;
     } | null;
   },
@@ -321,6 +331,38 @@ export function mountHierarchyRoute(
       }
     });
   }
+  app.get("/api/agent-plane/projects/:id/documents/:documentId/preview", async (c) => {
+    c.header("Cache-Control", "no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("Content-Security-Policy", "default-src 'none'; sandbox; frame-ancestors 'self'");
+    const actor = await deps.sessionActor(c.req.raw);
+    if (!actor) return c.body(null, 401);
+    if (!deps.authorizePreview || !deps.source?.previewDocument) return c.body(null, 503);
+    const parsed = CommercialInspectionSelectionSchema.safeParse({
+      projectId: c.req.param("id"),
+      bindingRevision: Number(c.req.header("x-rakazo-binding-revision")),
+      claimId: c.req.query("claimId"),
+      vendorId: c.req.query("vendorId"),
+      packageId: c.req.query("packageId"),
+      fileId: c.req.param("documentId"),
+    });
+    if (!parsed.success || !parsed.data.vendorId || !parsed.data.packageId || !c.req.query("botId"))
+      return c.body(null, 400);
+    try {
+      await deps.authorizePreview(actor, c.req.query("botId")!, parsed.data);
+      const response = await deps.source.previewDocument(parsed.data.fileId!);
+      // A binding change during the external read invalidates the result.
+      await deps.resolveBinding(actor, parsed.data.bindingRevision);
+      if (response.status === 415) return c.body(null, 415);
+      if (!response.ok) return c.body(null, 502);
+      c.header("Content-Type", response.headers.get("content-type")!);
+      c.header("Content-Disposition", "inline");
+      return c.body(await response.arrayBuffer());
+    } catch (error) {
+      const result = failure(error);
+      return c.body(null, result.status);
+    }
+  });
   app.get("/api/agent-plane/projects/:id/commercial", async (c) => {
     c.header("Cache-Control", "no-store");
     const actor = await deps.sessionActor(c.req.raw);
