@@ -223,12 +223,16 @@ function ProjectStageContent({
           <BuildingMap building={building} />
         </Suspense>
       </ErrorBoundary>
-      {building.address?.trim() ? (
-        <div className="mb-3 flex items-start gap-2 break-words">
-          <Building aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <span className="min-w-0">{building.address}</span>
+      <div className="mb-3 flex items-start gap-2 break-words">
+        <Building aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <div className="min-w-0">
+          <div>{building.name}</div>
+          {building.address?.trim() &&
+          building.address.trim().toLowerCase() !== building.name.trim().toLowerCase() ? (
+            <div className="text-muted-foreground">{building.address}</div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
       <ul>
         {building.projects.map((project) => (
           <li key={project.id}>

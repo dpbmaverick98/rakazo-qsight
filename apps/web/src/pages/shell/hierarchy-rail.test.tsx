@@ -236,7 +236,7 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     await act(async () => root.render(render("space")));
     await vi.waitFor(() => expect(container.textContent).toContain("Finishes"));
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(container.textContent).not.toContain("North Building");
+    expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
     expect(container.textContent?.match(/10 Example Street/g)).toHaveLength(1);
     expect(container.querySelector("h2")?.textContent).toBe("Example Client");
     expect(container.querySelector(".lucide-building")).not.toBeNull();
@@ -280,6 +280,51 @@ it("expands only the PM project, reads siblings on demand and keeps Claims scope
     container.remove();
   }
 });
+
+it.each([
+  [" north BUILDING ", false],
+  ["10 Example Street", true],
+  ["", false],
+  ["   ", false],
+])(
+  "shows building identity without a duplicate or empty address (%j)",
+  async (address, showAddress) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+      await act(async () =>
+        root.render(
+          <QueryClientProvider client={client}>
+            <ProjectStage
+              data={{ ...data, buildings: [{ ...data.buildings[0]!, address }] }}
+              loading={false}
+              retry={() => {}}
+              scope={{ userId: "user", spaceId: "space" }}
+              selection={{ botId: "pm", revision: 1, buildingId: "north", projectId: "roof" }}
+              tab="space"
+              onTabChange={() => {}}
+            />
+          </QueryClientProvider>,
+        ),
+      );
+      expect(container.textContent?.match(/North Building/g)).toHaveLength(1);
+      const identity = container.querySelector(".lucide-building")!.parentElement!;
+      expect(identity.textContent).toBe(`North Building${showAddress ? address : ""}`);
+      expect(identity.querySelectorAll(".text-muted-foreground")).toHaveLength(showAddress ? 1 : 0);
+      if (showAddress) expect(container.textContent?.split(address)).toHaveLength(2);
+      expect(
+        identity.compareDocumentPosition(container.querySelector("ul")!) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    } finally {
+      await act(async () => root.unmount());
+      client.clear();
+    }
+  },
+);
 
 it("maps project stage failures in priority order", () => {
   const ready = { loading: false, selected: true };
