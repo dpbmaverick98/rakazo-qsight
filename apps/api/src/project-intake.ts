@@ -14,7 +14,13 @@ export type ProjectIntakeInput = {
 export type ProjectIntakeSummary = { intakeId: string; files: { id: string; status: string }[] };
 type Intake = {
   id: string;
-  files: { id: string; status: string; upload_url: string | null; generation?: string }[];
+  files: {
+    id: string;
+    client_id?: string;
+    status: string;
+    upload_url: string | null;
+    generation?: string;
+  }[];
 };
 export async function stageProjectIntake(
   deps: {
@@ -67,6 +73,15 @@ export async function stageProjectIntake(
         };
       }),
     );
+    if (
+      attachments.some(({ bytes }) => bytes.length > 48 * 1024 * 1024) ||
+      attachments.reduce((total, { bytes }) => total + bytes.length, 0) > 64 * 1024 * 1024
+    )
+      throw new Error("Invalid intake size");
+    const bySourceId = new Map(
+      attachments.map((attachment) => [attachment.manifest.source_file_id, attachment]),
+    );
+    if (bySourceId.size !== attachments.length) throw new Error("Invalid intake request");
     const files = attachments.map(({ manifest }) => manifest);
     const key = createHash("sha256")
       .update(JSON.stringify([actor.spaceId, input.projectId, input.botId, files]))
@@ -75,10 +90,21 @@ export async function stageProjectIntake(
     try {
       const intake = await deps.source.createIntake(input.projectId, files, key, token);
       if (intake.files.length !== attachments.length) throw new Error("Invalid intake response");
+      const seen = new Set<string>();
+      for (const file of intake.files) {
+        if (!file.client_id || !bySourceId.has(file.client_id) || seen.has(file.client_id))
+          throw new Error("Invalid intake response");
+        seen.add(file.client_id);
+      }
       const completed = [];
-      for (const [index, file] of intake.files.entries()) {
-        const attachment = attachments[index]!;
-        if (!file.upload_url) throw new Error("Upload unavailable");
+      for (const file of intake.files) {
+        const attachment = bySourceId.get(file.client_id!)!;
+        if (!file.upload_url) {
+          if (!["processing", "ready", "published"].includes(file.status))
+            throw new Error("Upload unavailable");
+          completed.push({ id: file.id, status: file.status });
+          continue;
+        }
         const response = await (deps.fetch ?? fetch)(file.upload_url, {
           method: "PUT",
           body: attachment.bytes,
@@ -100,7 +126,11 @@ export async function stageProjectIntake(
       }
       return { intakeId: intake.id, files: completed };
     } finally {
-      await deps.source.revokeManagerToken(tokenId);
+      try {
+        await deps.source.revokeManagerToken(tokenId);
+      } catch {
+        // Reliable cleanup/expiry is a separate lifecycle decision.
+      }
     }
   } catch {
     throw new Error("Intake staging unavailable");

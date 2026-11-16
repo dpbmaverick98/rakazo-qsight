@@ -150,7 +150,11 @@ export function mountHierarchyRoute(
     if (!input.success || !id.safeParse(c.req.param("id")).success)
       return c.json({ status: "invalid_request" }, 400);
     try {
-      const { hierarchy } = await read(actor);
+      const revision = c.req.header("x-rakazo-binding-revision");
+      const { hierarchy, binding } = await read(
+        actor,
+        revision === undefined ? undefined : Number(revision),
+      );
       const project = hierarchy.buildings
         .flatMap((building) => building.projects)
         .find((item) => item.id === c.req.param("id"));
@@ -159,6 +163,7 @@ export function mountHierarchyRoute(
       if (!bots?.some((bot) => bot.id === input.data.botId && bot.spawnKey === `pm:${project.id}`))
         return c.json({ status: "forbidden" }, 403);
       if (!deps.stageProjectIntake) return c.json({ status: "disabled" }, 503);
+      await deps.resolveBinding(actor, binding.revision);
       try {
         const result = await deps.stageProjectIntake(actor, {
           ...input.data,

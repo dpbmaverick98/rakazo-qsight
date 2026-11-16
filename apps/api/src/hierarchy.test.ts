@@ -695,7 +695,7 @@ it.each(["member", "owner", "admin"])(
   },
 );
 
-function intakeSetup() {
+function intakeSetup(enabled = true) {
   const { deps } = setup();
   const stageProjectIntake = vi.fn(async () => ({
     intakeId: "intake",
@@ -703,14 +703,18 @@ function intakeSetup() {
     token: "secret-token",
   }));
   const app = new Hono();
-  mountHierarchyRoute(app, { ...deps, stageProjectIntake });
+  mountHierarchyRoute(app, {
+    ...deps,
+    stageProjectIntake: enabled ? stageProjectIntake : undefined,
+  });
   const request = (
     body: unknown = { botId: "manager", artifactIds: ["artifact"] },
     project = "roof",
+    headers: Record<string, string> = {},
   ) =>
     app.request(`/api/agent-plane/projects/${project}/intakes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...headers },
       body: JSON.stringify(body),
     });
   return { deps, stageProjectIntake, request };
@@ -784,4 +788,46 @@ it("rejects a mismatched hierarchy and sanitizes staging failures", async () => 
   const response = await request();
   expect(response.status).toBe(502);
   expect(await response.json()).toEqual({ status: "staging_unavailable" });
+});
+it.each(["0", "-1", "1.5", "bad", "9007199254740992"])(
+  "rejects invalid intake binding revision %s",
+  async (revision) => {
+    const { deps, request, stageProjectIntake } = intakeSetup();
+    const response = await request(undefined, undefined, { "x-rakazo-binding-revision": revision });
+    expect(response.status).toBe(400);
+    expect(deps.source.read).not.toHaveBeenCalled();
+    expect(stageProjectIntake).not.toHaveBeenCalled();
+  },
+);
+it("passes the requested intake revision and rechecks immediately before staging", async () => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  deps.resolveBinding.mockImplementation(async (_actor, revision) => {
+    expect(revision).toBe(1);
+    return binding;
+  });
+  deps.navigationBots.mockImplementation(async () => {
+    deps.resolveBinding.mockRejectedValueOnce(
+      new ORPCError("CONFLICT", { message: "binding_stale" }),
+    );
+    return [{ id: "manager", spawnKey: "pm:roof" }];
+  });
+  const response = await request(undefined, undefined, { "x-rakazo-binding-revision": "1" });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toEqual({ status: "binding_stale" });
+  expect(stageProjectIntake).not.toHaveBeenCalled();
+});
+it("returns 503 when intake staging is disabled", async () => {
+  const { request } = intakeSetup(false);
+  const response = await request();
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ status: "disabled" });
+});
+it.each<Record<string, string>>([
+  { origin: "https://foreign.test" },
+  { "Content-Type": "text/plain" },
+])("rejects intake origin or content type before reads", async (headers) => {
+  const { deps, request, stageProjectIntake } = intakeSetup();
+  expect((await request(undefined, undefined, headers)).status).toBe(headers.origin ? 403 : 400);
+  expect(deps.source.read).not.toHaveBeenCalled();
+  expect(stageProjectIntake).not.toHaveBeenCalled();
 });

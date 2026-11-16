@@ -31,11 +31,17 @@ function setup() {
           files: [
             {
               id: "f1",
+              client_id: "a",
               status: "pending",
               upload_url: "https://upload.example.test/secret",
               generation: "2",
             },
-            { id: "f2", status: "pending", upload_url: "https://upload.example.test/secret2" },
+            {
+              id: "f2",
+              client_id: "b",
+              status: "pending",
+              upload_url: "https://upload.example.test/secret2",
+            },
           ],
         }),
       ),
@@ -100,7 +106,6 @@ for (const failure of [
   "createIntake",
   "fetch",
   "completeIntakeFile",
-  "revokeManagerToken",
 ] as const) {
   it(`sanitizes ${failure} failure and revokes any minted token`, async () => {
     const deps = setup();
@@ -133,4 +138,110 @@ it("rejects an unsuccessful PUT and revokes the token", async () => {
   );
   expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
   expect(deps.source.revokeManagerToken).toHaveBeenCalledOnce();
+});
+it("maps reordered identities to distinct upload bytes and completion hashes", async () => {
+  const deps = setup();
+  deps.readArtifact.mockImplementation(async (_actor, { artifactId }) => ({
+    name: "file.txt",
+    mimeType: "text/plain",
+    contentBase64: Buffer.from(artifactId).toString("base64"),
+  }));
+  const intake = await deps.source.createIntake("project", [], "key", "token");
+  deps.source.createIntake.mockResolvedValue({ ...intake, files: [...intake.files].reverse() });
+  await stageProjectIntake(deps, actor, input);
+  for (const [index, id] of ["b", "a"].entries()) {
+    expect(deps.fetch.mock.calls[index]).toEqual([
+      intake.files.find((file) => file.client_id === id)!.upload_url,
+      expect.objectContaining({ body: Buffer.from(id) }),
+    ]);
+    expect(deps.source.completeIntakeFile.mock.calls[index]?.[2].expected_source_sha256).toBe(
+      createHash("sha256").update(id).digest("hex"),
+    );
+  }
+});
+it.each([undefined, "a", "unexpected"])(
+  "rejects invalid response identity %s before any PUT",
+  async (client_id) => {
+    const deps = setup();
+    const intake = await deps.source.createIntake("project", [], "key", "token");
+    intake.files[1]!.client_id = client_id;
+    deps.source.createIntake.mockResolvedValue(intake);
+    await expect(stageProjectIntake(deps, actor, input)).rejects.toThrow(
+      /^Intake staging unavailable$/,
+    );
+    expect(deps.fetch).not.toHaveBeenCalled();
+    expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
+  },
+);
+it("replays a second-file failure, then replays all-null URLs with the same summary", async () => {
+  const deps = setup();
+  deps.source.completeIntakeFile.mockResolvedValue({ status: "processing" });
+  deps.fetch
+    .mockResolvedValueOnce(new Response(null, { status: 200 }))
+    .mockResolvedValueOnce(new Response(null, { status: 403 }));
+  await expect(stageProjectIntake(deps, actor, input)).rejects.toThrow(
+    "Intake staging unavailable",
+  );
+  const intake = await deps.source.createIntake("project", [], "key", "token");
+  intake.files[0] = { ...intake.files[0]!, status: "processing", upload_url: null };
+  deps.source.createIntake.mockResolvedValue(intake);
+  deps.fetch.mockClear();
+  deps.source.completeIntakeFile.mockClear();
+  const summary = await stageProjectIntake(deps, actor, input);
+  expect(deps.fetch).toHaveBeenCalledOnce();
+  expect(deps.fetch.mock.calls[0]?.[0]).toBe(intake.files[1]!.upload_url);
+  expect(deps.source.completeIntakeFile).toHaveBeenCalledOnce();
+  expect(deps.source.completeIntakeFile.mock.calls[0]?.[1]).toBe("f2");
+  intake.files[1] = { ...intake.files[1]!, status: "processing", upload_url: null };
+  deps.fetch.mockClear();
+  deps.source.completeIntakeFile.mockClear();
+  expect(await stageProjectIntake(deps, actor, input)).toEqual(summary);
+  expect(deps.fetch).not.toHaveBeenCalled();
+  expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
+});
+it.each(["processing", "ready", "published", "pending", "failed"])(
+  "handles null URL in %s state",
+  async (status) => {
+    const deps = setup();
+    const intake = await deps.source.createIntake("project", [], "key", "token");
+    intake.files = intake.files.map((file) => ({ ...file, status, upload_url: null }));
+    deps.source.createIntake.mockResolvedValue(intake);
+    const result = stageProjectIntake(deps, actor, input);
+    if (["processing", "ready", "published"].includes(status))
+      expect(await result).toEqual({
+        intakeId: "intake",
+        files: intake.files.map(({ id }) => ({ id, status })),
+      });
+    else await expect(result).rejects.toThrow(/^Intake staging unavailable$/);
+    expect(deps.fetch).not.toHaveBeenCalled();
+    expect(deps.source.completeIntakeFile).not.toHaveBeenCalled();
+  },
+);
+it("preserves success when revocation fails", async () => {
+  const deps = setup();
+  deps.source.revokeManagerToken.mockRejectedValue(new Error("secret-token https://private.test"));
+  await expect(stageProjectIntake(deps, actor, input)).resolves.toEqual({
+    intakeId: "intake",
+    files: [
+      { id: "f1", status: "staged" },
+      { id: "f2", status: "staged" },
+    ],
+  });
+});
+it.each([
+  [49, 1],
+  [33, 33],
+])("rejects oversized files or totals before any PUT (%s MiB, %s MiB)", async (first, second) => {
+  const deps = setup();
+  for (const size of [first, second])
+    deps.readArtifact.mockResolvedValueOnce({
+      name: "file",
+      mimeType: "text/plain",
+      contentBase64: Buffer.alloc(size * 1024 * 1024).toString("base64"),
+    });
+  await expect(stageProjectIntake(deps, actor, input)).rejects.toThrow(
+    /^Intake staging unavailable$/,
+  );
+  expect(deps.fetch).not.toHaveBeenCalled();
+  expect(deps.source.managerServer).not.toHaveBeenCalled();
 });
