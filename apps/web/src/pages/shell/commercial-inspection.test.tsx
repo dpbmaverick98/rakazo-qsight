@@ -172,14 +172,17 @@ it("inspection navigation performs no network write or run request", async () =>
 });
 
 it.each([
-  ["support", "ready", "Support Ready"],
-  ["change_order", "parsing", "Change order Processing"],
-  ["unknown_role", "unknown_status", "Document"],
-  ["support", "uploading", "Support Uploading"],
-  ["support", "failed", "Support Failed"],
+  ["proposal", "ready", "Proposal", "Proposal Ready"],
+  ["breakdown", "ready", "Breakdown", "Breakdown Ready"],
+  ["invoice", "ready", "Invoices", "Invoice Ready"],
+  ["support", "ready", "Other", "Support Ready"],
+  ["change_order", "parsing", "Other", "Change order Processing"],
+  ["unknown_role", "unknown_status", "Other", "Document"],
+  ["support", "uploading", "Other", "Support Uploading"],
+  ["support", "failed", "Other", "Support Failed"],
 ])(
   "labels %s/%s consistently in document rows and the preview header",
-  async (role, status, label) => {
+  async (role, status, category, label) => {
     const view = await mount();
     try {
       const data = structuredClone(commercialDocumentsFixture);
@@ -189,7 +192,7 @@ it.each([
       await view.render({ data });
       await view.click("Finishes");
       await view.click("Example Interiors");
-      await view.click("Other");
+      await view.click(category);
       const row = view.button(file.filename).closest("li")!;
       expect(row.querySelector("p")?.textContent).toBe(label);
       expect(row.textContent).not.toContain(role);
