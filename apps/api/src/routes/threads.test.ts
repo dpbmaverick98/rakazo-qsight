@@ -289,7 +289,7 @@ function intakeFixture(spawnKey = "pm:roof") {
 }
 
 describe("PM chat attachment intake", () => {
-  it("stages once before the model turn and keeps the note out of stored blocks", async () => {
+  it("stages once before the model turn and persists the note as internal context", async () => {
     const f = intakeFixture();
     await f.send(["artifact-1"]);
     expect(f.stageProjectIntake).toHaveBeenCalledExactlyOnceWith(actor, {
@@ -308,7 +308,12 @@ describe("PM chat attachment intake", () => {
       }),
     );
     expect(f.tx.message.create.mock.calls[0]?.[0].data.blocks).toEqual([
-      { kind: "text", text: "Review this" },
+      {
+        kind: "text",
+        text: "Review this",
+        inspectionContext:
+          "Attached files were received for review in Vendor One intake intake-1 (1 files). Acknowledge receipt for review and ask one question at a time. Do not claim the documents are published or approved.",
+      },
       {
         kind: "file",
         artifactId: "artifact-1",

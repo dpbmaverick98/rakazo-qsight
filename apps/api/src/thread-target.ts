@@ -681,11 +681,12 @@ export async function sendThreadMessage(
           input.text,
           sendAttachmentBlocks(attachmentBlocks, artifacts, input.imageHandling),
         );
-        if (input.inspection) {
+        const context = [input.inspection?.prompt, input.stagingNote].filter(Boolean).join("\n\n");
+        if (context) {
           // Persist beside this message so new turns, history and steering share one snapshot.
           const textBlock = blocks.find((block) => block.kind === "text");
-          if (textBlock) Object.assign(textBlock, { inspectionContext: input.inspection.prompt });
-          else blocks.push({ kind: "text", text: "", inspectionContext: input.inspection.prompt });
+          if (textBlock) Object.assign(textBlock, { inspectionContext: context });
+          else blocks.push({ kind: "text", text: "", inspectionContext: context });
         }
         const message = await createThreadMessageInTransaction(tx, {
           threadId: target.threadId,

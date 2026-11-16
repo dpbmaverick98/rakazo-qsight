@@ -1,6 +1,6 @@
 import type { SandboxProvider } from "@rakazo/adapter-kit";
 import type { Actor, MessageBlock } from "@rakazo/contracts";
-import { callClientNonce } from "@rakazo/core";
+import { blocksToAgentHistoryText, callClientNonce } from "@rakazo/core";
 import type * as MessageQuoteModule from "@rakazo/core/message-quote";
 import type { PrismaClient } from "@rakazo/db";
 import { describe, expect, it, vi } from "vitest";
@@ -2695,6 +2695,39 @@ describe("sendThreadMessage", () => {
       trigger: "user",
       userId: "user-1",
     };
+
+    it.each([
+      ["success", "Review the files", "Staged files: receipt-1. Use the staged copies."],
+      ["failure", "Review the files", "Staging failed. Ask the user to retry."],
+      ["note-only", "", "Staged files: receipt-1. Use the staged copies."],
+    ])(
+      "persists the %s staging note when steering an active run",
+      async (_case, text, stagingNote) => {
+        const { tx, prisma } = busyThread([{ ...ownerRun, status: "running" }]);
+        await expect(
+          sendThreadMessage(
+            {
+              prisma,
+              sandbox: {} as never,
+              events: { notify: vi.fn().mockResolvedValue(undefined) } as never,
+              jobs: { enqueue: vi.fn().mockResolvedValue(undefined) } as never,
+            },
+            { spaceId: "workspace-1", userId: "user-1" } as Actor,
+            botTarget,
+            { text, stagingNote },
+          ),
+        ).resolves.toMatchObject({ runId: "run-owner" });
+        const blocks = tx.message.create.mock.calls[0]![0].data.blocks as MessageBlock[];
+        expect(blocks).toEqual([{ kind: "text", text, inspectionContext: stagingNote }]);
+        expect(blocksToAgentHistoryText(blocks)).toBe(
+          [text, stagingNote].filter(Boolean).join("\n\n"),
+        );
+        expect(tx.steeringMessage.create).toHaveBeenCalledWith({
+          data: { messageId: "msg-1", botId: "bot-a", userId: "user-1", runId: "run-owner" },
+        });
+        expect(tx.run.create).not.toHaveBeenCalled();
+      },
+    );
 
     it.each([
       ["bot", botTarget],

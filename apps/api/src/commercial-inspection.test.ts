@@ -254,7 +254,11 @@ it.each(["new", "steering", "waiting", "ordinary", "stale-at-commit", "changed-b
       },
       actor,
       target,
-      { text: "Review this", inspection: mode === "ordinary" ? undefined : inspection },
+      {
+        text: "Review this",
+        inspection: mode === "ordinary" ? undefined : inspection,
+        stagingNote: mode === "steering" ? "Staged receipt-1." : undefined,
+      },
     );
     if (mode === "stale-at-commit" || mode === "changed-bot") {
       await expect(send).rejects.toMatchObject({
@@ -275,10 +279,12 @@ it.each(["new", "steering", "waiting", "ordinary", "stale-at-commit", "changed-b
       expect(f.tx.task.create.mock.calls[0]![0]).toMatchObject({ data: { prompt: "Review this" } });
       return;
     }
-    expect(blocksToAgentHistoryText(blocks)).toContain(inspection.prompt);
-    expect(blocksToAgentHistorySegments(blocks)).toEqual([
-      { text: `Review this\n\n${inspection.prompt}` },
-    ]);
+    const context = [inspection.prompt, mode === "steering" ? "Staged receipt-1." : undefined]
+      .filter(Boolean)
+      .join("\n\n");
+    expect(blocks).toEqual([{ kind: "text", text: "Review this", inspectionContext: context }]);
+    expect(blocksToAgentHistoryText(blocks)).toContain(context);
+    expect(blocksToAgentHistorySegments(blocks)).toEqual([{ text: `Review this\n\n${context}` }]);
     if (mode === "new")
       expect(f.tx.task.create.mock.calls[0]![0]).toMatchObject({
         data: { prompt: `Review this\n\n${inspection.prompt}` },
