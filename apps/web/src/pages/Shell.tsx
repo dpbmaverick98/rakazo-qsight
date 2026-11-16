@@ -600,7 +600,7 @@ function SpaceShell() {
       sidebarSpaces.findIndex((space) => space.id === (shellSpaceId ?? bootstrapMe?.spaceId))
     ];
   const resolvedProject = resolveProjectManager(
-    clientNavigation?.isError ? null : clientNavigation?.data,
+    clientNavigation?.data,
     inGroup ? undefined : active?.id,
   );
   const projectSelection = resolvedProject
