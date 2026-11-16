@@ -183,6 +183,7 @@ export function createBackgroundJobHandlers(deps: {
             "The client binding is missing. Ask the client administrator to bind this workspace.",
           binding_stale: "The client binding changed. Refresh the project and try again.",
           project_unavailable: "The project is unavailable. Refresh the project and try again.",
+          space_unavailable: "The workspace is unavailable. Refresh the workspace and try again.",
           disabled: "File staging is unavailable. Please try again later.",
         };
         const advice = Object.hasOwn(guidance, category) ? guidance[category] : undefined;

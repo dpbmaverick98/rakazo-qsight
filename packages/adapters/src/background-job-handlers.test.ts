@@ -703,13 +703,20 @@ describe("project intake staging", () => {
     ["binding_missing", "binding is missing"],
     ["binding_stale", "binding changed"],
     ["project_unavailable", "project is unavailable"],
+    ["space_unavailable", "workspace is unavailable"],
+    ["disabled", "staging is unavailable"],
     ["private-id https://private.invalid/token", "retry"],
     ["constructor", "retry"],
   ])("posts safe guidance for %s", async (category, guidance) => {
     const { stage, tx } = fixture(async () => {
       throw new Error(category);
     });
-    await stage(payload);
+    await stage(payload, undefined, {
+      number: ["private-id https://private.invalid/token", "constructor"].includes(category)
+        ? 8
+        : 1,
+      max: 8,
+    });
     const message = JSON.stringify(tx.event.create.mock.calls);
     expect(message).toContain(guidance);
     expect(message).toContain("do not claim review");

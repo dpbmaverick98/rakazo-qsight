@@ -218,8 +218,11 @@ describe("PM attachment staging on send", () => {
     const jobs = { enqueue: vi.fn(async (_job: unknown) => undefined) };
     const procedure = { handler: (handler: unknown) => handler };
     const authed = new Proxy({}, { get: () => new Proxy({}, { get: () => procedure }) });
+    const findUnique = vi.fn().mockResolvedValue({
+      blocks: [{ kind: "file", artifactId: "file", name: "file", mimeType: "text/plain", size: 1 }],
+    });
     const routes = threadsRoutes({
-      deps: { jobs, env: {}, prisma: {} },
+      deps: { jobs, env: {}, prisma: { message: { findUnique } } },
       authed,
       callsEnabled: authed,
     } as unknown as RouterContext);
@@ -229,6 +232,7 @@ describe("PM attachment staging on send", () => {
     }) => Promise<unknown>;
     return {
       jobs,
+      findUnique,
       send: (input: { artifactIds?: string[]; clientNonce?: string } = {}) =>
         send({
           context: { actor },
@@ -266,6 +270,7 @@ describe("PM attachment staging on send", () => {
         idempotencyKey: "nonce",
       },
       replaceKey: "project.intake.stage:thread:nonce",
+      keepExisting: true,
       maxAttempts: 8,
     });
   });
@@ -275,6 +280,28 @@ describe("PM attachment staging on send", () => {
     await send({ artifactIds: ["file"], clientNonce: "nonce" });
     expect(jobs.enqueue.mock.calls[0]).toEqual(jobs.enqueue.mock.calls[1]);
   });
+  it("does not stage request artifacts when replaying a text-only nonce", async () => {
+    const { send, jobs, findUnique } = fixture();
+    findUnique.mockResolvedValue({ blocks: [{ kind: "text", text: "Hello" }] });
+    await send({ artifactIds: ["unexpected"], clientNonce: "nonce" });
+    expect(jobs.enqueue).not.toHaveBeenCalled();
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { threadId_clientNonce: { threadId: "thread", clientNonce: "nonce" } },
+      select: { blocks: true },
+    });
+  });
+  it.each([["different"], undefined])(
+    "stages persisted attachments on replay with request IDs %s",
+    async (artifactIds) => {
+      const { send, jobs } = fixture();
+      await send({ artifactIds, clientNonce: "nonce" });
+      expect(jobs.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ artifactIds: ["file"] }),
+        }),
+      );
+    },
+  );
   it("generates a submission key when the caller has no nonce", async () => {
     const { send, jobs } = fixture();
     await send({ artifactIds: ["file"] });

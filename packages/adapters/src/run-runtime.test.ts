@@ -217,7 +217,7 @@ describe("runtime project intake composition", () => {
       "project_unavailable",
     );
     prisma.artifact.findFirst.mockResolvedValueOnce(null as never);
-    await expect(callback!(payload)).rejects.toThrow("Intake staging unavailable");
+    await expect(callback!(payload)).rejects.toThrow("forbidden");
     expect(source.createIntake).not.toHaveBeenCalled();
   });
 });

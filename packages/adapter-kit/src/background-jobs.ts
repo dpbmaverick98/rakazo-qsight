@@ -395,6 +395,7 @@ export function projectIntakeStageJob(
     name: "project.intake.stage",
     payload,
     replaceKey: `project.intake.stage:${payload.threadId}:${payload.idempotencyKey}`,
+    keepExisting: true,
     maxAttempts: 8,
   };
 }

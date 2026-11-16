@@ -279,3 +279,19 @@ it.each([
   expect(deps.fetch).not.toHaveBeenCalled();
   expect(deps.source.managerServer).not.toHaveBeenCalled();
 });
+
+it.each([
+  "forbidden",
+  "personal",
+  "unbound",
+  "binding_missing",
+  "binding_stale",
+  "project_unavailable",
+  "space_unavailable",
+  "disabled",
+])("preserves permanent staging category %s", async (category) => {
+  const deps = setup();
+  const error = new Error(category);
+  deps.source.managerServer.mockRejectedValueOnce(error);
+  await expect(stageProjectIntake(deps, actor, input)).rejects.toBe(error);
+});

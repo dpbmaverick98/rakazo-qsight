@@ -281,6 +281,7 @@ it("validates, keys and dispatches project intake staging", async () => {
     name: "project.intake.stage",
     payload,
     replaceKey: "project.intake.stage:thread:nonce",
+    keepExisting: true,
     maxAttempts: 8,
   });
   const target = handlers();

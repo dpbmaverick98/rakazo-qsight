@@ -3,6 +3,7 @@ import { ORPCError } from "@orpc/server";
 import { createAdapterContext, projectIntakeStageJob, runJobKey } from "@rakazo/adapter-kit";
 import { getActiveTeachingSession, settleCallRequest, wakeRun } from "@rakazo/adapters";
 import type { Actor } from "@rakazo/contracts";
+import { MessageBlock } from "@rakazo/contracts";
 import type { CommercialInspectionSelection } from "@rakazo/contracts/project-commercial";
 import {
   AttachmentValidationError,
@@ -177,23 +178,42 @@ export function threadsRoutes(ctx: RouterContext) {
       }
       throw error;
     });
-    if (stagingNote && projectId && target.kind === "bot") {
-      await deps.jobs
-        .enqueue(
-          projectIntakeStageJob({
-            spaceId: actor.spaceId,
-            userId: actor.userId,
-            botId: target.botId,
-            threadId: target.threadId,
-            artifactIds: input.artifactIds!,
-            projectId,
-            projectName: target.bot.name,
-            idempotencyKey: input.clientNonce ?? randomUUID(),
-          }),
-        )
-        .catch(() => {
-          getLogger().warn("Project intake staging enqueue failed");
-        });
+    if (projectId && target.kind === "bot") {
+      // Without a nonce there is no persisted send receipt to recover on replay;
+      // use this request's attachments and a fresh submission key.
+      const message = input.clientNonce
+        ? await deps.prisma.message.findUnique({
+            where: {
+              threadId_clientNonce: { threadId: target.threadId, clientNonce: input.clientNonce },
+            },
+            select: { blocks: true },
+          })
+        : null;
+      const artifactIds = input.clientNonce
+        ? MessageBlock.array()
+            .parse(message?.blocks ?? [])
+            .flatMap((block) =>
+              block.kind === "file" || block.kind === "image" ? [block.artifactId] : [],
+            )
+        : input.artifactIds;
+      if (artifactIds?.length) {
+        await deps.jobs
+          .enqueue(
+            projectIntakeStageJob({
+              spaceId: actor.spaceId,
+              userId: actor.userId,
+              botId: target.botId,
+              threadId: target.threadId,
+              artifactIds,
+              projectId,
+              projectName: target.bot.name,
+              idempotencyKey: input.clientNonce ?? randomUUID(),
+            }),
+          )
+          .catch(() => {
+            getLogger().warn("Project intake staging enqueue failed");
+          });
+      }
     }
     return result;
   };

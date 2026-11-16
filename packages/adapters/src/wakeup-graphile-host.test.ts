@@ -4,6 +4,7 @@ import {
   HISTORY_COMPACT_MAX_ATTEMPTS,
   historyCompactJob,
   messagingReplyJob,
+  projectIntakeStageJob,
   teamChatAmbientJob,
 } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
@@ -233,6 +234,43 @@ describe("GraphileJobPublisher.enqueue", () => {
     } as never);
     return { publisher: new GraphileJobPublisher({} as Pool), ...graphile };
   }
+
+  it.each([
+    ["queued", 0, undefined],
+    ["backed-off", 2, undefined],
+    ["locked", 1, new Date("2030-01-01T00:00:00Z")],
+  ] as const)(
+    "preserves a %s intake job when replayed through the factory",
+    async (_state, attempts, lockedAt) => {
+      const job = projectIntakeStageJob({
+        spaceId: "space",
+        userId: "user",
+        botId: "bot",
+        threadId: "thread",
+        projectId: "project",
+        projectName: "Project",
+        artifactIds: ["stored"],
+        idempotencyKey: "nonce",
+      });
+      const existing = {
+        attempts,
+        maxAttempts: 8,
+        runAt: new Date("2030-01-02T00:00:00Z"),
+        lockedAt,
+      };
+      const jobs = new Map([[job.replaceKey!, existing]]);
+      const { publisher, addJob } = publisherOver(jobs);
+      await publisher.enqueue(job);
+      expect(job.keepExisting).toBe(true);
+      expect(addJob).toHaveBeenCalledWith(
+        job.name,
+        expect.anything(),
+        expect.objectContaining({ jobKeyMode: "unsafe_dedupe" }),
+      );
+      expect(jobs.get(job.replaceKey!)).toEqual(existing);
+      await publisher.close();
+    },
+  );
 
   it("keeps attempts and run_at while a keyed job still has attempts left", async () => {
     const runAt = new Date("2030-01-01T00:00:00.000Z");
