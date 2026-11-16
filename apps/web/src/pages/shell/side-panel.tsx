@@ -23,6 +23,7 @@ import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
 import { ProjectStage, useHierarchy } from "./hierarchy-rail";
+import { FinishSetupAction } from "./project-manager";
 import { firstThreadRoute } from "./use-shell-navigation";
 
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
@@ -157,6 +158,24 @@ export function ShellSidePanel({
 
   return (
     <>
+      {hierarchy.data?.canManage &&
+      active?.spawnKey === `setup:${hierarchy.data.client.id}` &&
+      hierarchy.data.buildings.flatMap((building) => building.projects).length > 1 &&
+      hierarchyScope.spaceId ? (
+        <div className="absolute end-3 top-14 z-10">
+          <FinishSetupAction
+            key={`${active.id}:${hierarchy.data.bindingRevision}`}
+            hierarchy={hierarchy.data}
+            spaceId={hierarchyScope.spaceId}
+            onOpenBot={openCreatedBot}
+            onChanged={() => {
+              void refreshBots();
+              void hierarchy.refetch();
+              retryNavigation?.();
+            }}
+          />
+        </div>
+      ) : null}
       {!open && projectOpener ? (
         <div className="absolute end-3 top-14 z-10">{projectOpener}</div>
       ) : null}

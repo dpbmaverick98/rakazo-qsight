@@ -1,6 +1,11 @@
 import type { Prisma } from "@rakazo/db";
 import { expect, it, vi } from "vitest";
-import { bindingAccess, boundHierarchy, resolveClientBinding } from "./space-client-binding.js";
+import {
+  bindingAccess,
+  boundHierarchy,
+  canManageClientBinding,
+  resolveClientBinding,
+} from "./space-client-binding.js";
 
 const actor = {
   userId: "user",
@@ -79,4 +84,16 @@ it("does not return hierarchy data when Space deletion starts during the upstrea
     },
   };
   await expect(boundHierarchy(typed, actor, source)).rejects.toThrow("space_unavailable");
+});
+
+it("capability probes preserve Space state and database errors", async () => {
+  const { db, typed, space } = setup();
+  space.isDefault = true;
+  await expect(canManageClientBinding(typed, actor)).rejects.toThrow("personal");
+  space.isDefault = false;
+  space.deletingAt = new Date() as never;
+  await expect(canManageClientBinding(typed, actor)).rejects.toThrow("space_unavailable");
+  const error = new Error("database unavailable");
+  db.spaceMember.findUnique.mockRejectedValueOnce(error);
+  await expect(canManageClientBinding(typed, actor)).rejects.toBe(error);
 });

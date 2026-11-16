@@ -187,6 +187,7 @@ import { createAuthResponseAudit } from "./security-audit.js";
 import { mountSharedPages } from "./shared-pages.js";
 import {
   bindingAccess,
+  canManageClientBinding,
   changeClientBinding,
   resolveClientBinding,
 } from "./space-client-binding.js";
@@ -1057,14 +1058,14 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
           )
       : undefined,
     projectManager: hierarchySource
-      ? async (actor, project, revision, finishSetup) => {
+      ? async (actor, project, revision, finishSetup, automatic) => {
           const client = createRouterClient(router, { context: { actor } });
           const { bot } = await client.mcp.servers.provisionProjectManager({
             projectId: project.id,
             projectName: project.name,
-            clientName: "",
             bindingRevision: revision,
             finishSetup,
+            automatic,
           });
           return bot.id;
         }
@@ -1090,10 +1091,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
         }
       : undefined,
     canCreateProject: async (actor) =>
-      runAsTenant(actor, async () => {
-        await bindingAccess(prisma, actor, true);
-        return true;
-      }),
+      runAsTenant(actor, () => canManageClientBinding(prisma, actor)),
     trustedOrigin: (origin) => isTrustedOrigin(origin, env),
     changed: async (actor) => {
       await events.publishRosterChange?.({ spaceIds: [actor.spaceId] });

@@ -3,7 +3,7 @@ import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture"
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ProjectManagerAction } from "./project-manager";
+import { FinishSetupAction, ProjectManagerAction } from "./project-manager";
 
 const mocks = vi.hoisted(() => ({ navigate: vi.fn(), provision: vi.fn(), rpcForSpace: vi.fn() }));
 vi.mock("react-router-dom", () => ({ useNavigate: () => mocks.navigate }));
@@ -121,4 +121,56 @@ it("refreshes the hierarchy only after successful setup provisioning", async () 
   expect(changed).not.toHaveBeenCalled();
   await view.click();
   expect(changed).toHaveBeenCalledOnce();
+});
+
+it("requires a project choice before explicitly finishing multi-project setup", async () => {
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const changed = vi.fn();
+  const opened = vi.fn();
+  await act(async () =>
+    root.render(
+      <FinishSetupAction
+        spaceId="space"
+        hierarchy={{
+          client: { id: "client", name: "Example Client" },
+          bindingRevision: 3,
+          canManage: true,
+          buildings: [
+            {
+              id: "building",
+              name: "Building",
+              projects: [
+                { id: "roof", name: "Roof survey", url: "https://example.test/roof" },
+                { id: "second", name: "Second", url: "https://example.test/second" },
+              ],
+            },
+          ],
+        }}
+        onChanged={changed}
+        onOpenBot={opened}
+      />,
+    ),
+  );
+  close = async () => {
+    await act(async () => root.unmount());
+  };
+  expect(container.querySelector("button")).toBeNull();
+  expect(mocks.provision).not.toHaveBeenCalled();
+  await act(async () => {
+    const select = container.querySelector("select")!;
+    select.value = "second";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(container.querySelector("button")!.textContent).toBe("Finish setup");
+  await act(async () => container.querySelector("button")!.click());
+  expect(mocks.provision).toHaveBeenCalledExactlyOnceWith({
+    projectId: "second",
+    projectName: "Second",
+    clientName: "Example Client",
+    bindingRevision: 3,
+    finishSetup: true,
+  });
+  expect(changed).toHaveBeenCalledOnce();
+  expect(opened).toHaveBeenCalledWith({ id: "pm" });
 });

@@ -47,9 +47,10 @@ export function mountHierarchyRoute(
     ) => Promise<string>;
     projectManager?: (
       actor: Actor,
-      project: CreatedProject,
+      project: Pick<CreatedProject, "id" | "name">,
       revision: number,
       finishSetup: boolean,
+      automatic?: boolean,
     ) => Promise<string>;
     retireProject?: (actor: Actor, projectId: string, revision: number) => Promise<void>;
     auditProject?: (actor: Actor, projectId: string, action: "rename" | "delete") => Promise<void>;
@@ -102,6 +103,24 @@ export function mountHierarchyRoute(
       throw new ORPCError("BAD_GATEWAY", { message: "binding_mismatch" });
     await deps.resolveBinding(actor, binding.revision);
     return { hierarchy, binding };
+  };
+  // Reconcile external tool-created projects as well as projects created through this API.
+  const finishSingleProject = async (
+    actor: Actor,
+    hierarchy: Hierarchy,
+    binding: ClientBinding,
+  ) => {
+    const projects = hierarchy.buildings.flatMap((building) => building.projects);
+    if (projects.length !== 1 || !deps.projectManager || !(await deps.canCreateProject?.(actor)))
+      return;
+    const bots = await deps.navigationBots?.(actor);
+    if (
+      !bots?.some((bot) => bot.spawnKey === `setup:${binding.externalClientId}`) ||
+      bots.some((bot) => bot.spawnKey === `pm:${projects[0]!.id}`)
+    )
+      return;
+    await deps.projectManager(actor, projects[0]!, binding.revision, true, true);
+    await deps.changed?.(actor);
   };
   app.post("/api/agent-plane/clients", async (c) => {
     c.header("Cache-Control", "no-store");
@@ -406,6 +425,7 @@ export function mountHierarchyRoute(
         actor,
         revision === undefined ? undefined : Number(revision),
       );
+      await finishSingleProject(actor, hierarchy, binding);
       const buildingIds = new Set<string>();
       const projectIds = new Set<string>();
       for (const building of hierarchy.buildings) {
@@ -467,6 +487,7 @@ export function mountHierarchyRoute(
         actor,
         revision === undefined ? undefined : Number(revision),
       );
+      await finishSingleProject(actor, hierarchy, binding);
       c.header("x-rakazo-binding-revision", String(binding.revision));
       return c.json({
         ...hierarchy,

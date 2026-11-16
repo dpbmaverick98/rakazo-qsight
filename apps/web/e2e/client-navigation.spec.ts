@@ -151,3 +151,62 @@ test("client sidebar keeps PM scope, search context and reversible archive", asy
     sidebar.locator(`[data-sidebar-group$=":building:north"] [data-roster-bot-id="${manager.id}"]`),
   ).toHaveCount(1);
 });
+
+test("setup PM requires an explicit project choice when several projects exist", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await signup(page, `finish-setup-${Date.now()}@rakazo.test`, "password12", "Test User");
+  await completeOnboarding(page);
+  const space = await rpc<{ id: string }>(page, "spaces/create", { name: "Example Client" });
+  await page.evaluate((id) => localStorage.setItem("rakazo:space-id", id), space.id);
+  const response = await page.request.post("/rpc/bots/create", {
+    headers: { "x-rakazo-space-id": space.id },
+    data: {
+      json: { name: "Proj. Manager - Sam", spawnKey: "setup:client", notifyOnFinish: false },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+  const { json: bot } = (await response.json()) as { json: { id: string } };
+  const client = { id: "client", name: "Example Client" };
+  const projects = [
+    { id: "roof", name: "Roof survey", url: "https://example.test/roof" },
+    { id: "lobby", name: "Lobby", url: "https://example.test/lobby" },
+  ];
+  await page.route("**/api/agent-plane/hierarchy", (route) =>
+    route.fulfill({
+      json: {
+        client,
+        bindingRevision: 1,
+        canManage: true,
+        buildings: [{ id: "building", name: "North Building", projects }],
+      },
+    }),
+  );
+  await page.route("**/api/agent-plane/navigation", (route) =>
+    route.request().headers()["x-rakazo-space-id"] === space.id
+      ? route.fulfill({
+          json: {
+            spaceId: space.id,
+            bindingRevision: 1,
+            client,
+            setupBotIds: [bot.id],
+            buildings: [
+              {
+                id: "building",
+                name: "North Building",
+                projects: projects.map((project) => ({ ...project, botIds: [] })),
+              },
+            ],
+          },
+        })
+      : route.fulfill({ status: 204 }),
+  );
+  await page.goto(`/app/${bot.id}`);
+  const choice = page.getByRole("combobox", { name: "Project", exact: true });
+  await expect(choice).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Finish setup", exact: true })).toHaveCount(0);
+  await choice.selectOption("lobby");
+  await expect(page.getByRole("button", { name: "Finish setup", exact: true })).toBeVisible();
+  await captureScreenshot(page, testInfo, "setup-pm-project-choice");
+});

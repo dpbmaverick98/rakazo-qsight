@@ -1,8 +1,10 @@
 import { ORPCError } from "@orpc/server";
 import { commercialFixture } from "@rakazo/contracts/project-commercial-fixture";
+import type { Prisma } from "@rakazo/db";
 import { Hono } from "hono";
 import { expect, it, vi } from "vitest";
 import { mountHierarchyRoute } from "./hierarchy.js";
+import { canManageClientBinding } from "./space-client-binding.js";
 
 const actor = {
   userId: "user",
@@ -21,8 +23,9 @@ const data = {
     },
   ],
 };
-function setup() {
+function setup(projectManager?: Parameters<typeof mountHierarchyRoute>[1]["projectManager"]) {
   const deps = {
+    projectManager,
     sessionActor: vi.fn(async () => actor as typeof actor | null),
     resolveBinding: vi.fn(async (_actor: typeof actor, _revision?: number) => binding),
     navigationBots: vi.fn(async () => [
@@ -561,3 +564,112 @@ it("authenticates previews, delegates manager ancestry checks, and strips upstre
   deps.resolveBinding.mockRejectedValueOnce(new ORPCError("CONFLICT"));
   expect((await request()).status).toBe(409);
 });
+
+it.each(["navigation", "hierarchy"])(
+  "automatically finishes a sole project's setup on %s load and stops after promotion",
+  async (path) => {
+    const promote = vi.fn(async () => "setup");
+    const { app, deps } = setup(promote);
+    const bots = [{ id: "setup", spawnKey: "setup:client" }];
+    deps.navigationBots.mockImplementation(async () => bots);
+    promote.mockImplementation(async () => {
+      bots[0]!.spawnKey = "pm:roof";
+      return "setup";
+    });
+    const response = await app.request(`/api/agent-plane/${path}`);
+    expect(response.status).toBe(200);
+    expect(promote).toHaveBeenCalledExactlyOnceWith(
+      actor,
+      data.buildings[0]!.projects[0],
+      1,
+      true,
+      true,
+    );
+    if (path === "navigation")
+      expect(await response.json()).toMatchObject({
+        setupBotIds: [],
+        buildings: [{ id: "building", projects: [{ id: "roof", botIds: ["setup"] }] }],
+      });
+    await app.request(`/api/agent-plane/${path}`);
+    expect(promote).toHaveBeenCalledOnce();
+    expect(deps.changed).toHaveBeenCalledOnce();
+  },
+);
+it.each(["multiple", "none", "member", "assigned"])(
+  "does not automatically finish setup for %s",
+  async (condition) => {
+    const promote = vi.fn(async () => "setup");
+    const { app, deps } = setup(promote);
+    deps.navigationBots.mockResolvedValue([{ id: "setup", spawnKey: "setup:client" }]);
+    if (condition === "multiple" || condition === "none")
+      deps.source.read.mockResolvedValue({
+        ...data,
+        buildings: [
+          {
+            ...data.buildings[0]!,
+            projects:
+              condition === "none"
+                ? []
+                : [
+                    ...data.buildings[0]!.projects,
+                    { id: "second", name: "Second", url: "https://example.test/second" },
+                  ],
+          },
+        ],
+      });
+    if (condition === "member") deps.canCreateProject.mockResolvedValue(false);
+    if (condition === "assigned")
+      deps.navigationBots.mockResolvedValue([
+        { id: "setup", spawnKey: "setup:client" },
+        { id: "assigned", spawnKey: "pm:roof" },
+      ]);
+    for (const path of ["hierarchy", "navigation"])
+      expect((await app.request(`/api/agent-plane/${path}`)).status).toBe(200);
+    expect(promote).not.toHaveBeenCalled();
+    expect(deps.changed).not.toHaveBeenCalled();
+  },
+);
+
+it("finishes setup after creating the first project", async () => {
+  const manager = vi.fn(async () => "setup");
+  const { app, deps } = setup(manager);
+  deps.source.read.mockResolvedValue({
+    ...data,
+    buildings: [{ ...data.buildings[0]!, projects: [] }],
+  });
+  const response = await app.request("/api/agent-plane/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ buildingId: "building", name: "New" }),
+  });
+  expect(response.status).toBe(201);
+  expect(await response.json()).toMatchObject({ id: "new", botId: "setup" });
+  expect(manager).toHaveBeenCalledExactlyOnceWith(
+    actor,
+    expect.objectContaining({ id: "new" }),
+    1,
+    true,
+  );
+});
+
+it.each(["member", "owner", "admin"])(
+  "uses production binding permissions for %s navigation and hierarchy reconciliation",
+  async (role) => {
+    for (const path of ["navigation", "hierarchy"]) {
+      const promote = vi.fn(async () => "setup");
+      const { app, deps } = setup(promote);
+      const db = {
+        spaceMember: { findUnique: vi.fn(async () => ({ role })) },
+        space: { findUnique: vi.fn(async () => ({ id: "space", isDefault: false })) },
+      } as unknown as Prisma.TransactionClient;
+      deps.canCreateProject.mockImplementation(() => canManageClientBinding(db, actor));
+      deps.navigationBots.mockResolvedValue([{ id: "setup", spawnKey: "setup:client" }]);
+      const response = await app.request(`/api/agent-plane/${path}`);
+      expect(response.status).toBe(200);
+      if (path === "hierarchy")
+        expect(await response.json()).toMatchObject({ canManage: role !== "member" });
+      expect(promote).toHaveBeenCalledTimes(role === "member" ? 0 : 1);
+      expect(deps.changed).toHaveBeenCalledTimes(role === "member" ? 0 : 1);
+    }
+  },
+);
