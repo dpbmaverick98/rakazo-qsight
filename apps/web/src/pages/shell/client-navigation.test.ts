@@ -1,7 +1,11 @@
 import type { Space } from "@rakazo/contracts";
 import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
 import { describe, expect, it } from "vitest";
-import { clientNavigationGroups } from "./client-navigation";
+import {
+  clientNavigationGroups,
+  resolveProjectManager,
+  unavailableClientNavigation,
+} from "./client-navigation";
 import { sidebarGroupsForSpaces } from "./space-sidebar";
 
 const bots = ["manager", "setup", "legacy"].map((id) => ({
@@ -34,31 +38,26 @@ const groups = () => sidebarGroupsForSpaces([space], "");
 describe("canonical client navigation", () => {
   it("groups pinned PMs once, retains empty nodes and collapses legacy bots", () => {
     const result = clientNavigationGroups(groups(), navigation, "");
-    expect(result.map((group) => group.title)).toEqual([
-      "Client",
-      "North",
-      "Roof",
-      "Empty",
-      "Pinned",
-    ]);
-    expect(result.map((group) => group.depth)).toEqual([0, 1, 2, 2, 1]);
+    expect(result.map((group) => group.title)).toEqual(["Client", "North", "Pinned"]);
+    expect(result.map((group) => group.depth)).toEqual([0, 1, 1]);
     expect(result.flatMap((group) => group.bots.map((item) => item.chat.id))).toEqual([
       "setup",
       "manager",
       "legacy",
     ]);
+    expect(result[0]?.bots[0]?.chat.name).toBe("Proj. Manager - Sam");
     expect(result.at(-1)?.defaultCollapsed).toBe(true);
-    expect(result.find((group) => group.title === "Roof")?.bots[0]?.chat.unread).toBe(true);
+    expect(result.find((group) => group.title === "North")?.bots[0]?.chat.unread).toBe(true);
   });
   it("shows ancestor context for bot, project and building searches", () => {
-    for (const query of ["manager", "Roof", "North"]) {
+    for (const query of ["manager", "Roof", "North", "Roof - PM"]) {
       const filtered = sidebarGroupsForSpaces([space], query);
       const result = clientNavigationGroups(filtered, navigation, query, groups());
       expect(result.map((group) => group.title)).toContain("Client");
       expect(result.map((group) => group.title)).toContain("North");
-      expect(result.map((group) => group.title)).toContain("Roof");
+      expect(result.find((group) => group.title === "North")?.bots[0]?.chat.name).toBe("Roof - PM");
       expect(result.every((group) => group.forceOpen)).toBe(true);
-      expect(result.find((group) => group.title === "Roof")?.bots[0]?.chat.id).toBe("manager");
+      expect(result.find((group) => group.title === "North")?.bots[0]?.chat.id).toBe("manager");
     }
   });
   it("keys expansion by Space and binding revision rather than labels", () => {
@@ -89,7 +88,7 @@ describe("canonical client navigation", () => {
     );
     expect(
       result
-        .filter((group) => group.project)
+        .filter((group) => group.buildingId)
         .flatMap((group) => group.bots.map((item) => item.chat.id)),
     ).toEqual(["legacy", "manager"]);
   });
@@ -138,29 +137,57 @@ describe("canonical client navigation", () => {
   });
 });
 
-it("places a building manager once while setup stays at the client, then moves the manager on promotion", () => {
+it("keeps legacy building conversations out of project headings, then places the promoted PM once", () => {
   const building = navigation.buildings[0]!;
   const before = clientNavigationGroups(
     groups(),
     { ...navigation, buildings: [{ ...building, botIds: ["manager"], projects: [] }] },
     "",
   );
-  expect(
-    before.find((group) => group.title === "Client")?.bots.map((item) => item.chat.id),
-  ).toEqual(["setup"]);
   expect(before.find((group) => group.title === "North")).toMatchObject({
     buildingId: "building",
-    canOpenSpaceSettings: true,
+    canOpenSpaceSettings: false,
+    bots: [],
   });
-  for (const [result, title] of [
-    [before, "North"],
-    [clientNavigationGroups(groups(), navigation, ""), "Roof"],
-  ] as const) {
-    expect(result.find((group) => group.title === title)?.bots.map((item) => item.chat.id)).toEqual(
-      ["manager"],
-    );
+  const after = clientNavigationGroups(groups(), navigation, "");
+  expect(after.find((group) => group.title === "North")?.bots[0]?.chat.name).toBe("Roof - PM");
+  expect(
+    after.flatMap((group) => group.bots).filter((item) => item.chat.id === "manager"),
+  ).toHaveLength(1);
+});
+it("resolves a direct bot route through canonical ancestry, never display names", () => {
+  expect(resolveProjectManager(navigation, "manager")).toEqual({
+    spaceId: "space",
+    bindingRevision: 1,
+    clientId: "client",
+    buildingId: "building",
+    projectId: "project",
+    botId: "manager",
+  });
+  for (const id of ["setup", "legacy", "Roof", undefined])
+    expect(resolveProjectManager(navigation, id)).toBeNull();
+  expect(resolveProjectManager(null, "manager")).toBeNull();
+});
+it("fails closed for duplicate or ambiguous assignments", () => {
+  for (const projects of [
+    [{ id: "project", name: "Roof", botIds: ["manager", "legacy"] }],
+    [
+      { id: "project", name: "Roof", botIds: ["manager"] },
+      { id: "other", name: "Roof", botIds: ["manager"] },
+    ],
+  ]) {
+    const ambiguous = { ...navigation, buildings: [{ ...navigation.buildings[0]!, projects }] };
+    expect(resolveProjectManager(ambiguous, "manager")).toBeNull();
     expect(
-      result.flatMap((group) => group.bots).filter((item) => item.chat.id === "manager"),
-    ).toHaveLength(1);
+      clientNavigationGroups(groups(), ambiguous, "")
+        .flatMap((group) => group.bots)
+        .some((item) => item.chat.id === "manager"),
+    ).toBe(false);
   }
+});
+
+it("keeps failed bound navigation unavailable rather than falling back to the roster", () => {
+  const result = unavailableClientNavigation(groups(), "space");
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({ spaceId: "space", bots: [], unavailable: true });
 });

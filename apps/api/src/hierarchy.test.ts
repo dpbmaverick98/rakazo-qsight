@@ -196,6 +196,8 @@ it("keeps project input and origin checks before upstream writes", async () => {
   const { app, deps } = setup();
   for (const [body, headers, status] of [
     ["{", { "Content-Type": "application/json" }, 400],
+    ['{"name":"New"}', { "Content-Type": "application/json" }, 400],
+    ['{"buildingId":"","name":"New"}', { "Content-Type": "application/json" }, 400],
     ['{"buildingId":"building","name":"New"}', { "Content-Type": "text/plain" }, 400],
     [
       '{"buildingId":"building","name":"New"}',
@@ -492,4 +494,21 @@ it("authorizes project mutations through the current binding and exact confirmat
   retireProject.mockRejectedValueOnce(new Error("revocation unavailable"));
   expect((await request("DELETE", "Roof")).status).toBe(502);
   expect(deleteProject).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  [
+    { id: "first", spawnKey: "pm:roof" },
+    { id: "second", spawnKey: "pm:roof" },
+  ],
+  [
+    { id: "manager", spawnKey: "pm:roof" },
+    { id: "manager", spawnKey: "setup:client" },
+  ],
+])("rejects ambiguous manager assignments without choosing a bot", async (...bots) => {
+  const { app, deps } = setup();
+  deps.navigationBots.mockResolvedValue(bots);
+  const response = await app.request("/api/agent-plane/navigation");
+  expect(response.status).toBe(502);
+  expect(response.headers.get("cache-control")).toBe("no-store");
 });

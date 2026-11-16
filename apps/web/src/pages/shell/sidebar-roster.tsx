@@ -13,8 +13,10 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
   GroupAvatar,
+  SectionHeading,
 } from "@rakazo/ui-web";
 import {
+  Building,
   ChevronDown,
   CircleAlert,
   Lock,
@@ -111,7 +113,7 @@ export function SidebarRoster({
           : collapsedSidebarSections.has(key))
       );
     };
-    const collapsed = Boolean(group.title) && isCollapsed(group.key);
+    const collapsed = !group.buildingId && Boolean(group.title) && isCollapsed(group.key);
     const groupBotIds = group.bots.flatMap((item) => (item.kind === "bot" ? [item.chat.id] : []));
     const hasSpaceActions = group.canOpenSpaceSettings;
     const headerDropTarget: RosterDropTarget | null =
@@ -138,6 +140,14 @@ export function SidebarRoster({
         style={!mini && group.depth ? { marginInlineStart: 12 } : undefined}
         className={`flex flex-col gap-0.5 ${mini && groupIndex > 0 ? "mt-2 border-t border-sidebar-border pt-2" : ""}`}
       >
+        {group.unavailable ? (
+          <p role="alert" className="px-2.5 text-caption text-muted-foreground">
+            <Trans>Navigation unavailable</Trans>
+            <Button size="sm" variant="ghost" onClick={group.retryNavigation}>
+              <Trans>Retry</Trans>
+            </Button>
+          </p>
+        ) : null}
         {!mini && (group.title || hasSpaceActions) ? (
           // biome-ignore lint/a11y/useSemanticElements: groups sidebar controls, not form fields; Move to remains the keyboard alternative.
           <div
@@ -163,7 +173,16 @@ export function SidebarRoster({
               applyRosterDrop(headerDropTarget, false, groupBotIds);
             }}
           >
-            {group.title ? (
+            {group.buildingId ? (
+              <SectionHeading
+                as="h3"
+                variant="label"
+                className="flex min-w-0 items-center gap-1.5 px-2.5 py-1"
+              >
+                <Building size={14} aria-hidden="true" />
+                <span className="truncate">{group.title}</span>
+              </SectionHeading>
+            ) : group.title ? (
               // Prefer the section menu over the space menu when both apply;
               // the dedicated space-actions button still opens the space menu.
               <ContextMenu disabled={!section}>
@@ -301,7 +320,7 @@ export function SidebarRoster({
                   : item.chat.preview ||
                     item.chat.members.map((member) => member.name).join(", ")));
             const rowDropTarget: RosterDropTarget | null =
-              item.chat.spaceId !== bootstrapMe?.spaceId
+              group.buildingId || item.chat.spaceId !== bootstrapMe?.spaceId
                 ? null
                 : item.kind === "bot"
                   ? { kind: "bot", chat: item.chat }
@@ -336,7 +355,7 @@ export function SidebarRoster({
             const chatTrigger = (
               <ContextMenuTrigger
                 render={<button type="button" />}
-                draggable={item.kind === "bot"}
+                draggable={!group.buildingId && item.kind === "bot"}
                 data-roster-bot-id={item.kind === "bot" ? item.chat.id : undefined}
                 data-roster-unread={item.chat.unread ? "true" : undefined}
                 data-roster-error={rowError && (compact || mini) ? "true" : undefined}
@@ -352,7 +371,9 @@ export function SidebarRoster({
                         .join(" ") || undefined
                     : undefined
                 }
-                aria-keyshortcuts={item.kind === "bot" ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
+                aria-keyshortcuts={
+                  !group.buildingId && item.kind === "bot" ? "Alt+ArrowUp Alt+ArrowDown" : undefined
+                }
                 onDragStart={(event) => {
                   if (item.kind !== "bot") return;
                   setDraggedBotId(item.chat.id);
@@ -380,6 +401,7 @@ export function SidebarRoster({
                 data-roster-drop={rosterDropKey === rowDropKey ? "true" : undefined}
                 onKeyDown={(event) => {
                   if (
+                    group.buildingId ||
                     item.kind !== "bot" ||
                     !event.altKey ||
                     (event.key !== "ArrowUp" && event.key !== "ArrowDown")
@@ -406,7 +428,7 @@ export function SidebarRoster({
                     : compact
                       ? "w-full min-h-11 gap-2 rounded-xl px-2.5 py-1.5"
                       : "w-full gap-3 rounded-xl px-2.5 py-[10px]"
-                } text-start ${item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""} ${
+                } text-start ${!group.buildingId && item.kind === "bot" ? "cursor-grab active:cursor-grabbing" : ""} ${
                   selected || rosterDropKey === rowDropKey
                     ? "bg-sidebar-accent"
                     : "group-hover/row:bg-accent"

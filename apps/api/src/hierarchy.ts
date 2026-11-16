@@ -377,7 +377,15 @@ export function mountHierarchyRoute(
         }
       }
       const bots = await deps.navigationBots(actor);
-      const bySpawnKey = new Map(bots.map((bot) => [bot.spawnKey, bot.id]));
+      const bySpawnKey = new Map<string, string>();
+      const botIds = new Set<string>();
+      for (const bot of bots) {
+        if (!bot.spawnKey) continue;
+        if (bySpawnKey.has(bot.spawnKey) || botIds.has(bot.id))
+          throw new ORPCError("BAD_GATEWAY", { message: "invalid_hierarchy" });
+        bySpawnKey.set(bot.spawnKey, bot.id);
+        botIds.add(bot.id);
+      }
       const assigned = (key: string) => {
         const id = bySpawnKey.get(key);
         return id ? [id] : [];

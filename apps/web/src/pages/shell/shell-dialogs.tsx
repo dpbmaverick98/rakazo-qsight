@@ -230,7 +230,7 @@ export function ShellDialogs({
                     }}
                   >
                     <Building2 />
-                    {t`Add building`}
+                    {t`New building`}
                   </DropdownMenuItem>
                 ) : null}
                 <DropdownMenuItem
@@ -246,7 +246,7 @@ export function ShellDialogs({
                   }}
                 >
                   <Plus />
-                  {t`Add project`}
+                  {t`New project`}
                 </DropdownMenuItem>
               </>
             ) : null}

@@ -472,7 +472,7 @@ it("rejects stale binding revisions and ordinary members before PM minting", asy
   expect(test.upstream).not.toHaveBeenCalled();
 });
 
-it("promotes the setup PM in place and removes its owner connection", async () => {
+it("promotes the same setup PM, preserves its conversation identity/history, and removes its owner connection", async () => {
   const test = setup();
   test.state.bots.push({ id: "setup", userId: "user", spaceId: "space", spawnKey: "setup:client" });
   test.state.assignments.push({
@@ -481,8 +481,11 @@ it("promotes the setup PM in place and removes its owner connection", async () =
     spaceId: "space",
     userId: "user",
   });
+  const history = [{ id: "message", content: "Roof setup", threadId: "existing-thread" }];
+  const threadHistory = new Map([["setup", history]]);
   const result = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
   expect(result.bot).toMatchObject({ id: "setup", spawnKey: "pm:roof" });
+  expect(threadHistory.get(result.bot.id)).toBe(history);
   expect(test.repos.createBot).not.toHaveBeenCalled();
   expect(test.state.bots).toHaveLength(1);
   expect(test.state.assignments).toEqual([
@@ -492,6 +495,7 @@ it("promotes the setup PM in place and removes its owner connection", async () =
   test.state.bots[0]!.name = "My manager";
   const reused = await provisionProjectManager(test.ctx, actor, { ...input, finishSetup: true });
   expect(reused.bot.name).toBe("My manager");
+  expect(threadHistory.get(reused.bot.id)).toBe(history);
   expect(test.state.bots).toHaveLength(1);
   expect(test.state.servers).toHaveLength(1);
   expect(

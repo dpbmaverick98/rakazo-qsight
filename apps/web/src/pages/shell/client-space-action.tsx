@@ -74,7 +74,9 @@ function ReadyClientSpaceAction({
   const id = useId();
   const queries = useQueryClient();
   const [buildingId, setBuildingId] = useState(
-    action === "building" ? "" : (initialBuildingId ?? hierarchy.buildings[0]?.id ?? ""),
+    action === "building"
+      ? ""
+      : (initialBuildingId ?? (hierarchy.buildings.length === 1 ? hierarchy.buildings[0]!.id : "")),
   );
   const [newBuilding, setNewBuilding] = useState(
     action === "building" || !hierarchy.buildings.length,
@@ -159,10 +161,11 @@ function ReadyClientSpaceAction({
               value={buildingId}
               disabled={busy}
               onChange={(event) => {
-                if (event.target.value === "") setNewBuilding(true);
+                if (event.target.value === "new") setNewBuilding(true);
                 else setBuildingId(event.target.value);
               }}
             >
+              <option value="" disabled>{t`Select building`}</option>
               {[
                 ...hierarchy.buildings,
                 ...(createdBuilding &&
@@ -174,21 +177,23 @@ function ReadyClientSpaceAction({
                   {building.name}
                 </option>
               ))}
-              <option value="">{t`New building`}</option>
+              <option value="new">{t`New building`}</option>
             </select>
-            <CreateProject
-              existingProjects={
-                hierarchy.buildings.find((building) => building.id === buildingId)?.projects
-              }
-              key={buildingId}
-              buildingId={buildingId}
-              spaceId={spaceId}
-              bindingRevision={hierarchy.bindingRevision}
-              refresh={refresh}
-              initiallyOpen
-              onBusyChange={setBusy}
-              onCreated={provision}
-            />
+            {buildingId ? (
+              <CreateProject
+                existingProjects={
+                  hierarchy.buildings.find((building) => building.id === buildingId)?.projects
+                }
+                key={buildingId}
+                buildingId={buildingId}
+                spaceId={spaceId}
+                bindingRevision={hierarchy.bindingRevision}
+                refresh={refresh}
+                initiallyOpen
+                onBusyChange={setBusy}
+                onCreated={provision}
+              />
+            ) : null}
           </>
         )}
         <Button variant="ghost" disabled={busy} onClick={onClose}>

@@ -138,60 +138,82 @@ it("reuses and reveals an existing project's manager without recreating the proj
   });
   expect(view.onOpenBot).toHaveBeenCalledWith({ id: "existing" });
 });
-it("uses verified location proof, then opens the new building manager", async () => {
-  const location = {
-    address: "10 Example Street",
-    latitude: 51,
-    longitude: 0,
-    attribution: "Example attribution",
-    verification_token: "candidate",
-    selectable: true,
-  };
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(Response.json({ items: [location], attribution: location.attribution }))
-    .mockResolvedValueOnce(
-      Response.json({
-        ...location,
-        verification_token: "proof",
-        location_precision: "building",
-        expires_in: 1800,
-      }),
-    )
-    .mockResolvedValueOnce(
-      Response.json({
-        id: "south",
-        botId: "manager",
-        name: "South Building",
-        address: location.address,
-        url: "https://example.test/buildings/south",
-      }),
-    )
-    .mockResolvedValueOnce(Response.json({ ...project, building_id: "south" }));
-  vi.stubGlobal("fetch", fetch);
-  const view = await mount("building");
-  await fill("ab");
-  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-  await fill("Example Street");
-  await submit();
-  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
-  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"]')!.click());
-  await submit();
-  await submit();
-  expect(fetch.mock.calls.map(([url]) => url)).toEqual([
-    "/api/agent-plane/locations/search",
-    "/api/agent-plane/locations/proof",
-    "/api/agent-plane/buildings",
-  ]);
-  expect(JSON.parse(fetch.mock.calls[2]![1].body)).toEqual({
-    address: location.address,
-    verification_token: "proof",
-    nickname: "",
-  });
-  expect(mocks.provision).not.toHaveBeenCalled();
-  expect(view.refreshRoster).toHaveBeenCalledOnce();
-  expect(view.onOpenBot).toHaveBeenCalledOnce();
-});
+it.each(["building", "project"] as const)(
+  "uses verified location proof for %s and continues to its manager",
+  async (action) => {
+    const location = {
+      address: "10 Example Street",
+      latitude: 51,
+      longitude: 0,
+      attribution: "Example attribution",
+      verification_token: "candidate",
+      selectable: true,
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ items: [location], attribution: location.attribution }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          ...location,
+          verification_token: "proof",
+          location_precision: "building",
+          expires_in: 1800,
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          id: "south",
+          botId: "manager",
+          name: "South Building",
+          address: location.address,
+          url: "https://example.test/buildings/south",
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ ...project, building_id: "south" }));
+    vi.stubGlobal("fetch", fetch);
+    const view = await mount(action);
+    if (action === "project") {
+      const select = document.querySelector("select")!;
+      await act(async () => {
+        select.value = "new";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    }
+    await fill("ab");
+    expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    await fill("Example Street");
+    await submit();
+    expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"]')!.click());
+    await submit();
+    await submit();
+    if (action === "project") {
+      expect(view.onOpenBot).not.toHaveBeenCalled();
+      expect(document.querySelector("select")!.value).toBe("south");
+      await fill("Roof survey");
+      await submit();
+      expect(JSON.parse(fetch.mock.calls[3]![1].body)).toEqual({
+        buildingId: "south",
+        name: "Roof survey",
+      });
+    }
+    expect(fetch.mock.calls.slice(0, 3).map(([url]) => url)).toEqual([
+      "/api/agent-plane/locations/search",
+      "/api/agent-plane/locations/proof",
+      "/api/agent-plane/buildings",
+    ]);
+    expect(JSON.parse(fetch.mock.calls[2]![1].body)).toEqual({
+      address: location.address,
+      verification_token: "proof",
+      nickname: "",
+    });
+    expect(mocks.provision).toHaveBeenCalledTimes(action === "project" ? 1 : 0);
+    expect(view.refreshRoster).toHaveBeenCalledOnce();
+    expect(view.onOpenBot).toHaveBeenCalledOnce();
+  },
+);
 it("offers a new building from Add project and rejects an unselectable address", async () => {
   vi.stubGlobal(
     "fetch",
@@ -214,7 +236,7 @@ it("offers a new building from Add project and rejects an unselectable address",
   await mount();
   const select = document.querySelector("select")!;
   await act(async () => {
-    select.value = "";
+    select.value = "new";
     select.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await fill("Broad area");
@@ -246,4 +268,29 @@ it("shows a dialog immediately without hierarchy data and offers a retry", async
   await mount("building", null);
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Add building");
   expect(document.querySelector('[role="alert"]')?.textContent).toBe("Hierarchy unavailable");
+});
+
+it("requires an explicit building choice when there are multiple buildings", async () => {
+  const fetch = vi.fn().mockResolvedValue(Response.json({ ...project, building_id: "south" }));
+  vi.stubGlobal("fetch", fetch);
+  await mount("project", {
+    ...hierarchy,
+    buildings: [...hierarchy.buildings, { id: "south", name: "South", projects: [] }],
+  });
+  const select = document.querySelector("select")!;
+  expect(select.value).toBe("");
+  expect(document.querySelector("form")).toBeNull();
+  expect(fetch).not.toHaveBeenCalled();
+  await act(async () => {
+    select.value = "south";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await fill("Roof survey");
+  await submit();
+  expect(JSON.parse(fetch.mock.calls[0]![1].body).buildingId).toBe("south");
+});
+it("preselects the only building", async () => {
+  await mount();
+  expect(document.querySelector("select")!.value).toBe("north");
+  expect(document.querySelector("form")).not.toBeNull();
 });

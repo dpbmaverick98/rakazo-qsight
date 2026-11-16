@@ -7,6 +7,7 @@ import type {
   Group,
   ThreadSnapshot,
 } from "@rakazo/contracts";
+import type { ClientNavigation } from "@rakazo/contracts/hierarchy";
 import { Button } from "@rakazo/ui-web";
 import { X } from "lucide-react";
 import type { ComponentProps, Dispatch, ReactNode, SetStateAction } from "react";
@@ -23,8 +24,8 @@ import { AgentImportForm } from "./agent-import";
 import { ArtifactStage } from "./artifact-stage";
 import type { BotPanelTab } from "./bot-panel";
 import { BotSettings } from "./bot-panel";
+import { resolveProjectManager } from "./client-navigation";
 import { HierarchyRail, useHierarchy } from "./hierarchy-rail";
-import { hierarchyRetry } from "./hierarchy-refresh";
 import { firstThreadRoute } from "./use-shell-navigation";
 
 /** The panel beside the chat: a bot's tabs, a routine, a group, or an import. */
@@ -32,6 +33,9 @@ export function ShellSidePanel({
   artifactStage,
   onSelectArtifact,
   hierarchyScope,
+  clientNavigation,
+  navigationError,
+  retryNavigation,
   rpc,
   panel,
   setPanel,
@@ -61,6 +65,9 @@ export function ShellSidePanel({
 }: {
   artifactStage: ArtifactStageState;
   onSelectArtifact: (id: string) => void;
+  clientNavigation?: ClientNavigation | null;
+  navigationError?: boolean;
+  retryNavigation?: () => void;
   hierarchyScope: { userId: string | null; spaceId: string | null; enabled: boolean };
   rpc: ReturnType<typeof createSpaceRpc>;
   panel: Panel;
@@ -97,6 +104,24 @@ export function ShellSidePanel({
     hierarchyScope.enabled,
   );
   const [hierarchyOpen, setHierarchyOpen] = useState(true);
+  const selection = resolveProjectManager(clientNavigation, activeGroup ? undefined : active?.id);
+  const selectedBuilding = hierarchy.data?.buildings.find(
+    (building) => building.id === selection?.buildingId,
+  );
+  const selectedProject = selectedBuilding?.projects.find(
+    (project) => project.id === selection?.projectId,
+  );
+  const selectedHierarchy =
+    selection &&
+    selectedBuilding &&
+    selectedProject &&
+    hierarchy.data &&
+    selection.spaceId === hierarchyScope.spaceId &&
+    selection.bindingRevision === hierarchy.data.bindingRevision &&
+    selection.clientId === hierarchy.data.client.id &&
+    !hierarchy.isError
+      ? { ...hierarchy.data, buildings: [{ ...selectedBuilding, projects: [selectedProject] }] }
+      : undefined;
   const hierarchyAvailable = hierarchyScope.enabled;
   const showHierarchy = hierarchyAvailable && hierarchyOpen;
   const open = Boolean(panel && (active || activeGroup || panel === "import-agent"));
@@ -144,16 +169,18 @@ export function ShellSidePanel({
             }
           >
             <HierarchyRail
-              key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}`}
+              key={`${hierarchyScope.userId}:${hierarchyScope.spaceId}:${selection?.bindingRevision}:${active?.id}`}
               scope={hierarchyScope}
-              data={
-                hierarchy.isError && !hierarchyRetry(0, hierarchy.error)
-                  ? undefined
-                  : hierarchy.data
-              }
+              data={selectedHierarchy}
+              projectId={selection?.projectId}
               loading={hierarchy.isFetching}
-              error={hierarchy.isError}
+              error={
+                !!navigationError ||
+                hierarchy.isError ||
+                !!(selection && !hierarchy.isFetching && !selectedHierarchy)
+              }
               retry={() => {
+                retryNavigation?.();
                 void hierarchy.refetch();
               }}
               collapse={() => setHierarchyOpen(false)}

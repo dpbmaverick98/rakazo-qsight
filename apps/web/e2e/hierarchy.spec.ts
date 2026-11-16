@@ -30,6 +30,7 @@ test("client hierarchy shares the right region with chat details", async ({ page
       return route.fulfill({ status: 204 });
     await route.fulfill({
       json: {
+        bindingRevision: 1,
         client: { id: "example", name: "Example Client" },
         buildings: [
           {
@@ -68,7 +69,36 @@ test("client hierarchy shares the right region with chat details", async ({ page
   });
   expect(botResponse.ok()).toBeTruthy();
   const { json: bot } = (await botResponse.json()) as { json: { id: string } };
+  await page.route("**/api/agent-plane/navigation", (route) =>
+    route.request().headers()["x-rakazo-space-id"] !== space.id
+      ? route.fulfill({ status: 204 })
+      : route.fulfill({
+          json: {
+            spaceId: space.id,
+            bindingRevision: 1,
+            client: { id: "example", name: "Example Client" },
+            setupBotIds: [],
+            buildings: [
+              {
+                id: "north",
+                name: "North Building",
+                projects: [{ id: "roof", name: "Roof survey", botIds: [bot.id] }],
+              },
+              { id: "empty", name: "Empty Building", projects: [] },
+            ],
+          },
+        }),
+  );
   await page.goto(`/app/${bot.id}`);
+  const sidebarBuilding = page.getByRole("heading", { name: "North Building", exact: true });
+  await expect(sidebarBuilding).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Empty Building", exact: true })).toBeVisible();
+  await expect(sidebarBuilding.locator("button")).toHaveCount(0);
+  const manager = page.locator(`[data-roster-bot-id="${bot.id}"]`);
+  await expect(manager).toContainText("Roof survey - PM");
+  await expect(manager).toHaveAttribute("aria-current", "page");
+  await captureScreenshot(page, testInfo, "canonical-pm-sidebar");
+
   const rail = page.getByRole("region", { name: "Client hierarchy" });
   const building = rail
     .getByRole("button", { name: "North Building", exact: true })
