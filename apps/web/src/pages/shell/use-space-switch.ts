@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { NavigateOptions } from "react-router-dom";
 import { discardPrimedBootstrap, primeSpaceBootstrap } from "../../lib/bootstrap";
 import { initialBootstrapTarget } from "../../lib/bootstrap-target";
 import { getSnapshot as getCallSnapshot, isLeavingSession } from "../../lib/call-session";
@@ -46,7 +47,7 @@ export function useOpenSpaceChat({
     };
   }, []);
   return useCallback(
-    (spaceId: string, path: string) => {
+    (spaceId: string, path: string, options?: NavigateOptions) => {
       closeMobileSidebar();
       const request = ++spaceSwitchRequest.current;
       const startedNavigation = navigationRevision.current;
@@ -55,7 +56,7 @@ export function useOpenSpaceChat({
       const previousEffective = selectedSpaceId() ?? bootstrapSpaceId;
       // Persist the active space (including primary) so voice/RPC headers match the chat.
       if (previousEffective === spaceId) {
-        if (selectSpace(spaceId)) navigate(path);
+        if (selectSpace(spaceId)) navigate(path, options);
         return;
       }
       // Signing out clears the selected space; a switch that finishes afterwards must not select one.
@@ -63,7 +64,8 @@ export function useOpenSpaceChat({
       const reload = async () => {
         await leaveOrganization(userId ?? null, previousEffective, spaceId);
         if (!live() || !selectSpace(spaceId)) return false;
-        window.location.assign(destination());
+        if (options?.replace) window.location.replace(destination());
+        else window.location.assign(destination());
         return true;
       };
       const destination = () =>
@@ -99,7 +101,7 @@ export function useOpenSpaceChat({
         void leaveOrganization(userId ?? null, previousEffective, spaceId);
         // Playback belongs to the conversation being left.
         speaker.stop();
-        navigate(destination());
+        navigate(destination(), options);
         return "commit";
       };
       /** What `commit` decided once the shell could remount; a commit that threw abandoned. */

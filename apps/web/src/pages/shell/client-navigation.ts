@@ -223,3 +223,33 @@ export function unavailableClientNavigation(
     ...groups.slice(index + 1).filter((group) => group.spaceId !== spaceId),
   ];
 }
+
+/** Bare app visits may leave an empty implicit Space for a client's existing chat. */
+export function clientLandingTarget(input: {
+  loaded: boolean;
+  selectedSpaceId: string | null;
+  botId?: string;
+  groupId?: string;
+  bots: readonly { id: string }[];
+  spaces: readonly { id: string; isDefault: boolean; bots: readonly { id: string }[] }[];
+  navigations: readonly {
+    isPending: boolean;
+    isFetching: boolean;
+    data?: ClientNavigation | null;
+  }[];
+}) {
+  if (!input.loaded || input.selectedSpaceId || input.botId || input.groupId || input.bots.length)
+    return undefined;
+  if (input.navigations.some((navigation) => navigation.isPending || navigation.isFetching))
+    return undefined;
+  const space = input.spaces.find((space) => !space.isDefault && space.bots.length > 0);
+  if (!space) return undefined;
+  const navigation = input.navigations.find((item) => item.data?.spaceId === space.id)?.data;
+  const preferred = [
+    ...(navigation?.setupBotIds ?? []),
+    ...(navigation?.buildings.flatMap((building) =>
+      building.projects.flatMap((project) => project.botIds),
+    ) ?? []),
+  ].find((id) => space.bots.some((bot) => bot.id === id));
+  return { spaceId: space.id, path: `/app/${preferred ?? space.bots[0]!.id}` };
+}
